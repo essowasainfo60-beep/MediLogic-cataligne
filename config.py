@@ -24,8 +24,8 @@ class Config:
     ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif', 'webp'}
     
     # Admin global
-    ADMIN_EMAIL = os.environ.get('ADMIN_EMAIL') or 'admin@medilogic.com'
-    ADMIN_PASSWORD = os.environ.get('ADMIN_PASSWORD') or 'Admin@2025MediLogic!'
+    ADMIN_EMAIL = os.environ.get('ADMIN_EMAIL') or ''
+    ADMIN_PASSWORD = os.environ.get('ADMIN_PASSWORD') or ''
     
     # WhatsApp
     WHATSAPP_BASE_URL = "https://wa.me/"
