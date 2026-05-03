@@ -1,17 +1,15 @@
 services:
   - type: web
-    name: medilogic-cataligne
+    name: medilogic-boutique
     runtime: python
     buildCommand: pip install -r requirements.txt
     startCommand: gunicorn app:app
     envVars:
       - key: DATABASE_URL
-        value: postgresql://postgres:essowasa1234@db.rdiyvvycbpumfhgmyfxo.supabase.co:5432/postgres
-      - key: IMGBB_API_KEY
-        value: 72c5c70cf4267dd117cea14606aad030
+        value: postgresql://medilogic_user:hUY7M1m12I3QZxdKUnLm0buFQ26ycKgU@dpg-d7rm4b6gvqtc73bjr700-a.oregon-postgres.render.com:5432/medilogic
       - key: SECRET_KEY
         value: medilogic-secret-key-2025
+      - key: IMGBB_API_KEY
+        value: 72c5c70cf4267dd117cea14606aad030
       - key: ADMIN_EMAIL
         value: essowasainfo60@gmail.com
-      - key: ADMIN_PASSWORD
-        value: essowasa1234A
