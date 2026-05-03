@@ -4,6 +4,7 @@ from flask_login import LoginManager, login_user, logout_user, login_required, c
 from models import db, Boutique, Vendeur, Article, Commande
 from utils import upload_to_imgbb, upload_multiple_images
 from datetime import datetime
+from models import db
 
 app = Flask(__name__)
 app.config.from_object('config.Config')
@@ -33,6 +34,10 @@ from client_routes import client_bp
 app.register_blueprint(admin_bp, url_prefix='/admin')
 app.register_blueprint(boutique_bp, url_prefix='/boutique')
 app.register_blueprint(client_bp, url_prefix='/')
+
+with app.app_context():
+    db.create_all()
+    print("✅ Base de données et tables vérifiées/créées")
 
 if __name__ == '__main__':
     with app.app_context():
