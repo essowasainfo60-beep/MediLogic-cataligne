@@ -15,11 +15,12 @@ db.init_app(app)
 # Configuration de Flask-Login
 login_manager = LoginManager()
 login_manager.init_app(app)
-login_manager.login_view = 'boutique_connexion'
+login_manager.login_view = 'boutique.connexion'  # ← Change ici
 login_manager.login_message = 'Veuillez vous connecter pour accéder à cette page'
 
 @login_manager.user_loader
 def load_user(user_id):
+    # Gérer les vendeurs si nécessaire
     if user_id.startswith('vendeur_'):
         vendeur_id = int(user_id.split('_')[1])
         return Vendeur.query.get(vendeur_id)
