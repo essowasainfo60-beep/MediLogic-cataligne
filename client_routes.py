@@ -199,7 +199,6 @@ def valider_commande():
         flash('Commande validée avec succès !', 'success')
         return render_template('client/confirmation.html', 
                              whatsapp_boutique_url=whatsapp_boutique_url,
-                             whatsapp_client_url=whatsapp_client_url,
                              commande=commande,
                              boutique=boutique)
     

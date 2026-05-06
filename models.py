@@ -86,6 +86,7 @@ class Commande(db.Model):
     instructions = db.Column(db.Text, nullable=True)  # ← AJOUTE CETTE LIGNE
     articles_json = db.Column(db.JSON, nullable=False)
     total = db.Column(db.Float, nullable=False)
+    numero_commande = db.Column(db.Integer, nullable=True)  # ← Ajoute cette ligne
     date_commande = db.Column(db.DateTime, default=datetime.utcnow)
     lu = db.Column(db.Boolean, default=False)
     
