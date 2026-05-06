@@ -132,8 +132,13 @@ def valider_commande():
         db.session.add(commande)
         db.session.commit()
         
+        # ==================== CALCULER LE NUMÉRO UNIQUE POUR CETTE BOUTIQUE ====================
+        numero_commande = Commande.query.filter_by(boutique_id=boutique_id).count()
+        commande.numero_commande = numero_commande
+        db.session.commit()
+        
         # ==================== MESSAGE POUR LA BOUTIQUE ====================
-        message_boutique = f"🆕 *NOUVELLE COMMANDE*\n"
+        message_boutique = f"🆕 *NOUVELLE COMMANDE N°{numero_commande}*\n"
         message_boutique += f"━━━━━━━━━━━━━━━━━━\n"
         message_boutique += f"👤 *Client:* {client_nom}\n"
         message_boutique += f"📱 *Tél:*  {client_telephone}\n"
@@ -167,10 +172,10 @@ def valider_commande():
         message_boutique += f"📞 Nous vous contacterons sous peu."
         
         # ==================== MESSAGE POUR LE CLIENT ====================
-        message_client = f"✅ *COMMANDE CONFIRMÉE*\n"
+        message_client = f"✅ *COMMANDE CONFIRMÉE N°{numero_commande}*\n"
         message_client += f"━━━━━━━━━━━━━━━━━━\n"
         message_client += f"Bonjour {client_nom},\n\n"
-        message_client += f"Nous avons bien reçu votre commande n°{commande.id}.\n\n"
+        message_client += f"Nous avons bien reçu votre commande.\n\n"
         message_client += f"📦 *Récapitulatif:*\n"
         
         for item in panier.values():
@@ -188,18 +193,13 @@ def valider_commande():
         numero_boutique = boutique.whatsapp.replace(' ', '').replace('+', '') if boutique.whatsapp else ''
         whatsapp_boutique_url = f"https://wa.me/{numero_boutique}?text={message_boutique_encode}"
         
-        # Lien WhatsApp pour le client
-        numero_client = client_telephone.replace(' ', '').replace('+', '')
-        whatsapp_client_url = f"https://wa.me/{numero_client}?text={message_client_encode}"
-        
-        print("=== MESSAGE BOUTIQUE ===\n", message_boutique)
-        print("=== MESSAGE CLIENT ===\n", message_client)
-        
+        print("=== MESSAGE BOUTIQUE ===\n", message_boutique)        
         session.pop('panier', None)
         
         flash('Commande validée avec succès !', 'success')
         return render_template('client/confirmation.html', 
                              whatsapp_boutique_url=whatsapp_boutique_url,
+                             whatsapp_client_url=whatsapp_client_url,
                              commande=commande,
                              boutique=boutique)
     
