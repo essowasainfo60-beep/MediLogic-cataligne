@@ -305,6 +305,42 @@ def commande_details(commande_id):
     
     return render_template('boutique/commande_details.html', commande=commande)
 
+@boutique_bp.route('/envoyer_confirmation_client/<int:commande_id>')
+@login_required
+def envoyer_confirmation_client(commande_id):
+    commande = Commande.query.get_or_404(commande_id)
+    
+    if commande.boutique_id != current_user.id:
+        flash('Accès non autorisé', 'danger')
+        return redirect(url_for('boutique.commandes'))
+    
+    # Récupérer les articles depuis le JSON
+    articles = commande.articles_json
+    
+    # Construire le message de confirmation pour le client
+    message = f"✅ *COMMANDE CONFIRMÉE*\n"
+    message += f"━━━━━━━━━━━━━━━━━━\n"
+    message += f"Bonjour {commande.client_nom},\n\n"
+    message += f"Nous avons bien reçu votre commande n°{commande.id}.\n\n"
+    message += f"📦 *Récapitulatif:*\n"
+    
+    for article in articles:
+        message += f"   • {article['nom']} x{article['quantite']} = {article['prix'] * article['quantite']:,.0f} FCFA\n"
+    
+    message += f"\n💰 *TOTAL: {commande.total:,.0f} FCFA*\n\n"
+    message += f"📞 Votre commande est en cours de traitement.\n"
+    message += f"Merci pour votre confiance !"
+    
+    # Encoder le message
+    from urllib.parse import quote
+    message_encode = quote(message)
+    
+    # Lien WhatsApp
+    numero_client = commande.client_telephone.replace(' ', '').replace('+', '')
+    whatsapp_url = f"https://wa.me/{numero_client}?text={message_encode}"
+    
+    return redirect(whatsapp_url)
+
 @boutique_bp.route('/modifier_whatsapp', methods=['POST'])
 @login_required
 def modifier_whatsapp():

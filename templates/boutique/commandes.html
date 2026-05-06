@@ -46,15 +46,15 @@
                             </div>
                         </div>
 
-                        <div class="flex space-x-3 mt-4">
+                        <div class="flex flex-wrap gap-2 mt-4">
                             <a href="{{ url_for('boutique.commande_details', commande_id=commande.id) }}" 
                                class="bg-blue-500 text-white px-4 py-2 rounded-lg hover:bg-blue-600 transition">
                                 <i class="fas fa-eye mr-1"></i> Détails
                             </a>
-                            <a href="https://wa.me/{{ commande.client_telephone|replace(' ', '')|replace('+', '') }}?text=Bonjour%20{{ commande.client_nom }},%20nous%20avons%20bien%20reçu%20votre%20commande%20n°{{ commande.id }}." 
+                            <a href="{{ url_for('boutique.envoyer_confirmation_client', commande_id=commande.id) }}" 
                                target="_blank"
-                               class="bg-green-500 text-white px-4 py-2 rounded-lg hover:bg-green-600 transition">
-                                <i class="fab fa-whatsapp mr-1"></i> Contacter
+                               class="bg-emerald-600 text-white px-4 py-2 rounded-lg hover:bg-emerald-700 transition">
+                                <i class="fab fa-whatsapp mr-1"></i> 📱 Confirmation client
                             </a>
                         </div>
                     </div>

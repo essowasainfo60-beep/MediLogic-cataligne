@@ -2,6 +2,7 @@ import json
 from flask import Blueprint, render_template, request, flash, redirect, url_for, session
 from models import db, Boutique, Article, Commande
 from datetime import datetime
+from urllib.parse import quote
 
 client_bp = Blueprint('client', __name__)
 
@@ -9,8 +10,6 @@ client_bp = Blueprint('client', __name__)
 
 @client_bp.route('/')
 def accueil():
-    # Rediriger vers la page de connexion boutique
-    # Les clients accèdent uniquement via lien direct /boutique/<id>
     return redirect(url_for('boutique.connexion'))
 
 @client_bp.route('/boutique/<int:boutique_id>')
@@ -22,8 +21,6 @@ def afficher_boutique(boutique_id):
         return redirect(url_for('client.accueil'))
     
     articles = Article.query.filter_by(boutique_id=boutique_id, archive=False).all()
-    
-    # Récupérer le panier depuis la session
     panier = session.get('panier', {})
     
     return render_template('client/catalogue.html', 
@@ -39,10 +36,8 @@ def ajouter_panier():
     quantite = int(request.form.get('quantite', 1))
     boutique_id = int(request.form.get('boutique_id'))
     
-    # Récupérer l'article
     article = Article.query.get_or_404(article_id)
     
-    # Initialiser le panier si inexistant
     if 'panier' not in session:
         session['panier'] = {}
     
@@ -69,7 +64,6 @@ def voir_panier():
     panier = session.get('panier', {})
     total = sum(item['prix'] * item['quantite'] for item in panier.values())
     
-    # Récupérer les infos de la boutique
     boutique_id = None
     for item in panier.values():
         boutique_id = item.get('boutique_id')
@@ -107,7 +101,6 @@ def valider_commande():
         flash('Votre panier est vide', 'warning')
         return redirect(url_for('client.accueil'))
     
-    # Récupérer la boutique
     boutique_id = None
     for item in panier.values():
         boutique_id = item.get('boutique_id')
@@ -125,10 +118,8 @@ def valider_commande():
         client_adresse = request.form.get('client_adresse')
         instructions = request.form.get('instructions')
         
-        # Calculer le total
         total = sum(item['prix'] * item['quantite'] for item in panier.values())
         
-        # Sauvegarder la commande en base de données
         commande = Commande(
             boutique_id=boutique_id,
             client_nom=client_nom,
@@ -141,51 +132,76 @@ def valider_commande():
         db.session.add(commande)
         db.session.commit()
         
-        # Préparer le message WhatsApp avec photos ET instructions
-        message = f"🆕 *NOUVELLE COMMANDE*%0A"
-        message += f"━━━━━━━━━━━━━━━━━━%0A"
-        message += f"👤 *Client:* {client_nom}%0A"
-        message += f"📱 *Tél:* {client_telephone}%0A"
-        message += f"📍 *Adresse:* {client_adresse}%0A"
+        # ==================== MESSAGE POUR LA BOUTIQUE ====================
+        message_boutique = f"🆕 *NOUVELLE COMMANDE*\n"
+        message_boutique += f"━━━━━━━━━━━━━━━━━━\n"
+        message_boutique += f"👤 *Client:* {client_nom}\n"
+        message_boutique += f"📱 *Tél:*  {client_telephone}\n"
+        message_boutique += f"📍 *Adresse:* {client_adresse}\n"
         
-        # Ajouter les instructions si présentes
         if instructions and instructions.strip():
-            message += f"%0A📝 *Instructions:*%0A"
-            message += f"\"{instructions.strip()}\"%0A"
+            message_boutique += f"\n📝 *Instructions:*\n"
+            message_boutique += f"\"{instructions.strip()}\"\n"
         
-        message += f"━━━━━━━━━━━━━━━━━━%0A"
-        message += f"📦 *ARTICLES COMMANDÉS:*%0A%0A"
+        message_boutique += f"━━━━━━━━━━━━━━━━━━\n"
+        message_boutique += f"📦 *ARTICLES COMMANDÉS:*\n\n"
         
         for item in panier.values():
-            article = Article.query.filter_by(
-                nom=item['nom'], 
-                boutique_id=boutique_id
-            ).first()
+            article = Article.query.filter_by(nom=item['nom'], boutique_id=boutique_id).first()
             
-            message += f"🔹 *{item['nom']}*%0A"
-            message += f"   Quantité: {item['quantite']}%0A"
-            message += f"   Prix unitaire: {item['prix']:,.0f} FCFA%0A"
-            message += f"   Sous-total: {item['prix'] * item['quantite']:,.0f} FCFA%0A"
+            message_boutique += f"🔹 *{item['nom']}*\n"
+            message_boutique += f"   Quantité: {item['quantite']}\n"
+            message_boutique += f"   Prix unitaire: {item['prix']:,.0f} FCFA\n"
+            message_boutique += f"   Sous-total: {item['prix'] * item['quantite']:,.0f} FCFA\n"
             
             if article and article.photos_urls and len(article.photos_urls) > 0:
                 photo_url = article.photos_urls[0]
-                message += f"   🖼️ *Photo:* {photo_url}%0A"
+                message_boutique += f"   🖼️ *Photo:* {photo_url}\n"
             
-            message += f"%0A"
+            message_boutique += f"\n"
         
-        message += f"━━━━━━━━━━━━━━━━━━%0A"
-        message += f"💰 *TOTAL: {total:,.0f} FCFA*%0A"
-        message += f"━━━━━━━━━━━━━━━━━━%0A"
-        message += f"✅ Merci pour votre commande !%0A"
-        message += f"📞 Nous vous contacterons sous peu."
+        message_boutique += f"━━━━━━━━━━━━━━━━━━\n"
+        message_boutique += f"💰 *TOTAL: {total:,.0f} FCFA*\n"
+        message_boutique += f"━━━━━━━━━━━━━━━━━━\n"
+        message_boutique += f"✅ Merci pour votre commande !\n"
+        message_boutique += f"📞 Nous vous contacterons sous peu."
         
-        numero_whatsapp = boutique.whatsapp.replace(' ', '').replace('+', '') if boutique.whatsapp else ''
-        whatsapp_url = f"https://wa.me/{numero_whatsapp}?text={message}"
+        # ==================== MESSAGE POUR LE CLIENT ====================
+        message_client = f"✅ *COMMANDE CONFIRMÉE*\n"
+        message_client += f"━━━━━━━━━━━━━━━━━━\n"
+        message_client += f"Bonjour {client_nom},\n\n"
+        message_client += f"Nous avons bien reçu votre commande n°{commande.id}.\n\n"
+        message_client += f"📦 *Récapitulatif:*\n"
+        
+        for item in panier.values():
+            message_client += f"   • {item['nom']} x{item['quantite']} = {item['prix'] * item['quantite']:,.0f} FCFA\n"
+        
+        message_client += f"\n💰 *TOTAL: {total:,.0f} FCFA*\n\n"
+        message_client += f"📞 Un agent vous contactera sous peu.\n"
+        message_client += f"Merci pour votre confiance !"
+        
+        # Encodage pour l'URL
+        message_boutique_encode = quote(message_boutique)
+        message_client_encode = quote(message_client)
+        
+        # Lien WhatsApp pour la boutique
+        numero_boutique = boutique.whatsapp.replace(' ', '').replace('+', '') if boutique.whatsapp else ''
+        whatsapp_boutique_url = f"https://wa.me/{numero_boutique}?text={message_boutique_encode}"
+        
+        # Lien WhatsApp pour le client
+        numero_client = client_telephone.replace(' ', '').replace('+', '')
+        whatsapp_client_url = f"https://wa.me/{numero_client}?text={message_client_encode}"
+        
+        print("=== MESSAGE BOUTIQUE ===\n", message_boutique)
+        print("=== MESSAGE CLIENT ===\n", message_client)
         
         session.pop('panier', None)
         
         flash('Commande validée avec succès !', 'success')
-        return render_template('client/confirmation.html', whatsapp_url=whatsapp_url, commande=commande)
+        return render_template('client/confirmation.html', 
+                             whatsapp_boutique_url=whatsapp_boutique_url,
+                             commande=commande,
+                             boutique=boutique)
     
     total = sum(item['prix'] * item['quantite'] for item in panier.values())
     
