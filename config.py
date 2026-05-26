@@ -9,15 +9,11 @@ class Config:
     DATABASE_URL = os.environ.get('DATABASE_URL')
     
     if DATABASE_URL and 'postgresql' in DATABASE_URL:
-        # Utiliser psycopg2 (compatible Render)
         SQLALCHEMY_DATABASE_URI = DATABASE_URL
     else:
         SQLALCHEMY_DATABASE_URI = 'sqlite:///medilogic.db'
     
     SQLALCHEMY_TRACK_MODIFICATIONS = False
-    
-    # ImgBB API
-    IMGBB_API_KEY = os.environ.get('IMGBB_API_KEY') or '72c5c70cf4267dd117cea14606aad030'
     
     # Uploads
     MAX_CONTENT_LENGTH = 16 * 1024 * 1024
@@ -29,3 +25,7 @@ class Config:
     
     # WhatsApp
     WHATSAPP_BASE_URL = "https://wa.me/"
+    
+    # Supabase Storage
+    SUPABASE_URL = os.environ.get('SUPABASE_URL')
+    SUPABASE_KEY = os.environ.get('SUPABASE_KEY')

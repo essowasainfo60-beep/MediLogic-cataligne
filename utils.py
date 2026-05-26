@@ -1,42 +1,73 @@
+from PIL import Image
+import io
 import requests
 from werkzeug.utils import secure_filename
 from flask import current_app
 
-def upload_to_imgbb(file, custom_name=None):
-    """Upload une image vers ImgBB et retourne l'URL"""
+def compress_image(file, max_size_mb=10):
+    """Compresse une image avant upload"""
     try:
-        api_key = current_app.config['IMGBB_API_KEY']
+        img = Image.open(file)
         
-        if hasattr(file, 'read'):
-            file_content = file.read()
-        else:
-            file_content = file
+        # Convertir en RGB si nécessaire (pour PNG avec transparence)
+        if img.mode in ('RGBA', 'LA', 'P'):
+            img = img.convert('RGB')
         
-        files = {
-            'image': (secure_filename(custom_name or 'image.jpg'), file_content)
+        # Redimensionner si trop grande (max 2000px)
+        if img.width > 2000 or img.height > 2000:
+            ratio = min(2000/img.width, 2000/img.height)
+            new_size = (int(img.width*ratio), int(img.height*ratio))
+            img = img.resize(new_size, Image.Resampling.LANCZOS)
+        
+        # Compresser
+        buffer = io.BytesIO()
+        img.save(buffer, format='JPEG', quality=75, optimize=True)
+        buffer.seek(0)
+        
+        return buffer
+    except Exception as e:
+        print(f"Erreur compression: {e}")
+        return file
+
+def upload_to_imgbb(file, custom_name=None):
+    """Upload vers Supabase avec compression"""
+    try:
+        supabase_url = current_app.config.get('SUPABASE_URL')
+        supabase_key = current_app.config.get('SUPABASE_KEY')
+        
+        if not supabase_url or not supabase_key:
+            return None
+        
+        # Compresser l'image
+        compressed_file = compress_image(file)
+        
+        # Upload vers Supabase
+        filename = secure_filename(custom_name or file.filename)
+        file_path = f"articles/{filename}"
+        
+        headers = {
+            "apikey": supabase_key,
+            "Authorization": f"Bearer {supabase_key}"
         }
         
-        data = {
-            'key': api_key,
-            'name': custom_name or 'medilogic_image',
-            'expiration': 0
-        }
+        files = {'file': (filename, compressed_file, 'image/jpeg')}
         
-        response = requests.post('https://api.imgbb.com/1/upload', files=files, data=data)
-        result = response.json()
+        upload_url = f"{supabase_url}/storage/v1/object/mediLogic-images/{file_path}"
+        response = requests.post(upload_url, headers=headers, files=files)
         
-        if result.get('success'):
-            return result['data']['url']
+        if response.status_code in [200, 201]:
+            public_url = f"{supabase_url}/storage/v1/object/public/mediLogic-images/{file_path}"
+            print(f"✅ Image uploadée sur Supabase: {public_url}")
+            return public_url
         else:
-            print(f"Erreur ImgBB: {result}")
+            print(f"❌ Erreur: {response.status_code} - {response.text}")
             return None
             
     except Exception as e:
-        print(f"Exception upload ImgBB: {e}")
+        print(f"❌ Exception: {e}")
         return None
 
 def upload_multiple_images(files, boutique_id, article_id=None):
-    """Upload plusieurs images vers ImgBB"""
     urls = []
     for idx, file in enumerate(files):
         if file and file.filename:
