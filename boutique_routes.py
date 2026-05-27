@@ -3,7 +3,7 @@ from flask_login import login_user, logout_user, login_required, current_user
 from models import db, Boutique, Vendeur, Article, Commande
 from utils import upload_to_imgbb, upload_multiple_images
 from datetime import datetime
-
+from flask import current_app
 boutique_bp = Blueprint('boutique', __name__)
 
 # ==================== INSCRIPTION & CONNEXION ====================
@@ -211,10 +211,35 @@ def supprimer_photo(article_id, photo_index):
         flash('Accès non autorisé', 'danger')
         return redirect(url_for('boutique.articles'))
     
+    # Vérifier que l'index existe
     if 0 <= photo_index < len(article.photos_urls):
+        photo_url = article.photos_urls[photo_index]
+        
+        # Supprimer de Supabase
+        if '/public/mediLogic-images/' in photo_url:
+            file_path = photo_url.split('/public/mediLogic-images/')[-1]
+            supabase_url = current_app.config.get('SUPABASE_URL')
+            supabase_key = current_app.config.get('SUPABASE_KEY')
+            
+            if supabase_url and supabase_key:
+                import requests
+                delete_url = f"{supabase_url}/storage/v1/object/mediLogic-images/{file_path}"
+                headers = {
+                    "apikey": supabase_key,
+                    "Authorization": f"Bearer {supabase_key}"
+                }
+                requests.delete(delete_url, headers=headers)
+        
+        # Supprimer l'URL de la liste (pop supprime à l'index)
         article.photos_urls.pop(photo_index)
+        
+        # 🔥 Nettoyer les éventuelles valeurs null/None
+        article.photos_urls = [url for url in article.photos_urls if url and url.strip()]
+        
         db.session.commit()
         flash('Photo supprimée', 'success')
+    else:
+        flash('Photo introuvable', 'danger')
     
     return redirect(url_for('boutique.modifier_article', article_id=article_id))
 

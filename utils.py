@@ -1,3 +1,5 @@
+import os
+import time
 from PIL import Image
 import io
 import requests
@@ -41,8 +43,13 @@ def upload_to_imgbb(file, custom_name=None):
         # Compresser l'image
         compressed_file = compress_image(file)
         
+        # Ajouter un timestamp pour éviter les doublons
+        timestamp = int(time.time())
+        original_name = secure_filename(custom_name or file.filename)
+        name, ext = os.path.splitext(original_name)
+        filename = f"{name}_{timestamp}{ext}"
+        
         # Upload vers Supabase
-        filename = secure_filename(custom_name or file.filename)
         file_path = f"articles/{filename}"
         
         headers = {
