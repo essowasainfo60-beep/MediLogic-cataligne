@@ -10,7 +10,20 @@ client_bp = Blueprint('client', __name__)
 
 @client_bp.route('/')
 def accueil():
-    return redirect(url_for('boutique.connexion'))
+    # Rediriger vers la dernière boutique visitée si elle existe
+    last_boutique_id = session.get('last_boutique_id')
+    if last_boutique_id:
+        boutique = Boutique.query.get(last_boutique_id)
+        if boutique and boutique.active:
+            return redirect(url_for('client.afficher_boutique', boutique_id=last_boutique_id))
+    
+    # Sinon, rediriger vers la première boutique active
+    premiere_boutique = Boutique.query.filter_by(active=True).first()
+    if premiere_boutique:
+        return redirect(url_for('client.afficher_boutique', boutique_id=premiere_boutique.id))
+    
+    # Si aucune boutique active, afficher un message
+    return "Aucune boutique disponible pour le moment"
 
 @client_bp.route('/boutique/<int:boutique_id>')
 def afficher_boutique(boutique_id):
@@ -89,7 +102,13 @@ def retirer_panier(article_id):
 def vider_panier():
     session.pop('panier', None)
     flash('Panier vidé', 'info')
-    return redirect(url_for('client.accueil'))
+    
+    # Rediriger vers le catalogue de la dernière boutique
+    last_boutique_id = session.get('last_boutique_id')
+    if last_boutique_id:
+        return redirect(url_for('client.afficher_boutique', boutique_id=last_boutique_id))
+    
+    return redirect('/')
 
 # ==================== VALIDATION COMMANDE & WHATSAPP ====================
 
