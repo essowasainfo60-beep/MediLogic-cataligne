@@ -15,11 +15,6 @@
         50% { transform: scale(1.05); }
     }
     
-    @keyframes shimmer {
-        0% { background-position: -1000px 0; }
-        100% { background-position: 1000px 0; }
-    }
-    
     .article-card {
         animation: fadeIn 0.6s ease-out;
         transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
@@ -32,23 +27,6 @@
         box-shadow: 0 20px 40px rgba(0,0,0,0.15);
     }
     
-    .article-card::before {
-        content: '';
-        position: absolute;
-        top: 0;
-        left: -100%;
-        width: 100%;
-        height: 100%;
-        background: linear-gradient(90deg, transparent, rgba(255,255,255,0.3), transparent);
-        transition: left 0.5s;
-        pointer-events: none;
-    }
-    
-    .article-card:hover::before {
-        left: 100%;
-    }
-    
-    /* Style pour le modal d'image */
     .modal {
         display: none;
         position: fixed;
@@ -73,8 +51,6 @@
         left: 50%;
         transform: translate(-50%, -50%);
         border-radius: 12px;
-        box-shadow: 0 25px 50px -12px rgba(0,0,0,0.5);
-        animation: pulse 0.3s ease-out;
     }
     
     .close-modal {
@@ -106,9 +82,6 @@
         cursor: pointer;
         z-index: 10;
         transition: all 0.3s;
-        backdrop-filter: blur(5px);
-        font-size: 18px;
-        font-weight: bold;
     }
     
     .carousel-prev { left: 15px; }
@@ -138,11 +111,6 @@
         transition: all 0.3s;
     }
     
-    .indicator:hover {
-        transform: scale(1.3);
-        background: rgba(255,255,255,0.8);
-    }
-    
     .indicator.active {
         background: white;
         width: 20px;
@@ -168,7 +136,6 @@
         background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
     }
     
-    /* Badge prix */
     .price-badge {
         position: absolute;
         top: 12px;
@@ -181,26 +148,22 @@
         font-weight: bold;
         z-index: 5;
         box-shadow: 0 4px 10px rgba(0,0,0,0.2);
-        backdrop-filter: blur(5px);
     }
     
-    /* Bouton ajouter au panier animé */
     .add-to-cart-btn {
         transition: all 0.3s;
-        position: relative;
-        overflow: hidden;
     }
     
-    .add-to-cart-btn:hover {
+    .add-to-cart-btn:hover:not(:disabled) {
         transform: translateY(-2px);
         box-shadow: 0 10px 20px rgba(0,0,0,0.2);
     }
     
-    .add-to-cart-btn:active {
-        transform: translateY(0);
+    .add-to-cart-btn:disabled {
+        opacity: 0.7;
+        cursor: not-allowed;
     }
     
-    /* Input quantités stylé */
     .quantity-input {
         transition: all 0.3s;
         border: 2px solid #e2e8f0;
@@ -212,7 +175,6 @@
         outline: none;
     }
     
-    /* Barre de recherche améliorée */
     .search-bar {
         transition: all 0.3s;
         border: 2px solid #e2e8f0;
@@ -224,29 +186,6 @@
         outline: none;
     }
     
-    /* Animation de chargement */
-    .loading-skeleton {
-        background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
-        background-size: 1000px 100%;
-        animation: shimmer 1.5s infinite;
-    }
-    
-    /* Badge nouveau produit */
-    .new-badge {
-        position: absolute;
-        top: 12px;
-        left: 12px;
-        background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
-        color: white;
-        padding: 4px 10px;
-        border-radius: 12px;
-        font-size: 11px;
-        font-weight: bold;
-        z-index: 5;
-        animation: pulse 2s infinite;
-    }
-    
-    /* Bouton voir panier flottant */
     .floating-cart {
         position: fixed;
         bottom: 30px;
@@ -255,10 +194,49 @@
         animation: pulse 2s infinite;
     }
     
+    .toast-notification {
+        position: fixed;
+        bottom: 100px;
+        right: 30px;
+        background: linear-gradient(135deg, #10b981, #059669);
+        color: white;
+        padding: 12px 24px;
+        border-radius: 12px;
+        box-shadow: 0 10px 25px rgba(0,0,0,0.2);
+        z-index: 1000;
+        animation: slideInRight 0.3s ease-out;
+        font-weight: 500;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+    }
+    
+    .toast-notification.error {
+        background: linear-gradient(135deg, #ef4444, #dc2626);
+    }
+    
+    @keyframes slideInRight {
+        from {
+            transform: translateX(100%);
+            opacity: 0;
+        }
+        to {
+            transform: translateX(0);
+            opacity: 1;
+        }
+    }
+    
     @media (max-width: 768px) {
         .floating-cart {
             bottom: 20px;
             right: 20px;
+        }
+        .toast-notification {
+            bottom: 80px;
+            right: 20px;
+            left: 20px;
+            text-align: center;
+            justify-content: center;
         }
     }
 </style>
@@ -266,14 +244,14 @@
 
 {% block content %}
 <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-    <!-- En-tête boutique avec design amélioré -->
+    <!-- En-tête boutique -->
     <div class="bg-gradient-to-r from-purple-600 to-blue-600 rounded-2xl shadow-xl p-8 mb-8 text-white">
         <div class="flex flex-col md:flex-row items-center text-center md:text-left justify-between">
             <div class="flex items-center mb-4 md:mb-0">
                 {% if boutique.logo_url %}
                     <img src="{{ boutique.logo_url }}" alt="{{ boutique.nom_boutique }}" class="h-24 w-24 object-contain rounded-full bg-white p-2 shadow-lg mr-6">
                 {% else %}
-                    <div class="h-24 w-24 bg-white bg-opacity-20 rounded-full flex items-center justify-center mr-6 backdrop-filter backdrop-blur-lg">
+                    <div class="h-24 w-24 bg-white bg-opacity-20 rounded-full flex items-center justify-center mr-6">
                         <i class="fas fa-store text-4xl text-white"></i>
                     </div>
                 {% endif %}
@@ -283,7 +261,6 @@
                 </div>
             </div>
             
-            <!-- Bouton panier dans l'en-tête (caché sur mobile, apparaît flottant) -->
             <div class="hidden md:block">
                 <a href="{{ url_for('client.voir_panier') }}" class="relative inline-block">
                     <div class="bg-white text-gray-800 px-6 py-3 rounded-full hover:shadow-lg transition-all hover:scale-105 flex items-center font-semibold">
@@ -298,7 +275,7 @@
         </div>
     </div>
     
-    <!-- Panier flottant pour mobile -->
+    <!-- Panier flottant -->
     <div class="floating-cart md:hidden">
         <a href="{{ url_for('client.voir_panier') }}" class="relative inline-block">
             <div class="bg-gradient-to-r from-purple-600 to-blue-600 text-white px-5 py-3 rounded-full shadow-lg hover:shadow-xl transition-all flex items-center">
@@ -310,10 +287,9 @@
         </a>
     </div>
 
-    <!-- Barre de recherche et filtre améliorée -->
+    <!-- Barre de recherche -->
     <div class="bg-white rounded-2xl shadow-lg p-6 mb-8">
         <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <!-- Recherche -->
             <div class="md:col-span-2">
                 <label class="block text-gray-700 text-sm font-bold mb-2 flex items-center">
                     <i class="fas fa-search mr-2 text-purple-600"></i>
@@ -324,7 +300,6 @@
                        class="search-bar w-full px-5 py-3 rounded-xl focus:outline-none">
             </div>
             
-            <!-- Filtre prix -->
             <div>
                 <label class="block text-gray-700 text-sm font-bold mb-2 flex items-center">
                     <i class="fas fa-chart-line mr-2 text-purple-600"></i>
@@ -339,11 +314,10 @@
             </div>
         </div>
         
-        <!-- Bouton réinitialiser -->
         <div class="mt-4 text-right">
             <button onclick="resetFilters()" 
                     class="bg-gray-200 text-gray-700 px-5 py-2 rounded-xl hover:bg-gray-300 transition-all hover:scale-105">
-                <i class="fas fa-undo-alt mr-2"></i> Réinitialiser les filtres
+                <i class="fas fa-undo-alt mr-2"></i> Réinitialiser
             </button>
         </div>
     </div>
@@ -353,9 +327,10 @@
         {% for article in articles %}
         <div class="article-card bg-white rounded-2xl shadow-lg overflow-hidden flex flex-col"
              data-name="{{ article.nom|lower }}"
-             data-price="{{ article.prix }}">
+             data-price="{{ article.prix }}"
+             data-id="{{ article.id }}">
             
-            <!-- Galerie d'images avec carrousel -->
+            <!-- Galerie d'images -->
             <div class="carousel-container relative" data-carousel-id="{{ article.id }}">
                 {% if article.photos_urls and article.photos_urls|length > 0 %}
                     {% set first_photo = article.photos_urls[0] %}
@@ -367,24 +342,14 @@
                              data-index="0"
                              onclick="openModal(this)">
                         
-                        <!-- Badge prix -->
                         <div class="price-badge">
                             {{ "%.0f"|format(article.prix) }} FCFA
                         </div>
                         
-                        <!-- Badge nouveau (optionnel - pour les produits récents) -->
-                        {% if loop.index <= 3 %}
-                        <div class="new-badge">
-                            <i class="fas fa-star mr-1"></i> Nouveau
-                        </div>
-                        {% endif %}
-                        
                         {% if article.photos_urls|length > 1 %}
-                            <!-- Boutons carrousel -->
                             <button class="carousel-btn carousel-prev" onclick="event.stopPropagation(); changeImage(this.parentElement, -1)">❮</button>
                             <button class="carousel-btn carousel-next" onclick="event.stopPropagation(); changeImage(this.parentElement, 1)">❯</button>
                             
-                            <!-- Indicateurs -->
                             <div class="photo-indicators">
                                 {% for photo in article.photos_urls %}
                                     {% if photo and photo != '' %}
@@ -410,7 +375,6 @@
             <div class="p-5 flex-1 flex flex-col">
                 <h3 class="text-xl font-bold text-gray-800 mb-2 line-clamp-1">{{ article.nom }}</h3>
                 
-                <!-- Description avec bouton Lire plus / Réduire -->
                 <div class="mb-3">
                     <p class="text-gray-600 text-sm leading-relaxed" id="desc-{{ article.id }}">
                         {{ article.description[:120] }}{% if article.description|length > 120 %}...{% endif %}
@@ -423,7 +387,6 @@
                     {% endif %}
                 </div>
                 
-                <!-- Prix et ajout panier -->
                 <div class="mt-auto">
                     <div class="flex items-center justify-between mb-3">
                         <div class="text-2xl font-bold bg-gradient-to-r from-purple-600 to-blue-600 bg-clip-text text-transparent">
@@ -434,17 +397,18 @@
                         </div>
                     </div>
                     
-                    <form method="POST" action="{{ url_for('client.ajouter_panier') }}" class="flex space-x-3">
+                    <!-- Formulaire avec quantité correctement gérée -->
+                    <form method="POST" action="{{ url_for('client.ajouter_panier') }}" class="add-to-cart-form" onsubmit="handleAddToCart(event, this)">
                         <input type="hidden" name="article_id" value="{{ article.id }}">
                         <input type="hidden" name="boutique_id" value="{{ boutique.id }}">
-                        <div class="relative">
-                            <input type="number" name="quantite" value="1" min="1" 
+                        <div class="flex space-x-3">
+                            <input type="number" name="quantite" id="quantite-{{ article.id }}" value="1" min="1" max="99"
                                    class="quantity-input w-20 px-3 py-2 border-2 border-gray-200 rounded-xl text-center focus:outline-none">
+                            <button type="submit" 
+                                    class="add-to-cart-btn flex-1 bg-gradient-to-r from-green-500 to-green-600 text-white py-2 rounded-xl hover:from-green-600 hover:to-green-700 transition-all font-semibold">
+                                <i class="fas fa-cart-plus mr-2"></i> Ajouter
+                            </button>
                         </div>
-                        <button type="submit" 
-                                class="add-to-cart-btn flex-1 bg-gradient-to-r from-green-500 to-green-600 text-white py-2 rounded-xl hover:from-green-600 hover:to-green-700 transition-all font-semibold">
-                            <i class="fas fa-cart-plus mr-2"></i> Ajouter
-                        </button>
                     </form>
                 </div>
             </div>
@@ -452,7 +416,7 @@
         {% endfor %}
     </div>
 
-    <!-- Modal pour afficher les photos en grand -->
+    <!-- Modal image -->
     <div id="imageModal" class="modal" onclick="closeModal()">
         <span class="close-modal">&times;</span>
         <img class="modal-content" id="modalImage">
@@ -463,14 +427,140 @@
 </div>
 
 <script>
-// Stockage global pour les images du modal
+// Stockage pour les images du modal
 let currentModalImages = [];
 let currentModalIndex = 0;
 
-// Stockage des intervalles pour le défilement automatique
+// Intervalles pour le défilement automatique
 const autoIntervals = {};
 
-// Fonction pour démarrer le défilement automatique
+// Fonction d'affichage de notification
+function showNotification(message, isError = false) {
+    const oldToast = document.querySelector('.toast-notification');
+    if (oldToast) oldToast.remove();
+    
+    const toast = document.createElement('div');
+    toast.className = 'toast-notification' + (isError ? ' error' : '');
+    toast.innerHTML = `
+        <i class="fas ${isError ? 'fa-exclamation-triangle' : 'fa-check-circle'}"></i>
+        <span>${message}</span>
+    `;
+    document.body.appendChild(toast);
+    
+    setTimeout(() => {
+        if (toast && toast.remove) toast.remove();
+    }, 3000);
+}
+
+// Met à jour le compteur du panier
+function updateCartCountDisplay(count) {
+    const panierCount = document.getElementById('panierCount');
+    const panierCountFloating = document.getElementById('panierCountFloating');
+    if (panierCount) panierCount.textContent = count;
+    if (panierCountFloating) panierCountFloating.textContent = count;
+}
+
+// Gestionnaire d'ajout au panier - CORRECTION POUR LA QUANTITÉ
+function handleAddToCart(event, form) {
+    event.preventDefault();
+    
+    // Récupérer la quantité correctement
+    const quantiteInput = form.querySelector('input[name="quantite"]');
+    const quantite = quantiteInput ? parseInt(quantiteInput.value) : 1;
+    
+    const button = form.querySelector('.add-to-cart-btn');
+    const originalHTML = button.innerHTML;
+    
+    // Récupérer les valeurs
+    const articleId = form.querySelector('input[name="article_id"]').value;
+    const boutiqueId = form.querySelector('input[name="boutique_id"]').value;
+    
+    // Créer les données à envoyer
+    const formData = new URLSearchParams();
+    formData.append('article_id', articleId);
+    formData.append('boutique_id', boutiqueId);
+    formData.append('quantite', quantite);
+    
+    // Désactiver le bouton et afficher le chargement
+    button.disabled = true;
+    button.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i> Ajout en cours...';
+    
+    // Envoyer la requête fetch
+    fetch(form.action, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/x-www-form-urlencoded',
+        },
+        body: formData.toString()
+    })
+    .then(response => {
+        // Vérifier si la réponse est JSON ou redirection
+        const contentType = response.headers.get('content-type');
+        if (contentType && contentType.includes('application/json')) {
+            return response.json();
+        } else if (response.redirected) {
+            // Si redirection, suivre
+            window.location.href = response.url;
+            return null;
+        }
+        return response.text().then(text => {
+            // Si c'est du HTML, c'est probablement un succès
+            return { success: true, panier_count: null };
+        });
+    })
+    .then(data => {
+        if (data && data.success === false) {
+            throw new Error(data.message || 'Erreur lors de l\'ajout');
+        }
+        
+        // Mettre à jour le compteur
+        if (data && data.panier_count !== undefined && data.panier_count !== null) {
+            updateCartCountDisplay(data.panier_count);
+        } else {
+            // Incrémenter visuellement
+            const currentCount = parseInt(document.getElementById('panierCount')?.textContent || '0');
+            updateCartCountDisplay(currentCount + quantite);
+        }
+        
+        // Afficher la notification avec la quantité
+        showNotification(`✓ ${quantite} article(s) ajouté(s) au panier !`);
+        
+        // Animation de succès
+        button.innerHTML = '<i class="fas fa-check mr-2"></i> Ajouté !';
+        button.style.background = 'linear-gradient(135deg, #10b981, #059669)';
+        
+        // Animation sur la carte
+        const card = form.closest('.article-card');
+        if (card) {
+            card.style.transform = 'scale(1.02)';
+            setTimeout(() => {
+                card.style.transform = '';
+            }, 300);
+        }
+        
+        // Réinitialiser la quantité à 1 après l'ajout (optionnel)
+        // quantiteInput.value = 1;
+        
+        // Restaurer le bouton
+        setTimeout(() => {
+            if (button) {
+                button.innerHTML = originalHTML;
+                button.style.background = '';
+                button.disabled = false;
+            }
+        }, 1500);
+    })
+    .catch(error => {
+        console.error('Erreur:', error);
+        showNotification('❌ ' + error.message, true);
+        
+        // Restaurer le bouton
+        button.innerHTML = originalHTML;
+        button.disabled = false;
+    });
+}
+
+// Initialiser les carrousels
 function startAutoSlide(container) {
     const carouselId = container.getAttribute('data-carousel-id');
     if (autoIntervals[carouselId]) clearInterval(autoIntervals[carouselId]);
@@ -478,17 +568,23 @@ function startAutoSlide(container) {
     const img = container.querySelector('.gallery-img');
     if (!img) return;
     
-    const images = JSON.parse(img.getAttribute('data-images'));
-    if (!images || images.length <= 1) return;
+    const images = img.getAttribute('data-images');
+    if (!images) return;
     
-    autoIntervals[carouselId] = setInterval(() => {
-        if (!container.matches(':hover')) {
-            changeImage(container, 1);
-        }
-    }, 4000);
+    try {
+        const parsedImages = JSON.parse(images);
+        if (!parsedImages || parsedImages.length <= 1) return;
+        
+        autoIntervals[carouselId] = setInterval(() => {
+            if (!container.matches(':hover')) {
+                changeImage(container, 1);
+            }
+        }, 4000);
+    } catch(e) {
+        console.error('Erreur parsing images:', e);
+    }
 }
 
-// Fonction pour arrêter le défilement automatique
 function stopAutoSlide(container) {
     const carouselId = container.getAttribute('data-carousel-id');
     if (autoIntervals[carouselId]) {
@@ -497,7 +593,6 @@ function stopAutoSlide(container) {
     }
 }
 
-// Initialiser tous les carrousels
 function initCarousels() {
     document.querySelectorAll('.carousel-container').forEach(container => {
         startAutoSlide(container);
@@ -506,25 +601,83 @@ function initCarousels() {
     });
 }
 
-// Ouvrir le modal
-function openModal(imgElement) {
-    const container = imgElement.parentElement;
-    const imagesAttr = imgElement.getAttribute('data-images');
+// Fonctions du carrousel
+function changeImage(container, direction) {
+    const img = container.querySelector('.gallery-img');
+    if (!img) return;
     
-    if (imagesAttr) {
-        currentModalImages = JSON.parse(imagesAttr);
-        currentModalIndex = parseInt(imgElement.getAttribute('data-index')) || 0;
+    const imagesAttr = img.getAttribute('data-images');
+    if (!imagesAttr) return;
+    
+    try {
+        let images = JSON.parse(imagesAttr);
+        let currentIndex = parseInt(img.getAttribute('data-index')) || 0;
         
-        const modal = document.getElementById('imageModal');
-        const modalImg = document.getElementById('modalImage');
-        modal.style.display = "block";
-        document.body.style.overflow = "hidden";
-        updateModalImage();
-        updateModalIndicators();
+        currentIndex += direction;
+        if (currentIndex < 0) currentIndex = images.length - 1;
+        if (currentIndex >= images.length) currentIndex = 0;
+        
+        img.src = images[currentIndex];
+        img.setAttribute('data-index', currentIndex);
+        
+        const indicators = container.querySelectorAll('.indicator');
+        indicators.forEach((ind, idx) => {
+            if (idx === currentIndex) {
+                ind.classList.add('active');
+            } else {
+                ind.classList.remove('active');
+            }
+        });
+    } catch(e) {
+        console.error('Erreur changement image:', e);
     }
 }
 
-// Mettre à jour l'image du modal
+function goToImage(container, index) {
+    const img = container.querySelector('.gallery-img');
+    if (!img) return;
+    
+    const imagesAttr = img.getAttribute('data-images');
+    if (!imagesAttr) return;
+    
+    try {
+        let images = JSON.parse(imagesAttr);
+        img.src = images[index];
+        img.setAttribute('data-index', index);
+        
+        const indicators = container.querySelectorAll('.indicator');
+        indicators.forEach((ind, idx) => {
+            if (idx === index) {
+                ind.classList.add('active');
+            } else {
+                ind.classList.remove('active');
+            }
+        });
+    } catch(e) {
+        console.error('Erreur navigation image:', e);
+    }
+}
+
+// Modal
+function openModal(imgElement) {
+    const imagesAttr = imgElement.getAttribute('data-images');
+    
+    if (imagesAttr) {
+        try {
+            currentModalImages = JSON.parse(imagesAttr);
+            currentModalIndex = parseInt(imgElement.getAttribute('data-index')) || 0;
+            
+            const modal = document.getElementById('imageModal');
+            modal.style.display = "block";
+            document.body.style.overflow = "hidden";
+            updateModalImage();
+            updateModalIndicators();
+        } catch(e) {
+            console.error('Erreur ouverture modal:', e);
+        }
+    }
+}
+
 function updateModalImage() {
     const modalImg = document.getElementById('modalImage');
     if (currentModalImages[currentModalIndex]) {
@@ -532,7 +685,6 @@ function updateModalImage() {
     }
 }
 
-// Mettre à jour les indicateurs du modal
 function updateModalIndicators() {
     const container = document.getElementById('modalIndicators');
     if (!container) return;
@@ -551,7 +703,6 @@ function updateModalIndicators() {
     });
 }
 
-// Changer d'image dans le modal
 function modalChangeImage(direction) {
     if (!currentModalImages.length) return;
     currentModalIndex += direction;
@@ -561,55 +712,15 @@ function modalChangeImage(direction) {
     updateModalIndicators();
 }
 
-// Changer d'image dans le carrousel
-function changeImage(container, direction) {
-    const img = container.querySelector('.gallery-img');
-    if (!img) return;
-    
-    let images = JSON.parse(img.getAttribute('data-images'));
-    let currentIndex = parseInt(img.getAttribute('data-index')) || 0;
-    
-    currentIndex += direction;
-    if (currentIndex < 0) currentIndex = images.length - 1;
-    if (currentIndex >= images.length) currentIndex = 0;
-    
-    img.src = images[currentIndex];
-    img.setAttribute('data-index', currentIndex);
-    
-    const indicators = container.querySelectorAll('.indicator');
-    indicators.forEach((ind, idx) => {
-        if (idx === currentIndex) {
-            ind.classList.add('active');
-        } else {
-            ind.classList.remove('active');
-        }
-    });
+function closeModal() {
+    document.getElementById('imageModal').style.display = "none";
+    document.body.style.overflow = "auto";
 }
 
-// Aller directement à une image
-function goToImage(container, index) {
-    const img = container.querySelector('.gallery-img');
-    if (!img) return;
-    
-    let images = JSON.parse(img.getAttribute('data-images'));
-    img.src = images[index];
-    img.setAttribute('data-index', index);
-    
-    const indicators = container.querySelectorAll('.indicator');
-    indicators.forEach((ind, idx) => {
-        if (idx === index) {
-            ind.classList.add('active');
-        } else {
-            ind.classList.remove('active');
-        }
-    });
-}
-
-// Fonction pour afficher/masquer la description complète
+// Description
 function toggleDescription(articleId, fullDescription) {
     const descElement = document.getElementById(`desc-${articleId}`);
     const button = event.target;
-    const icon = button.querySelector('i');
     
     if (descElement.innerText.includes('...')) {
         descElement.innerText = fullDescription;
@@ -621,21 +732,7 @@ function toggleDescription(articleId, fullDescription) {
     }
 }
 
-// Fermer le modal
-function closeModal() {
-    document.getElementById('imageModal').style.display = "none";
-    document.body.style.overflow = "auto";
-}
-
-// Mettre à jour le compteur du panier
-function updateCartCount(count) {
-    const panierCount = document.getElementById('panierCount');
-    const panierCountFloating = document.getElementById('panierCountFloating');
-    if (panierCount) panierCount.textContent = count;
-    if (panierCountFloating) panierCountFloating.textContent = count;
-}
-
-// ==================== RECHERCHE ET FILTRE ====================
+// Recherche et filtres
 const searchInput = document.getElementById('searchInput');
 const sortSelect = document.getElementById('sortPrice');
 const articlesContainer = document.getElementById('articlesContainer');
@@ -646,7 +743,6 @@ function filterAndSortArticles() {
     
     let articles = Array.from(document.querySelectorAll('.article-card'));
     
-    // Filtrer par recherche
     if (searchTerm) {
         articles = articles.filter(article => {
             const name = article.getAttribute('data-name');
@@ -654,7 +750,6 @@ function filterAndSortArticles() {
         });
     }
     
-    // Trier par prix
     if (sortValue === 'asc') {
         articles.sort((a, b) => {
             const priceA = parseFloat(a.getAttribute('data-price')) || 0;
@@ -669,23 +764,15 @@ function filterAndSortArticles() {
         });
     } else {
         articles.sort((a, b) => {
-            const idA = parseInt(a.querySelector('input[name="article_id"]')?.value) || 0;
-            const idB = parseInt(b.querySelector('input[name="article_id"]')?.value) || 0;
+            const idA = parseInt(a.getAttribute('data-id')) || 0;
+            const idB = parseInt(b.getAttribute('data-id')) || 0;
             return idA - idB;
         });
     }
     
-    // Réafficher avec animation
     if (articlesContainer) {
         articles.forEach(article => {
-            article.style.opacity = '0';
-            article.style.transform = 'translateY(20px)';
             articlesContainer.appendChild(article);
-            setTimeout(() => {
-                article.style.transition = 'all 0.6s ease-out';
-                article.style.opacity = '1';
-                article.style.transform = 'translateY(0)';
-            }, 10);
         });
         
         let noResultsMsg = document.getElementById('noResultsMsg');
@@ -717,10 +804,7 @@ function resetFilters() {
     filterAndSortArticles();
 }
 
-if (searchInput) searchInput.addEventListener('input', filterAndSortArticles);
-if (sortSelect) sortSelect.addEventListener('change', filterAndSortArticles);
-
-// Navigation au clavier
+// Événements clavier
 document.addEventListener('keydown', function(e) {
     if (e.key === 'Escape') {
         closeModal();
@@ -731,40 +815,13 @@ document.addEventListener('keydown', function(e) {
     }
 });
 
-// Initialisation au chargement de la page
+// Initialisation
 document.addEventListener('DOMContentLoaded', function() {
     initCarousels();
     filterAndSortArticles();
 });
 
-// Intercepter les soumissions de formulaire pour mettre à jour le panier sans rechargement
-document.querySelectorAll('form[action*="ajouter_panier"]').forEach(form => {
-    form.addEventListener('submit', async (e) => {
-        e.preventDefault();
-        const formData = new FormData(form);
-        
-        try {
-            const response = await fetch(form.action, {
-                method: 'POST',
-                body: formData
-            });
-            const data = await response.json();
-            if (data.success) {
-                updateCartCount(data.panier_count);
-                // Animation de succès
-                const btn = form.querySelector('button[type="submit"]');
-                const originalText = btn.innerHTML;
-                btn.innerHTML = '<i class="fas fa-check mr-2"></i> Ajouté !';
-                btn.style.background = 'linear-gradient(135deg, #10b981, #059669)';
-                setTimeout(() => {
-                    btn.innerHTML = originalText;
-                    btn.style.background = 'linear-gradient(135deg, #10b981, #059669)';
-                }, 2000);
-            }
-        } catch (error) {
-            console.error('Erreur:', error);
-        }
-    });
-});
+if (searchInput) searchInput.addEventListener('input', filterAndSortArticles);
+if (sortSelect) sortSelect.addEventListener('change', filterAndSortArticles);
 </script>
 {% endblock %}
