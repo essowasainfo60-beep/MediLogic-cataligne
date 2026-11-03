@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from "_macros.html" import recherche %}
 
 {% block title %}{{ 'Articles archivés' if archives else 'Gestion des articles' }} - {{ current_user.nom_boutique }}{% endblock %}
 
@@ -28,9 +29,10 @@
     </div>
 
     {% if articles %}
-        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        {{ recherche('#listeArticles', 'Rechercher un article : nom, n°, description…', '#aucunArticle', 'mb-5') }}
+        <div id="listeArticles" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {% for article in articles %}
-                <div class="bg-white rounded-xl shadow-md overflow-hidden hover:shadow-lg transition {{ 'opacity-75' if archives }}">
+                <div data-item="n°{{ article.numero }} {{ article.nom }} {{ article.description or '' }}" class="bg-white rounded-xl shadow-md overflow-hidden hover:shadow-lg transition {{ 'opacity-75' if archives }}">
                     <!-- Images -->
                     <div class="relative h-48 bg-gray-100">
                         {% if article.photos_urls and article.photos_urls|length > 0 %}

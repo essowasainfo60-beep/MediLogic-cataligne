@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from "_macros.html" import recherche %}
 
 {% block title %}Gestion des vendeurs - {{ current_user.nom_boutique }}{% endblock %}
 
@@ -19,6 +20,7 @@
     {% if vendeurs %}
         <div class="bg-white rounded-xl shadow-md overflow-hidden">
             <div class="overflow-x-auto">
+                {{ recherche('#lignesVendeurs', 'Rechercher un vendeur…', None, 'm-3') }}
                 <table class="min-w-full divide-y divide-gray-200">
                     <thead class="bg-gray-50">
                         <tr>
@@ -29,9 +31,9 @@
                             <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
                         </tr>
                     </thead>
-                    <tbody class="bg-white divide-y divide-gray-200">
+                    <tbody id="lignesVendeurs" class="bg-white divide-y divide-gray-200">
                         {% for vendeur in vendeurs %}
-                        <tr class="hover:bg-gray-50 transition">
+                        <tr data-item="{{ vendeur.prenom }} {{ vendeur.nom }} {{ vendeur.email }}" class="hover:bg-gray-50 transition">
                             <td class="px-6 py-4 whitespace-nowrap">
                                 <div class="flex items-center">
                                     <div class="h-10 w-10 rounded-full bg-blue-100 flex items-center justify-center">

@@ -3,6 +3,16 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <!-- Thème clair / nuit appliqué avant l'affichage (pas de clignotement) -->
+    <script>
+        (function () {
+            var choix = null;
+            try { choix = localStorage.getItem('theme'); } catch (e) {}
+            if (choix === 'nuit' || (!choix && window.matchMedia && matchMedia('(prefers-color-scheme: dark)').matches)) {
+                document.documentElement.classList.add('dark');
+            }
+        })();
+    </script>
     <!-- Application installable "LivraPlus" (téléphone / tablette / PC) -->
     <link rel="manifest" href="{{ url_for('app_manifest') }}">
     <meta name="theme-color" content="#0b1d35">
@@ -12,11 +22,10 @@
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-title" content="LivraPlus">
     <title>{% block title %}LivraPlus{% endblock %}</title>
-    <!-- TailwindCSS CDN -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <script src="https://cdn.tailwindcss.com"></script>
-    <!-- Font Awesome -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
-    <!-- Configuration Tailwind -->
     <script>
         tailwind.config = {
             theme: {
@@ -32,140 +41,203 @@
             }
         }
     </script>
+    <link rel="stylesheet" href="{{ url_for('static', filename='theme.css') }}">
     <style>
-        .loading {
-            display: inline-block;
-            width: 20px;
-            height: 20px;
-            border: 3px solid #f3f3f3;
-            border-top: 3px solid #2563EB;
-            border-radius: 50%;
-            animation: spin 1s linear infinite;
-        }
-        @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
-        }
-        .btn-loading {
-            opacity: 0.7;
-            cursor: not-allowed;
-        }
-        .transition-smooth {
-            transition: all 0.3s ease;
-        }
+        .btn-loading { opacity: 0.7; cursor: not-allowed; }
+        .transition-smooth { transition: all 0.3s ease; }
     </style>
     {% block extra_css %}{% endblock %}
 </head>
-<body class="bg-gray-50">
+<body class="min-h-screen flex flex-col">
+    {% set espace_boutique = current_user.is_authenticated and current_user.nom_boutique is defined and request.blueprint == 'boutique' %}
+    {% set vitrine = current_user if espace_boutique else (boutique if boutique is defined and boutique else none) %}
+    {% set liens_boutique = [
+        ('boutique.dashboard', 'fa-house', 'Accueil'),
+        ('boutique.commandes', 'fa-receipt', 'Commandes'),
+        ('boutique.livreurs', 'fa-motorcycle', 'Livraison'),
+        ('boutique.articles', 'fa-boxes-stacked', 'Articles'),
+        ('boutique.inventaire', 'fa-warehouse', 'Stock'),
+        ('boutique.historique', 'fa-clock-rotate-left', 'Historique')] %}
+
     <!-- Navigation -->
-    <nav class="bg-white shadow-lg sticky top-0 z-50">
+    <nav class="bg-white/95 backdrop-blur border-b border-gray-200 sticky top-0 z-50">
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            {% set espace_boutique = current_user.is_authenticated and current_user.nom_boutique is defined and request.blueprint == 'boutique' %}
-            {% set vitrine = current_user if espace_boutique else (boutique if boutique is defined and boutique else none) %}
             <div class="flex justify-between items-center h-16 gap-3">
+                <!-- Identité : boutique connectée, boutique visitée, ou LivraPlus -->
                 <div class="flex items-center min-w-0">
                     {% if vitrine %}
-                    <!-- Identité de la boutique (connectée, ou visitée par le client) -->
-                    <a href="{{ url_for('boutique.dashboard') if espace_boutique else url_for('client.catalogue', code=vitrine.lien_public) }}" class="flex items-center gap-2 min-w-0">
+                    <a href="{{ url_for('boutique.dashboard') if espace_boutique else url_for('client.catalogue', code=vitrine.lien_public) }}" class="flex items-center gap-2.5 min-w-0">
                         {% if vitrine.logo_url %}
-                        <img src="{{ vitrine.logo_url }}" alt="" class="h-10 w-10 rounded-full object-contain bg-gray-50 border flex-shrink-0">
+                        <img src="{{ vitrine.logo_url }}" alt="" class="h-10 w-10 rounded-xl object-contain bg-white border border-gray-200 flex-shrink-0">
                         {% else %}
-                        <span class="h-10 w-10 rounded-full bg-[#0b1d35] text-teal-300 flex items-center justify-center font-bold flex-shrink-0">{{ vitrine.nom_boutique[:1]|upper }}</span>
+                        <span class="h-10 w-10 rounded-xl bg-[#0b1d35] text-teal-300 flex items-center justify-center font-bold flex-shrink-0">{{ vitrine.nom_boutique[:1]|upper }}</span>
                         {% endif %}
                         <span class="min-w-0">
-                            <span class="block font-bold text-gray-800 truncate">{{ vitrine.nom_boutique }}</span>
-                            <span class="block text-[11px] text-gray-400 leading-none">avec LivraPlus</span>
+                            <span class="block font-bold text-gray-900 truncate leading-tight">{{ vitrine.nom_boutique }}</span>
+                            <span class="block text-[11px] text-gray-400 leading-tight">avec Livra<span class="text-teal-500 font-semibold">Plus</span></span>
                         </span>
                     </a>
                     {% else %}
                     <a href="/" class="flex items-center gap-2">
-                        <span class="h-9 w-9 rounded-lg bg-[#0b1d35] text-teal-300 flex items-center justify-center font-bold text-sm">L+</span>
-                        <span class="font-bold text-xl text-gray-800">Livra<span class="text-teal-500">Plus</span></span>
+                        <span class="h-9 w-9 rounded-xl bg-[#0b1d35] text-teal-300 flex items-center justify-center font-bold text-sm">L+</span>
+                        <span class="font-extrabold text-xl text-gray-900 tracking-tight">Livra<span class="text-teal-500">Plus</span></span>
                     </a>
                     {% endif %}
                 </div>
-                <div class="flex items-center gap-1 sm:gap-3 text-sm">
+
+                {% if espace_boutique %}
+                <!-- Liens principaux (ordinateur / tablette) -->
+                <div class="hidden md:flex items-center gap-1 text-sm">
+                    {% for endpoint, icone, libelle in liens_boutique %}
+                    <a href="{{ url_for(endpoint) }}"
+                       class="relative px-3 py-2 rounded-lg font-medium transition {{ 'bg-purple-50 text-purple-700' if request.endpoint == endpoint else 'text-gray-600 hover:bg-gray-100' }}">
+                        <i class="fas {{ icone }} mr-1.5 opacity-80"></i><span class="hidden lg:inline">{{ libelle }}</span>
+                        {% if endpoint == 'boutique.commandes' and nouvelles_commandes %}
+                        <span class="absolute -top-1 -right-1 bg-red-500 text-white text-[10px] font-bold rounded-full min-w-[18px] h-[18px] px-1 flex items-center justify-center">{{ nouvelles_commandes }}</span>
+                        {% endif %}
+                    </a>
+                    {% endfor %}
+                </div>
+                {% endif %}
+
+                <div class="flex items-center gap-2">
                     {% if session.get('is_admin') %}
-                        <a href="{{ url_for('admin.admin_dashboard') }}" class="text-gray-600 hover:text-primary transition">
-                            <i class="fas fa-tachometer-alt"></i> Admin
-                        </a>
-                        <a href="{{ url_for('admin.admin_logout') }}" class="text-red-500 hover:text-red-700 transition">
-                            <i class="fas fa-sign-out-alt"></i> Déconnexion
-                        </a>
+                        <a href="{{ url_for('admin.admin_dashboard') }}" class="text-sm text-gray-600 hover:text-primary px-2"><i class="fas fa-gauge"></i> Admin</a>
+                        <button type="button" onclick="basculerTheme()" class="h-9 w-9 rounded-lg text-gray-600 hover:bg-gray-100" title="Mode clair / nuit"><i class="fas fa-circle-half-stroke"></i></button>
+                        <a href="{{ url_for('admin.admin_logout') }}" class="text-sm text-red-500 hover:text-red-700 px-2"><i class="fas fa-right-from-bracket"></i></a>
                     {% elif espace_boutique %}
-                        {% for endpoint, icone, libelle in [
-                            ('boutique.dashboard', 'fa-house', 'Accueil'),
-                            ('boutique.commandes', 'fa-receipt', 'Commandes'),
-                            ('boutique.livreurs', 'fa-motorcycle', 'Livreurs'),
-                            ('boutique.inventaire', 'fa-warehouse', 'Stock'),
-                            ('boutique.historique', 'fa-clock-rotate-left', 'Historique'),
-                            ('boutique.profil', 'fa-store', 'Ma boutique')] %}
-                        <a href="{{ url_for(endpoint) }}" title="{{ libelle }}"
-                           class="px-2 py-1.5 rounded-lg transition {{ 'bg-purple-50 text-purple-700' if request.endpoint == endpoint else 'text-gray-600 hover:text-primary' }}">
-                            <i class="fas {{ icone }}"></i><span class="hidden lg:inline ml-1">{{ libelle }}</span>
-                        </a>
-                        {% endfor %}
-                        <a href="{{ url_for('boutique.logout') }}" title="Déconnexion" class="px-2 py-1.5 text-red-500 hover:text-red-700 transition">
-                            <i class="fas fa-sign-out-alt"></i><span class="hidden lg:inline ml-1">Déconnexion</span>
-                        </a>
+                    <!-- Menu sous le nom de la personne connectée -->
+                    <details class="menu-utilisateur relative">
+                        <summary class="flex items-center gap-2 pl-1 pr-2 py-1 rounded-xl hover:bg-gray-100 transition">
+                            <span class="h-9 w-9 rounded-full bg-gradient-to-br from-purple-600 to-indigo-600 text-white flex items-center justify-center font-semibold text-sm">
+                                {{ (current_user.proprietaire_prenom or current_user.nom_boutique)[:1]|upper }}
+                            </span>
+                            <span class="hidden sm:block text-left leading-tight">
+                                <span class="block text-sm font-semibold text-gray-800">{{ current_user.proprietaire_prenom }}</span>
+                                <span class="block text-[11px] text-gray-400">Gérant·e</span>
+                            </span>
+                            <i class="fas fa-chevron-down text-xs text-gray-400"></i>
+                        </summary>
+                        <div class="absolute right-0 mt-2 w-64 bg-white border border-gray-200 rounded-2xl shadow-xl py-2 text-sm z-50">
+                            <div class="px-4 py-2 border-b border-gray-100 mb-1">
+                                <p class="font-semibold text-gray-800">{{ current_user.proprietaire_prenom }} {{ current_user.proprietaire_nom }}</p>
+                                <p class="text-xs text-gray-500 truncate">{{ current_user.email }}</p>
+                            </div>
+                            <!-- Liens principaux (téléphone) -->
+                            <div class="md:hidden border-b border-gray-100 pb-1 mb-1">
+                                {% for endpoint, icone, libelle in liens_boutique %}
+                                <a href="{{ url_for(endpoint) }}" class="flex items-center gap-3 px-4 py-2 hover:bg-gray-50 {{ 'text-purple-700 font-semibold' if request.endpoint == endpoint else 'text-gray-700' }}">
+                                    <i class="fas {{ icone }} w-4 text-center"></i> {{ libelle }}
+                                    {% if endpoint == 'boutique.commandes' and nouvelles_commandes %}<span class="ml-auto bg-red-500 text-white text-[10px] font-bold rounded-full px-1.5">{{ nouvelles_commandes }}</span>{% endif %}
+                                </a>
+                                {% endfor %}
+                            </div>
+                            <a href="{{ url_for('boutique.profil') }}" class="flex items-center gap-3 px-4 py-2 text-gray-700 hover:bg-gray-50"><i class="fas fa-store w-4 text-center"></i> Ma boutique</a>
+                            <a href="{{ url_for('boutique.changer_mot_de_passe') }}" class="flex items-center gap-3 px-4 py-2 text-gray-700 hover:bg-gray-50"><i class="fas fa-key w-4 text-center"></i> Changer le mot de passe</a>
+                            <a href="{{ url_for('boutique.dashboard') }}#biometrie" class="flex items-center gap-3 px-4 py-2 text-gray-700 hover:bg-gray-50"><i class="fas fa-fingerprint w-4 text-center"></i> Face ID / empreinte</a>
+                            <a href="{{ url_for('client.catalogue', code=current_user.lien_public) }}" target="_blank" class="flex items-center gap-3 px-4 py-2 text-gray-700 hover:bg-gray-50"><i class="fas fa-eye w-4 text-center"></i> Voir mon catalogue</a>
+                            <button type="button" onclick="basculerTheme()" class="w-full flex items-center gap-3 px-4 py-2 text-gray-700 hover:bg-gray-50">
+                                <i class="fas fa-moon w-4 text-center icone-theme"></i> <span class="libelle-theme">Mode nuit</span>
+                            </button>
+                            <div class="border-t border-gray-100 mt-1 pt-1">
+                                <a href="{{ url_for('boutique.logout') }}" class="flex items-center gap-3 px-4 py-2 text-red-600 hover:bg-red-50"><i class="fas fa-right-from-bracket w-4 text-center"></i> Déconnexion</a>
+                            </div>
+                        </div>
+                    </details>
+                    {% else %}
+                    <button type="button" onclick="basculerTheme()" class="h-9 w-9 rounded-lg text-gray-500 hover:bg-gray-100" title="Mode clair / nuit">
+                        <i class="fas fa-moon icone-theme"></i>
+                    </button>
                     {% endif %}
                 </div>
             </div>
         </div>
     </nav>
 
-    <!-- Messages Flash -->
-    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mt-4">
+    <!-- Messages -->
+    <div class="max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 mt-4">
         {% with messages = get_flashed_messages(with_categories=true) %}
-            {% if messages %}
-                {% for category, message in messages %}
-                    <div class="mb-4 p-4 rounded-lg {% if category == 'success' %}bg-green-100 text-green-700 border border-green-200{% elif category == 'danger' %}bg-red-100 text-red-700 border border-red-200{% elif category == 'warning' %}bg-yellow-100 text-yellow-700 border border-yellow-200{% else %}bg-blue-100 text-blue-700 border border-blue-200{% endif %} flex justify-between items-center">
-                        <span>{{ message }}</span>
-                        <button onclick="this.parentElement.remove()" class="text-gray-500 hover:text-gray-700">
-                            <i class="fas fa-times"></i>
-                        </button>
-                    </div>
-                {% endfor %}
-            {% endif %}
+            {% for category, message in messages %}
+                <div class="mb-3 px-4 py-3 rounded-xl text-sm flex justify-between items-center gap-3 border
+                    {% if category == 'success' %}bg-green-50 text-green-800 border-green-200
+                    {% elif category == 'danger' %}bg-red-50 text-red-800 border-red-200
+                    {% elif category == 'warning' %}bg-yellow-50 text-yellow-800 border-yellow-200
+                    {% else %}bg-blue-50 text-blue-800 border-blue-200{% endif %}">
+                    <span>{{ message }}</span>
+                    <button onclick="this.parentElement.remove()" class="opacity-60 hover:opacity-100" aria-label="Fermer"><i class="fas fa-times"></i></button>
+                </div>
+            {% endfor %}
         {% endwith %}
     </div>
 
-    <!-- Contenu principal -->
-    <main class="py-8">
+    <main class="py-6 flex-1">
         {% block content %}{% endblock %}
     </main>
 
-    <!-- Footer -->
-    <footer class="bg-gray-800 text-white mt-12 py-8">
-        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
-            <p>&copy; 2026 LivraPlus · MediLogic</p>
-            <p class="text-gray-400 text-sm mt-2">Commandes, livraisons et stock, simplement.</p>
+    <footer class="bg-[#0b1d35] text-white py-6 mt-8">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row justify-between items-center gap-2 text-sm">
+            <p><span class="font-bold">Livra<span class="text-teal-300">Plus</span></span> · commandes, livraisons et stock, simplement</p>
+            <p class="text-white/50">&copy; 2026 MediLogic</p>
         </div>
     </footer>
 
-    <!-- Scripts -->
     <script>
-        // Gestion automatique des boutons avec chargement
-        document.querySelectorAll('form').forEach(form => {
-            form.addEventListener('submit', function(e) {
-                // Pas d'envoi réel (confirmation annulée, ou envoi en arrière-plan) : on ne bloque pas le bouton
-                if (e.defaultPrevented) return;
-                const submitBtn = this.querySelector('button[type="submit"]');
-                if (submitBtn && !submitBtn.hasAttribute('data-no-loading')) {
-                    submitBtn.disabled = true;
-                    submitBtn.classList.add('btn-loading');
-                    const originalText = submitBtn.innerHTML;
-                    submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i> Chargement...';
-                    submitBtn.setAttribute('data-original-text', originalText);
-                }
+        // ---------- Mode clair / nuit ----------
+        function majBoutonsTheme() {
+            var nuit = document.documentElement.classList.contains('dark');
+            document.querySelectorAll('.icone-theme').forEach(function (i) { i.className = 'fas ' + (nuit ? 'fa-sun' : 'fa-moon') + ' w-4 text-center icone-theme'; });
+            document.querySelectorAll('.libelle-theme').forEach(function (s) { s.textContent = nuit ? 'Mode clair' : 'Mode nuit'; });
+        }
+        function basculerTheme() {
+            var nuit = document.documentElement.classList.toggle('dark');
+            try { localStorage.setItem('theme', nuit ? 'nuit' : 'clair'); } catch (e) {}
+            majBoutonsTheme();
+        }
+        majBoutonsTheme();
+
+        // ---------- Menu utilisateur : se ferme en cliquant ailleurs ----------
+        document.addEventListener('click', function (e) {
+            document.querySelectorAll('details.menu-utilisateur[open]').forEach(function (d) {
+                if (!d.contains(e.target)) d.removeAttribute('open');
             });
         });
-        
-        // Boutons de suppression avec confirmation
-        document.querySelectorAll('.btn-delete').forEach(btn => {
-            btn.addEventListener('click', function(e) {
-                if (!confirm('Êtes-vous sûr de vouloir supprimer cet élément ?')) {
-                    e.preventDefault();
+
+        // ---------- Recherche dans les listes ----------
+        // <input data-filtre="#liste"> filtre les éléments [data-item] de #liste
+        // (sans tenir compte des accents ni des majuscules).
+        function sansAccents(t) { return (t || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase(); }
+        document.querySelectorAll('[data-filtre]').forEach(function (champ) {
+            var liste = document.querySelector(champ.dataset.filtre);
+            if (!liste) return;
+            var vide = document.querySelector(champ.dataset.vide || '#_');
+            var compte = champ.parentElement.querySelector('.compte');
+            function filtrer() {
+                var mots = sansAccents(champ.value).split(/\s+/).filter(Boolean);
+                var visibles = 0, total = 0;
+                liste.querySelectorAll('[data-item]').forEach(function (el) {
+                    total++;
+                    var texte = sansAccents(el.dataset.item || el.textContent);
+                    var ok = mots.every(function (m) { return texte.indexOf(m) !== -1; });
+                    el.style.display = ok ? '' : 'none';
+                    if (ok) visibles++;
+                });
+                if (vide) vide.classList.toggle('hidden', visibles > 0);
+                if (compte) compte.textContent = mots.length ? visibles + ' / ' + total : total ? total + ' au total' : '';
+            }
+            champ.addEventListener('input', filtrer);
+            filtrer();
+        });
+
+        // ---------- Boutons : « Chargement… » pendant l'envoi ----------
+        document.querySelectorAll('form').forEach(function (form) {
+            form.addEventListener('submit', function (e) {
+                if (e.defaultPrevented) return;  // confirmation annulée, ou envoi en arrière-plan
+                var bouton = this.querySelector('button[type="submit"]');
+                if (bouton && !bouton.hasAttribute('data-no-loading')) {
+                    bouton.disabled = true;
+                    bouton.classList.add('btn-loading');
+                    bouton.setAttribute('data-original-text', bouton.innerHTML);
+                    bouton.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i> Chargement...';
                 }
             });
         });

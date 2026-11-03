@@ -4,6 +4,15 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>LivraPlus - Connexion</title>
+    <script>
+        (function () {
+            var choix = null;
+            try { choix = localStorage.getItem('theme'); } catch (e) {}
+            if (choix === 'nuit' || (!choix && window.matchMedia && matchMedia('(prefers-color-scheme: dark)').matches)) {
+                document.documentElement.classList.add('dark');
+            }
+        })();
+    </script>
     <!-- Application installable "LivraPlus" (téléphone / tablette / PC) -->
     <link rel="manifest" href="{{ url_for('app_manifest') }}">
     <meta name="theme-color" content="#0b1d35">
@@ -125,9 +134,23 @@
                 background: var(--navy); color: var(--accent); align-items: center; justify-content: center; font-weight: 700; }
         }
         @media (max-width: 460px) { .form-panel { padding: 24px 16px; } }
+
+        /* ===== Mode nuit ===== */
+        .theme-btn { position: fixed; top: 16px; right: 16px; z-index: 10; width: 40px; height: 40px; border-radius: 12px;
+                     border: 1.5px solid #e3e7ee; background: #fff; color: #0b1d35; cursor: pointer; font-size: 18px; }
+        html.dark body { background: #0b1220; }
+        html.dark .form-heading, html.dark .form-group label, html.dark .btn-bio, html.dark .register-link a { color: #e2e8f0; }
+        html.dark .form-subtitle, html.dark .forgot, html.dark .register-link, html.dark .bio-hint { color: #8fa1bb; }
+        html.dark input { background: #121a2b; border-color: #263248; color: #e2e8f0; }
+        html.dark input:focus { background: #121a2b; }
+        html.dark .btn-bio, html.dark .theme-btn { background: #121a2b; border-color: #263248; color: #e2e8f0; }
+        html.dark .btn-submit { background: linear-gradient(135deg, #2dd4bf 0%, #0ea5e9 100%); color: #0b1d35; }
+        html.dark .divider::before, html.dark .divider::after { background: #263248; }
+        html.dark .mobile-mark { background: #121a2b; }
     </style>
 </head>
 <body>
+    <button type="button" class="theme-btn" id="btnTheme" title="Mode clair / nuit" onclick="basculerTheme()">🌙</button>
 
     <aside class="brand-panel">
         <div class="brand-top">
@@ -241,6 +264,15 @@
                 erreur.style.display = 'block';
             }
         }
+
+        // Mode clair / nuit (même choix que dans le reste de l'application)
+        function majTheme() { document.getElementById('btnTheme').textContent = document.documentElement.classList.contains('dark') ? '☀️' : '🌙'; }
+        function basculerTheme() {
+            var nuit = document.documentElement.classList.toggle('dark');
+            try { localStorage.setItem('theme', nuit ? 'nuit' : 'clair'); } catch (e) {}
+            majTheme();
+        }
+        majTheme();
 
         // Application installable
         let invitationInstall = null;

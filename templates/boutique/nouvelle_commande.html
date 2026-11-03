@@ -65,13 +65,21 @@
         <div class="bg-white rounded-xl shadow-md p-5">
             <h2 class="font-semibold text-gray-800 mb-3"><i class="fas fa-boxes text-purple-500 mr-2"></i>Articles</h2>
 
+            {% if catalogue %}
+            <!-- Sélecteur avec recherche : taper un nom ou un n°, puis toucher l'article -->
+            <div class="relative mb-3" id="selecteur">
+                <div class="recherche">
+                    <i class="fas fa-magnifying-glass"></i>
+                    <input type="search" id="chercheArticle" autocomplete="off" class="rounded-xl"
+                           placeholder="Ajouter un article : tapez son nom ou son n° (ex. 12)…">
+                </div>
+                <div id="resultats" class="hidden absolute left-0 right-0 mt-1 bg-white border border-gray-200 rounded-xl shadow-xl max-h-80 overflow-y-auto z-20"></div>
+            </div>
+            {% endif %}
+
             <div id="lignes" class="space-y-2"></div>
+            <p id="aucuneLigne" class="text-sm text-gray-400 py-3 text-center">Aucun article pour l'instant.</p>
             <div class="flex flex-wrap gap-2 mt-3">
-                {% if catalogue %}
-                <button type="button" onclick="ajouterLigne()" class="text-sm bg-purple-50 text-purple-700 px-3 py-2 rounded-lg hover:bg-purple-100">
-                    <i class="fas fa-plus mr-1"></i> Article du catalogue
-                </button>
-                {% endif %}
                 <button type="button" onclick="ajouterLibre()" class="text-sm bg-gray-100 text-gray-700 px-3 py-2 rounded-lg hover:bg-gray-200">
                     <i class="fas fa-plus mr-1"></i> Article hors catalogue
                 </button>
@@ -94,17 +102,6 @@
     </form>
 </div>
 
-<template id="modeleLigne">
-    <div class="ligne flex gap-2 items-center">
-        <select name="article_id" class="flex-1 min-w-0 border border-gray-300 rounded-lg px-2 py-2 text-sm">
-            {% for a in catalogue %}
-            <option value="{{ a.id }}" data-prix="{{ a.prix }}">n°{{ a.numero }} · {{ a.nom }} — {{ "{:,.0f}".format(a.prix).replace(',', ' ') }} FCFA</option>
-            {% endfor %}
-        </select>
-        <input type="number" name="quantite" value="1" min="1" class="w-16 border border-gray-300 rounded-lg px-2 py-2 text-sm text-center">
-        <button type="button" class="retirer text-red-500 px-2" aria-label="Retirer"><i class="fas fa-trash"></i></button>
-    </div>
-</template>
 <template id="modeleLibre">
     <div class="ligne flex gap-2 items-center">
         <input type="text" name="libre_nom" placeholder="Nom de l'article" class="flex-1 min-w-0 border border-gray-300 rounded-lg px-2 py-2 text-sm">
@@ -115,23 +112,92 @@
 </template>
 
 <script>
+const CATALOGUE = [
+    {% for a in catalogue %}{ id: {{ a.id }}, numero: {{ a.numero or 0 }}, nom: {{ a.nom|tojson }}, prix: {{ a.prix }},
+      stock: {{ a.stock if a.stock is not none else 'null' }}, photo: {{ ((a.photos_urls or [])|select|first or '')|tojson }} },
+    {% endfor %}];
 const lignes = document.getElementById('lignes');
+const fcfa = (v) => Math.round(v).toLocaleString('fr-FR') + ' FCFA';
+const echapper = (t) => String(t).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+
 function brancher(ligne) {
-    ligne.querySelectorAll('select, input').forEach((el) => el.addEventListener('input', calculer));
+    ligne.querySelectorAll('input').forEach((el) => el.addEventListener('input', calculer));
     ligne.querySelector('.retirer').addEventListener('click', () => { ligne.remove(); calculer(); });
     lignes.appendChild(ligne);
     calculer();
 }
-function ajouterLigne() { brancher(document.getElementById('modeleLigne').content.firstElementChild.cloneNode(true)); }
 function ajouterLibre() { brancher(document.getElementById('modeleLibre').content.firstElementChild.cloneNode(true)); }
+
+// ---------- Ajout d'un article du catalogue (ou +1 s'il y est déjà) ----------
+function ajouterArticle(a) {
+    const existante = lignes.querySelector(`.ligne[data-article="${a.id}"]`);
+    if (existante) {
+        const q = existante.querySelector('[name="quantite"]');
+        q.value = (+q.value || 0) + 1;
+        calculer();
+        return;
+    }
+    const div = document.createElement('div');
+    div.className = 'ligne flex gap-2 items-center bg-gray-50 rounded-xl p-2';
+    div.dataset.article = a.id;
+    div.dataset.prix = a.prix;
+    div.innerHTML = `
+        <input type="hidden" name="article_id" value="${a.id}">
+        ${a.photo ? `<img src="${echapper(a.photo)}" alt="" class="h-10 w-10 rounded-lg object-cover flex-shrink-0">`
+                  : '<span class="h-10 w-10 rounded-lg bg-gray-200 flex-shrink-0"></span>'}
+        <span class="flex-1 min-w-0">
+            <span class="block text-sm font-semibold text-gray-800 truncate"><span class="text-purple-600">n°${a.numero}</span> · ${echapper(a.nom)}</span>
+            <span class="block text-xs text-gray-500">${fcfa(a.prix)}${a.stock !== null ? ' · stock ' + a.stock : ''}</span>
+        </span>
+        <input type="number" name="quantite" value="1" min="1" class="w-16 border border-gray-300 px-2 py-1.5 text-sm text-center" aria-label="Quantité">
+        <button type="button" class="retirer text-red-500 px-2" aria-label="Retirer"><i class="fas fa-trash"></i></button>`;
+    brancher(div);
+}
+
+// ---------- Recherche ----------
+const champ = document.getElementById('chercheArticle');
+const boite = document.getElementById('resultats');
+const norm = (t) => (t || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+function afficherResultats() {
+    const q = norm(champ.value.trim().replace(/^n°\s*/i, ''));
+    const trouves = CATALOGUE.filter((a) => !q || String(a.numero) === q || norm(a.nom).includes(q)
+                                         || String(a.numero).startsWith(q)).slice(0, 30);
+    boite.innerHTML = trouves.length ? trouves.map((a) => `
+        <button type="button" data-id="${a.id}" class="w-full flex items-center gap-3 px-3 py-2 text-left hover:bg-gray-50 ${a.stock !== null && a.stock <= 0 ? 'opacity-50' : ''}">
+            ${a.photo ? `<img src="${echapper(a.photo)}" alt="" class="h-9 w-9 rounded-lg object-cover">` : '<span class="h-9 w-9 rounded-lg bg-gray-200"></span>'}
+            <span class="flex-1 min-w-0 text-sm"><span class="text-purple-600 font-semibold">n°${a.numero}</span> · <span class="text-gray-800">${echapper(a.nom)}</span>
+                ${a.stock !== null ? `<span class="block text-xs ${a.stock <= 0 ? 'text-red-600' : 'text-gray-500'}">${a.stock <= 0 ? 'Épuisé' : 'Stock : ' + a.stock}</span>` : ''}</span>
+            <span class="text-sm font-semibold text-gray-700 whitespace-nowrap">${fcfa(a.prix)}</span>
+        </button>`).join('')
+        : '<p class="px-3 py-4 text-sm text-gray-500 text-center">Aucun article trouvé. Utilisez « Article hors catalogue ».</p>';
+    boite.classList.remove('hidden');
+}
+if (champ) {
+    champ.addEventListener('input', afficherResultats);
+    champ.addEventListener('focus', afficherResultats);
+    champ.addEventListener('keydown', (e) => {   // Entrée = ajouter le premier résultat
+        if (e.key === 'Enter') { e.preventDefault(); boite.querySelector('button[data-id]')?.click(); }
+        if (e.key === 'Escape') boite.classList.add('hidden');
+    });
+    boite.addEventListener('click', (e) => {
+        const b = e.target.closest('button[data-id]');
+        if (!b) return;
+        ajouterArticle(CATALOGUE.find((a) => a.id === +b.dataset.id));
+        champ.value = '';
+        boite.classList.add('hidden');
+        champ.focus();
+    });
+    document.addEventListener('click', (e) => { if (!document.getElementById('selecteur').contains(e.target)) boite.classList.add('hidden'); });
+}
+
 function calculer() {
     let total = 0;
     lignes.querySelectorAll('.ligne').forEach((l) => {
-        const select = l.querySelector('select');
-        const prix = select ? +select.selectedOptions[0].dataset.prix : +(l.querySelector('[name="libre_prix"]').value || 0);
+        const prix = l.dataset.prix ? +l.dataset.prix : +(l.querySelector('[name="libre_prix"]').value || 0);
         const qte = +(l.querySelector('[name="quantite"], [name="libre_quantite"]').value || 0);
         total += prix * qte;
     });
+    document.getElementById('aucuneLigne').classList.toggle('hidden', lignes.children.length > 0);
     total += +(document.getElementById('fraisLivraison').value || 0);
     document.getElementById('total').textContent = Math.round(total).toLocaleString('fr-FR') + ' FCFA';
 }
@@ -140,6 +206,7 @@ function appliquerFraisZone() {
     document.getElementById('fraisLivraison').value = Math.round(+(choix.dataset.frais || 0)) || '';
     calculer();
 }
-{% if catalogue %}ajouterLigne();{% else %}ajouterLibre();{% endif %}
+{% if not catalogue %}ajouterLibre();{% endif %}
+calculer();
 </script>
 {% endblock %}

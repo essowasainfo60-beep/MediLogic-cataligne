@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from "_macros.html" import recherche %}
 
 {% block title %}Livreurs - {{ current_user.nom_boutique }}{% endblock %}
 
@@ -26,9 +27,10 @@
     </form>
 
     {% if livreurs %}
-    <div class="bg-white rounded-xl shadow-md divide-y">
+    {% if livreurs|length > 3 %}{{ recherche('#listeLivreurs', 'Rechercher un livreur : nom ou téléphone…', None, 'mb-3') }}{% endif %}
+    <div id="listeLivreurs" class="bg-white rounded-xl shadow-md divide-y">
         {% for l in livreurs %}
-        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 p-4 {{ 'opacity-50' if not l.actif }}">
+        <div data-item="{{ l.nom }} {{ l.telephone }} {{ l.telephone_whatsapp }}" class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 p-4 {{ 'opacity-50' if not l.actif }}">
             <div>
                 <p class="font-semibold text-gray-800">{{ l.nom }}
                     {% if en_cours.get(l.id) %}<span class="ml-2 text-xs bg-purple-100 text-purple-800 px-2 py-0.5 rounded-full">{{ en_cours[l.id] }} en cours</span>{% endif %}
@@ -92,9 +94,10 @@
     </form>
 
     {% if zones %}
-    <div class="space-y-3">
+    {% if zones|length > 3 %}{{ recherche('#listeZones', 'Rechercher une zone ou un quartier…', None, 'mb-3') }}{% endif %}
+    <div id="listeZones" class="space-y-3">
         {% for z in zones %}
-        <form method="POST" action="{{ url_for('boutique.modifier_zone', zone_id=z.id) }}"
+        <form data-item="{{ z.nom }} {{ z.quartiers or '' }} {{ z.livreur.nom if z.livreur else '' }}" method="POST" action="{{ url_for('boutique.modifier_zone', zone_id=z.id) }}"
               class="bg-white rounded-xl shadow-md p-4 grid grid-cols-1 md:grid-cols-12 gap-2 items-center {{ 'opacity-50' if not z.active }}">
             <input type="text" name="nom" value="{{ z.nom }}" required class="md:col-span-3 px-3 py-2 border border-gray-200 rounded-lg font-semibold">
             <input type="text" name="quartiers" value="{{ z.quartiers or '' }}" placeholder="Quartiers" class="md:col-span-3 px-3 py-2 border border-gray-200 rounded-lg text-sm">

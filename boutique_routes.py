@@ -200,9 +200,26 @@ def dashboard():
     commandes_count = Commande.query.filter_by(boutique_id=current_user.id).count()
     nouvelles_count = Commande.query.filter_by(boutique_id=current_user.id, statut='nouvelle').count()
     en_livraison_count = Commande.query.filter_by(boutique_id=current_user.id, statut='en_livraison').count()
+    confirmees_count = Commande.query.filter_by(boutique_id=current_user.id, statut='confirmee').count()
+
+    debut_jour = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
+    du_jour = Commande.query.filter(Commande.boutique_id == current_user.id, Commande.date_commande >= debut_jour).count()
+    livrees_jour = Commande.query.filter(Commande.boutique_id == current_user.id, Commande.statut == 'livree',
+                                         Commande.date_livraison >= debut_jour).all()
+    ruptures = Article.query.filter(Article.boutique_id == current_user.id, Article.archive.is_(False),
+                                    Article.stock.isnot(None), Article.stock <= 0).count()
+    dernieres = (Commande.query.filter_by(boutique_id=current_user.id)
+                 .order_by(Commande.date_commande.desc()).limit(6).all())
 
     return render_template('boutique/dashboard.html',
                            en_livraison_count=en_livraison_count,
+                           confirmees_count=confirmees_count,
+                           du_jour=du_jour,
+                           livrees_jour=len(livrees_jour),
+                           encaisse_jour=sum(c.total for c in livrees_jour),
+                           ruptures=ruptures,
+                           dernieres=dernieres,
+                           fcfa=msg.fcfa,
                            articles_count=articles_count,
                            vendeurs_count=vendeurs_count,
                            commandes_count=commandes_count,
@@ -907,3 +924,34 @@ def zones_modele():
     livreurs_actifs = Livreur.query.filter_by(boutique_id=current_user.id, actif=True).order_by(Livreur.nom).all()
     return render_template('boutique/zones_modele.html', modele=ZONES_LOME, existantes=existantes,
                            livreurs=livreurs_actifs)
+
+# ==================== COMPTE ====================
+
+@boutique_bp.app_context_processor
+def injecter_compteurs():
+    """Pastille « nouvelles commandes » dans la barre du haut."""
+    if current_user.is_authenticated and isinstance(current_user, Boutique):
+        return {'nouvelles_commandes': Commande.query.filter_by(boutique_id=current_user.id, statut='nouvelle').count()}
+    return {'nouvelles_commandes': 0}
+
+@boutique_bp.route('/mot_de_passe', methods=['GET', 'POST'])
+@login_required
+def changer_mot_de_passe():
+    if request.method == 'POST':
+        actuel = request.form.get('actuel') or ''
+        nouveau = request.form.get('nouveau') or ''
+        if not current_user.verifier_mot_de_passe(actuel):
+            flash('Mot de passe actuel incorrect', 'danger')
+        elif nouveau != request.form.get('confirmation'):
+            flash('Les deux nouveaux mots de passe ne correspondent pas', 'danger')
+        elif not MDP_FORT.match(nouveau):
+            flash(MSG_MDP_FAIBLE, 'danger')
+        elif nouveau == actuel:
+            flash('Le nouveau mot de passe doit être différent de l\'actuel', 'warning')
+        else:
+            current_user.set_mot_de_passe(nouveau)
+            db.session.commit()
+            flash('Mot de passe changé. Utilisez-le à votre prochaine connexion.', 'success')
+            return redirect(url_for('boutique.dashboard'))
+        return redirect(url_for('boutique.changer_mot_de_passe'))
+    return render_template('boutique/mot_de_passe.html')

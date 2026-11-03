@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from "_macros.html" import recherche %}
 
 {% block title %}Inventaire - {{ current_user.nom_boutique }}{% endblock %}
 
@@ -39,6 +40,7 @@
     {% endif %}
 
     <!-- Comptage -->
+    {% if articles %}{{ recherche('#lignesInventaire', 'Rechercher un article : nom ou n°…', None, 'mb-3') }}{% endif %}
     <form method="POST" class="bg-white rounded-xl shadow-md overflow-hidden">
         <div class="p-4 border-b bg-gray-50">
             <p class="font-semibold text-gray-800">Faire l'inventaire</p>
@@ -49,9 +51,9 @@
             <thead class="text-gray-600 text-left bg-gray-50">
                 <tr><th class="px-3 py-2">Article</th><th class="px-3 py-2 text-right">Prix</th><th class="px-3 py-2 text-right">Stock actuel</th><th class="px-3 py-2 text-right">Valeur</th><th class="px-3 py-2">Compté</th></tr>
             </thead>
-            <tbody class="divide-y">
+            <tbody class="divide-y" id="lignesInventaire">
                 {% for a in articles %}
-                <tr class="{{ 'opacity-60' if a.archive }}">
+                <tr data-item="n°{{ a.numero }} {{ a.nom }}" class="{{ 'opacity-60' if a.archive }}">
                     <td class="px-3 py-2">
                         <a href="{{ url_for('boutique.mouvements_stock', article=a.id) }}" class="font-medium hover:underline"><span class="text-purple-600">n°{{ a.numero }}</span> · {{ a.nom }}</a>
                         {% if a.archive %}<span class="text-xs text-gray-400 ml-1">(archivé)</span>{% endif %}

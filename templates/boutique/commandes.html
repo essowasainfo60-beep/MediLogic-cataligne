@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from "_macros.html" import recherche %}
 
 {% block title %}Commandes reçues{% endblock %}
 
@@ -30,9 +31,11 @@
     </div>
 
     {% if commandes %}
-        <div class="space-y-4">
+        {{ recherche('#listeCommandes', 'Rechercher : client, téléphone, n° de commande, article, quartier…', '#aucuneCommande', 'mb-5') }}
+        <div id="listeCommandes" class="space-y-4">
             {% for commande in commandes %}
-                <div class="bg-white rounded-xl shadow-md overflow-hidden hover:shadow-lg transition {{ 'ring-2 ring-blue-400' if commande.statut == 'nouvelle' }}">
+                <div data-item="n°{{ commande.numero }} {{ commande.client_nom }} {{ commande.client_telephone }} {{ commande.client_telephone|replace(' ', '') }} {{ commande.client_adresse }} {{ commande.zone.nom if commande.zone else '' }} {{ commande.livreur.nom if commande.livreur else '' }} {{ commande.source_libelle }} {% for a in commande.articles_json %}{{ a.nom }} {% endfor %}"
+                     class="bg-white rounded-xl shadow-md overflow-hidden hover:shadow-lg transition {{ 'ring-2 ring-blue-400' if commande.statut == 'nouvelle' }}">
                     <div class="p-6">
                         <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-4">
                             <div>

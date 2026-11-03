@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from "_macros.html" import recherche %}
 
 {% block title %}Mouvements de stock{% endblock %}
 
@@ -16,15 +17,16 @@
         </select>
     </form>
 
+    {{ recherche('#lignesMouvements', 'Rechercher : article, type, commande…', None, 'mb-3') }}
     <div class="bg-white rounded-xl shadow-md overflow-x-auto">
         <table class="w-full text-sm">
             <thead class="bg-gray-50 text-gray-600 text-left">
                 <tr><th class="px-3 py-2">Date</th><th class="px-3 py-2">Article</th><th class="px-3 py-2">Type</th>
                     <th class="px-3 py-2 text-right">Quantité</th><th class="px-3 py-2 text-right">Stock après</th><th class="px-3 py-2">Détail</th></tr>
             </thead>
-            <tbody class="divide-y">
+            <tbody class="divide-y" id="lignesMouvements">
                 {% for m in mouvements %}
-                <tr>
+                <tr data-item="{{ m.article.nom }} {{ m.type_libelle }} {{ m.note or '' }} {{ m.date.strftime('%d/%m/%Y') }}">
                     <td class="px-3 py-2 whitespace-nowrap">{{ m.date.strftime('%d/%m/%Y %H:%M') }}</td>
                     <td class="px-3 py-2">{{ m.article.nom }}</td>
                     <td class="px-3 py-2">{{ m.type_libelle }}</td>

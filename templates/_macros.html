@@ -1,0 +1,13 @@
+{# Champ de recherche d'une liste : filtre les éléments [data-item] de `cible`
+   (voir le script « Recherche dans les listes » de base.html). #}
+{% macro recherche(cible, placeholder='Rechercher…', vide=None, classe='') %}
+<div class="recherche {{ classe }}">
+    <i class="fas fa-magnifying-glass"></i>
+    <input type="search" data-filtre="{{ cible }}" {% if vide %}data-vide="{{ vide }}"{% endif %}
+           placeholder="{{ placeholder }}" autocomplete="off" class="rounded-xl">
+    <span class="compte"></span>
+</div>
+{% if vide %}
+<p id="{{ vide[1:] }}" class="hidden text-center text-gray-500 py-8"><i class="fas fa-magnifying-glass mr-1"></i> Aucun résultat pour cette recherche.</p>
+{% endif %}
+{% endmacro %}
