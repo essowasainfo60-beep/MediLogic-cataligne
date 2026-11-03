@@ -20,17 +20,24 @@
         </div>
 
         <div class="p-6">
-            <!-- Statut -->
-            <form method="POST" action="{{ url_for('boutique.changer_statut_commande', commande_id=commande.id) }}"
-                  class="flex flex-wrap gap-2 border-b border-gray-200 pb-4 mb-4">
-                <span class="text-sm text-gray-500 self-center mr-2">Changer le statut :</span>
-                {% for code, (libelle, classe) in statuts.items() if code != 'retournee' %}
-                <button type="submit" name="statut" value="{{ code }}"
-                        class="px-3 py-1.5 rounded-lg text-sm font-medium {{ classe }} {{ 'ring-2 ring-offset-1 ring-purple-500' if commande.statut == code else 'opacity-70 hover:opacity-100' }}">
-                    {{ libelle }}
-                </button>
+            <!-- Suivi : Reçue → Confirmée → En livraison → Livrée -->
+            {% if commande.statut in ['annulee', 'retournee'] %}
+            <p class="mb-5 px-4 py-3 rounded-xl text-sm font-semibold {{ commande.statut_classe }}">
+                <i class="fas fa-circle-info mr-1"></i> Commande {{ commande.statut_libelle|lower }}.
+            </p>
+            {% else %}
+            {% set rang = {'nouvelle': 0, 'confirmee': 1, 'en_livraison': 2, 'livree': 3}[commande.statut] %}
+            <ol class="grid grid-cols-4 gap-1 mb-6 text-[11px] sm:text-xs text-center">
+                {% for libelle in ['Reçue', 'Confirmée', 'En livraison', 'Livrée'] %}
+                <li>
+                    <div class="h-1.5 rounded-full {{ 'bg-green-500' if loop.index0 <= rang else 'bg-gray-200' }}"></div>
+                    <p class="mt-1.5 {{ 'font-bold text-gray-900' if loop.index0 == rang else ('text-green-700' if loop.index0 < rang else 'text-gray-400') }}">
+                        {% if loop.index0 < rang %}✓ {% endif %}{{ libelle }}
+                    </p>
+                </li>
                 {% endfor %}
-            </form>
+            </ol>
+            {% endif %}
 
             <!-- Client -->
             <div class="border-b border-gray-200 pb-4 mb-4">
@@ -128,16 +135,23 @@
                     </form>
                     {% endif %}
                     {% if livreurs %}
-                    <form method="POST" action="{{ url_for('boutique.attribuer_livreur', commande_id=commande.id) }}" class="flex flex-col sm:flex-row gap-2">
-                        <select name="livreur_id" required class="flex-1 border border-gray-300 rounded-lg px-3 py-2">
-                            <option value="">Choisir un livreur…</option>
+                    {% set en_route = commande.statut == 'en_livraison' %}
+                    <form method="POST" action="{{ url_for('boutique.attribuer_livreur', commande_id=commande.id) }}" class="flex flex-col sm:flex-row gap-2"
+                          data-question="{{ ('Confier la commande n°' ~ commande.numero ~ ' à un autre livreur ?') if en_route else ('Voulez-vous vraiment confirmer la commande n°' ~ commande.numero ~ ' de ' ~ commande.client_nom ~ ' ?') }}"
+                          onsubmit="return confirm(this.dataset.question + '\n\nLivreur : ' + this.livreur_id.selectedOptions[0].dataset.nom)">
+                        <select name="livreur_id" required class="flex-1 border border-gray-300 px-3 py-2.5">
+                            <option value="" data-nom="">Choisir le livreur…</option>
                             {% for l in livreurs %}
-                            <option value="{{ l.id }}" {{ 'selected' if livreur_propose == l.id }}>{{ l.nom }} ({{ l.telephone }}){% if commande.zone and commande.zone.livreur_id == l.id %} · attitré de la zone{% endif %}</option>
+                            <option value="{{ l.id }}" data-nom="{{ l.nom }}" {{ 'selected' if livreur_propose == l.id }}>🛵 {{ l.nom }} ({{ l.telephone }}){% if commande.zone and commande.zone.livreur_id == l.id %} · livreur de la zone{% endif %}</option>
                             {% endfor %}
                         </select>
-                        <button type="submit" class="bg-purple-600 text-white px-4 py-2 rounded-lg hover:bg-purple-700">
-                            {{ 'Changer de livreur' if commande.livreur else 'Attribuer la livraison' }}
+                        {% if en_route %}
+                        <button type="submit" class="bg-gray-100 text-gray-700 px-4 py-2.5 rounded-xl font-semibold hover:bg-gray-200">Changer de livreur</button>
+                        {% else %}
+                        <button type="submit" class="bg-green-600 text-white px-5 py-2.5 rounded-xl font-semibold hover:bg-green-700">
+                            <i class="fas fa-check mr-1"></i> Confirmer et livrer
                         </button>
+                        {% endif %}
                     </form>
                     {% else %}
                     <p class="text-sm text-gray-600">Aucun livreur enregistré.
@@ -191,13 +205,6 @@
                     <i class="fas fa-rotate-left mr-2"></i> Retour / échange d'articles
                 </a>
                 {% endif %}
-                {% if commande.statut == 'nouvelle' %}
-                <a href="{{ url_for('boutique.envoyer_confirmation_client', commande_id=commande.id) }}"
-                   target="_blank"
-                   class="bg-green-500 text-white py-3 rounded-lg text-center hover:bg-green-600 transition">
-                    <i class="fab fa-whatsapp mr-2"></i> Confirmer au client
-                </a>
-                {% endif %}
                 <a href="{{ url_for('boutique.imprimer_commande', commande_id=commande.id, format='80') }}" target="_blank"
                    class="bg-gray-800 text-white py-3 rounded-lg text-center hover:bg-gray-900 transition">
                     <i class="fas fa-receipt mr-2"></i> Imprimer ticket 80 mm
@@ -215,6 +222,15 @@
                     <i class="fas fa-arrow-left mr-2"></i> Retour
                 </a>
             </div>
+            {% if commande.statut in ['nouvelle', 'confirmee', 'en_livraison'] %}
+            <form method="POST" action="{{ url_for('boutique.changer_statut_commande', commande_id=commande.id) }}" class="mt-4 text-center"
+                  data-question="Annuler la commande n°{{ commande.numero }} de {{ commande.client_nom }} ?"
+                  onsubmit="return confirm(this.dataset.question)">
+                <button type="submit" name="statut" value="annulee" class="text-sm text-red-600 hover:underline">
+                    <i class="fas fa-ban mr-1"></i> Annuler la commande
+                </button>
+            </form>
+            {% endif %}
         </div>
     </div>
 </div>

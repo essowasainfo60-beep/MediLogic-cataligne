@@ -35,6 +35,22 @@ def article_de_la_boutique(article_id):
     return article if article.boutique_id == current_user.id else None
 
 
+def liens_whatsapp_livraison(commande):
+    """(lien pour prévenir le client, lien pour envoyer la course au livreur)."""
+    lien_livraison = url_for('client.livraison', code=commande.code_livraison, _external=True)
+    return (msg.lien_whatsapp(commande.client_telephone, msg.livreur_en_route_client(commande)),
+            msg.lien_whatsapp(commande.livreur.telephone, msg.course_livreur(commande, lien_livraison)))
+
+
+def confier_au_livreur(commande, livreur):
+    """Confirmer = confier à un livreur : la commande part aussitôt en livraison."""
+    commande.livreur = livreur
+    if not commande.code_livraison:
+        commande.code_livraison = nouveau_code_lien()
+    stock.changer_statut(commande, 'en_livraison')
+    commande.lu = True
+
+
 def zones_actives():
     return Zone.query.filter_by(boutique_id=current_user.id, active=True).order_by(Zone.nom).all()
 
@@ -467,7 +483,9 @@ def commandes():
                      .filter(Commande.boutique_id == current_user.id)
                      .group_by(Commande.statut).all())
     return render_template('boutique/commandes.html', commandes=commandes_list,
-                           statut_actif=statut, compteurs=compteurs, statuts=Commande.STATUTS)
+                           statut_actif=statut, compteurs=compteurs, statuts=Commande.STATUTS,
+                           livreurs=Livreur.query.filter_by(boutique_id=current_user.id, actif=True).order_by(Livreur.nom).all(),
+                           liens_wa={c.id: liens_whatsapp_livraison(c) for c in commandes_list if c.statut == 'en_livraison' and c.livreur})
 
 @boutique_bp.route('/commande_details/<int:commande_id>')
 @login_required
@@ -482,10 +500,8 @@ def commande_details(commande_id):
         db.session.commit()
 
     wa_client = wa_livreur = None
-    if commande.livreur:
-        wa_client = msg.lien_whatsapp(commande.client_telephone, msg.livreur_en_route_client(commande))
-        lien_livraison = url_for('client.livraison', code=commande.code_livraison, _external=True)
-        wa_livreur = msg.lien_whatsapp(commande.livreur.telephone, msg.course_livreur(commande, lien_livraison))
+    if commande.livreur and commande.code_livraison:
+        wa_client, wa_livreur = liens_whatsapp_livraison(commande)
 
     livreurs = Livreur.query.filter_by(boutique_id=current_user.id, actif=True).order_by(Livreur.nom).all()
     # Livreur proposé : celui déjà choisi, sinon le livreur attitré de la zone
@@ -552,7 +568,8 @@ def nouvelle_commande():
         if not lignes or not client_nom or not client_telephone or not client_adresse:
             flash('Client (nom, téléphone, adresse) et au moins un article sont obligatoires', 'danger')
             return render_template('boutique/nouvelle_commande.html', catalogue=catalogue,
-                                   sources=Commande.SOURCES, zones=zones_actives(), form=f)
+                                   sources=Commande.SOURCES, zones=zones_actives(), form=f,
+                                   livreurs=Livreur.query.filter_by(boutique_id=current_user.id, actif=True).order_by(Livreur.nom).all())
 
         zone = Zone.query.filter_by(id=f.get('zone_id', type=int), boutique_id=current_user.id).first()
         frais = lire_prix(f.get('frais_livraison'))
@@ -573,11 +590,19 @@ def nouvelle_commande():
             lu=True,
         )
         enregistrer_avec_numero(commande, 'numero_commande', Commande.prochain_numero)
-        flash(f'Commande n°{commande.numero} enregistrée. Attribuez-la à un livreur et imprimez la facture.', 'success')
+        livreur = Livreur.query.filter_by(id=f.get('livreur_id', type=int), boutique_id=current_user.id, actif=True).first()
+        if livreur:
+            confier_au_livreur(commande, livreur)
+            db.session.commit()
+            flash(f'Commande n°{commande.numero} enregistrée et en livraison avec {livreur.nom}. '
+                  'Prévenez le client et le livreur, puis imprimez la facture.', 'success')
+        else:
+            flash(f'Commande n°{commande.numero} enregistrée. Confirmez-la en choisissant un livreur.', 'success')
         return redirect(url_for('boutique.commande_details', commande_id=commande.id) + '#livraison')
 
     return render_template('boutique/nouvelle_commande.html', catalogue=catalogue,
-                           sources=Commande.SOURCES, zones=zones_actives(), form=request.args)
+                           sources=Commande.SOURCES, zones=zones_actives(), form=request.args,
+                           livreurs=Livreur.query.filter_by(boutique_id=current_user.id, actif=True).order_by(Livreur.nom).all())
 
 @boutique_bp.route('/commande/<int:commande_id>/attribuer', methods=['POST'])
 @login_required
@@ -588,14 +613,16 @@ def attribuer_livreur(commande_id):
     if not commande or not livreur:
         flash('Choisissez un livreur', 'danger')
         return redirect(url_for('boutique.commande_details', commande_id=commande_id))
+    if commande.statut in ('livree', 'retournee', 'annulee'):
+        flash(f'La commande n°{commande.numero} est déjà {commande.statut_libelle.lower()}', 'warning')
+        return redirect(url_for('boutique.commande_details', commande_id=commande_id))
 
-    commande.livreur = livreur
-    stock.changer_statut(commande, 'en_livraison')
-    commande.lu = True
-    if not commande.code_livraison:
-        commande.code_livraison = nouveau_code_lien()
+    deja_en_route = commande.statut == 'en_livraison'
+    confier_au_livreur(commande, livreur)
     db.session.commit()
-    flash(f'Commande confiée à {livreur.nom}. Prévenez maintenant le client et le livreur avec les boutons WhatsApp.', 'success')
+    flash((f'Commande n°{commande.numero} confiée à {livreur.nom}.' if deja_en_route
+           else f'Commande n°{commande.numero} confirmée et en livraison avec {livreur.nom}.')
+          + ' Étape suivante : prévenez le client et envoyez la course au livreur (boutons WhatsApp).', 'success')
     return redirect(url_for('boutique.commande_details', commande_id=commande.id) + '#livraison')
 
 @boutique_bp.route('/commande/<int:commande_id>/imprimer')

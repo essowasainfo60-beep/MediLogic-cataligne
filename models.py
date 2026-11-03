@@ -131,7 +131,7 @@ class Commande(db.Model):
 
     STATUTS = {
         'nouvelle': ('Nouvelle', 'bg-blue-100 text-blue-800'),
-        'confirmee': ('Confirmée', 'bg-yellow-100 text-yellow-800'),
+        'confirmee': ('Confirmée · à livrer', 'bg-yellow-100 text-yellow-800'),
         'en_livraison': ('En livraison', 'bg-purple-100 text-purple-800'),
         'livree': ('Livrée', 'bg-green-100 text-green-800'),
         'retournee': ('Retournée', 'bg-orange-100 text-orange-800'),
