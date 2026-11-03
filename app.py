@@ -76,6 +76,11 @@ def mettre_a_jour_schema():
                 for i, (ligne_id,) in enumerate(ids, start=dernier + 1):
                     conn.execute(text(f"UPDATE {table} SET {champ} = :n WHERE id = :i"), {'n': i, 'i': ligne_id})
             conn.execute(text(f"CREATE UNIQUE INDEX IF NOT EXISTS ux_{table}_boutique_{champ} ON {table} (boutique_id, {champ})"))
+        if 'code_acces' not in {c['name'] for c in inspecteur.get_columns('livreurs')}:
+            conn.execute(text("ALTER TABLE livreurs ADD COLUMN code_acces VARCHAR(32)"))
+            conn.execute(text("CREATE UNIQUE INDEX IF NOT EXISTS ix_livreurs_code_acces ON livreurs (code_acces)"))
+        for (livreur_id,) in conn.execute(text("SELECT id FROM livreurs WHERE code_acces IS NULL")).fetchall():
+            conn.execute(text("UPDATE livreurs SET code_acces = :c WHERE id = :i"), {'c': nouveau_code_lien(), 'i': livreur_id})
         colonnes_boutiques = {c['name'] for c in inspecteur.get_columns('boutiques')}
         for nom, definition in [('description', 'TEXT'), ('adresse', 'VARCHAR(255)')]:
             if nom not in colonnes_boutiques:

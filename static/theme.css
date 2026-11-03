@@ -18,6 +18,25 @@ input:focus, select:focus, textarea:focus { outline: none; border-color: #8b5cf6
 ::placeholder { color: #9ca3af; }
 table thead th { font-weight: 600; font-size: .78rem; text-transform: uppercase; letter-spacing: .03em; }
 
+/* ---- Largeur : le contenu occupe l'écran (ordinateur, tablette, téléphone) ----
+   Les pages de travail (listes, fiches, tableaux) s'élargissent jusqu'à 1600 px ;
+   les petits formulaires (mot de passe, connexion…) restent centrés et lisibles. */
+@media (min-width: 1024px) {
+    .max-w-3xl, .max-w-4xl, .max-w-5xl, .max-w-6xl, .max-w-7xl { max-width: min(1600px, 100%) !important; }
+}
+@media (min-width: 1280px) {
+    /* plus de colonnes sur grand écran */
+    #listeArticles, #articles { grid-template-columns: repeat(4, minmax(0, 1fr)) !important; }
+}
+@media (min-width: 1600px) {
+    #listeArticles, #articles { grid-template-columns: repeat(5, minmax(0, 1fr)) !important; }
+}
+@media (min-width: 1280px) {
+    /* liste des commandes en 2 colonnes sur grand écran */
+    #listeCommandes { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem; }
+    #listeCommandes > * + * { margin-top: 0 !important; }
+}
+
 /* Champ de recherche des listes */
 .recherche { position: relative; }
 .recherche i { position: absolute; left: .9rem; top: 50%; transform: translateY(-50%); color: #9ca3af; pointer-events: none; }
@@ -81,4 +100,4 @@ html.dark .text-primary { color: #93b4ff !important; }
 
 html.dark .shadow-md, html.dark .shadow-lg, html.dark .shadow { box-shadow: 0 0 0 1px var(--bordure) !important; }
 html.dark footer { background: #070c16 !important; }
-html.dark img.bg-white, html.dark .rounded-full.bg-white { background-color: #fff !important; } /* logos sur fond clair */
+html.dark img.bg-white { background-color: #fff !important; } /* logos : gardent leur fond clair */

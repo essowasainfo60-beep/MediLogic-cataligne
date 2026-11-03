@@ -6,7 +6,7 @@ from flask import (Blueprint, Response, abort, flash, jsonify, redirect,
 
 import messages_whatsapp as msg
 import stock
-from models import db, Boutique, Article, Commande, Photo, Zone, enregistrer_avec_numero
+from models import db, Boutique, Article, Commande, Photo, Zone, Livreur, enregistrer_avec_numero
 
 client_bp = Blueprint('client', __name__)
 
@@ -279,3 +279,55 @@ def livraison(code):
     wa_merci = msg.lien_whatsapp(commande.client_telephone, msg.livree_client(commande))         if commande.statut == 'livree' else None
     return render_template('client/livraison.html', commande=commande, wa_merci=wa_merci,
                            fcfa=msg.fcfa)
+
+# ==================== ESPACE DU LIVREUR (lien personnel, installable) ====================
+
+def livreur_par_code(code):
+    livreur = Livreur.query.filter_by(code_acces=code).first()
+    if not livreur or not livreur.actif or not livreur.boutique.active:
+        abort(404)
+    return livreur
+
+@client_bp.route('/l/<code>')
+def espace_livreur(code):
+    livreur = livreur_par_code(code)
+    a_livrer = (Commande.query.filter_by(livreur_id=livreur.id, statut='en_livraison')
+                .order_by(Commande.date_commande).all())
+    debut_jour = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
+    livrees = (Commande.query.filter(Commande.livreur_id == livreur.id, Commande.statut == 'livree')
+               .order_by(Commande.date_livraison.desc()).limit(50).all())
+    du_jour = [c for c in livrees if c.date_livraison and c.date_livraison >= debut_jour]
+    return render_template('client/espace_livreur.html', livreur=livreur, a_livrer=a_livrer, livrees=livrees,
+                           livrees_jour=len(du_jour), encaisse_jour=sum(c.total for c in du_jour),
+                           onglet=request.args.get('onglet', 'a_livrer'), fcfa=msg.fcfa)
+
+@client_bp.route('/l/<code>/livree/<int:commande_id>', methods=['POST'])
+def espace_livreur_livree(code, commande_id):
+    livreur = livreur_par_code(code)
+    commande = Commande.query.filter_by(id=commande_id, livreur_id=livreur.id).first_or_404()
+    if commande.statut == 'en_livraison':
+        stock.changer_statut(commande, 'livree')
+        db.session.commit()
+        flash(f"Commande n°{commande.numero} livrée à {commande.date_livraison.strftime('%H:%M')}. Merci !", 'success')
+    return redirect(url_for('client.espace_livreur', code=code))
+
+@client_bp.route('/l/<code>/manifest.json')
+def manifest_livreur(code):
+    """Manifeste propre au livreur : l'application installée s'ouvre sur SON espace."""
+    livreur = livreur_par_code(code)
+    return jsonify({
+        'name': f'LivraPlus Livreur · {livreur.boutique.nom_boutique}',
+        'short_name': 'Mes livraisons',
+        'id': f'/l/{code}',
+        'start_url': f'/l/{code}',
+        'scope': '/',
+        'display': 'standalone',
+        'background_color': '#0b1d35',
+        'theme_color': '#0b1d35',
+        'lang': 'fr',
+        'icons': [
+            {'src': '/static/icons/icon-192.png', 'sizes': '192x192', 'type': 'image/png', 'purpose': 'any maskable'},
+            {'src': '/static/icons/icon-512.png', 'sizes': '512x512', 'type': 'image/png', 'purpose': 'any maskable'},
+        ],
+    })
+

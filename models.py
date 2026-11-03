@@ -256,6 +256,8 @@ class Livreur(db.Model):
     telephone = db.Column(db.String(50), nullable=False)
     actif = db.Column(db.Boolean, default=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    # Lien secret de l'espace du livreur (/l/<code>), installable sur son téléphone
+    code_acces = db.Column(db.String(32), unique=True, index=True, default=lambda: nouveau_code_lien())
 
     boutique = db.relationship('Boutique', backref=db.backref('livreurs', cascade='all, delete-orphan'))
 

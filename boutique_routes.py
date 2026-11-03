@@ -37,7 +37,10 @@ def article_de_la_boutique(article_id):
 
 def liens_whatsapp_livraison(commande):
     """(lien pour prévenir le client, lien pour envoyer la course au livreur)."""
-    lien_livraison = url_for('client.livraison', code=commande.code_livraison, _external=True)
+    # Le livreur valide depuis son espace (toutes ses courses), sinon via le lien de la commande
+    lien_livraison = (url_for('client.espace_livreur', code=commande.livreur.code_acces, _external=True)
+                      if commande.livreur.code_acces else
+                      url_for('client.livraison', code=commande.code_livraison, _external=True))
     return (msg.lien_whatsapp(commande.client_telephone, msg.livreur_en_route_client(commande)),
             msg.lien_whatsapp(commande.livreur.telephone, msg.course_livreur(commande, lien_livraison)))
 
@@ -982,3 +985,24 @@ def changer_mot_de_passe():
             return redirect(url_for('boutique.dashboard'))
         return redirect(url_for('boutique.changer_mot_de_passe'))
     return render_template('boutique/mot_de_passe.html')
+
+@boutique_bp.route('/livreurs/<int:livreur_id>/espace')
+@login_required
+def envoyer_espace_livreur(livreur_id):
+    """Ouvre WhatsApp avec le lien de l'espace personnel du livreur."""
+    livreur = Livreur.query.filter_by(id=livreur_id, boutique_id=current_user.id).first_or_404()
+    if not livreur.code_acces:
+        livreur.code_acces = nouveau_code_lien()
+        db.session.commit()
+    lien = url_for('client.espace_livreur', code=livreur.code_acces, _external=True)
+    return redirect(msg.lien_whatsapp(livreur.telephone, msg.espace_livreur(livreur, lien)))
+
+@boutique_bp.route('/livreurs/<int:livreur_id>/nouveau_lien', methods=['POST'])
+@login_required
+def nouveau_lien_livreur(livreur_id):
+    livreur = Livreur.query.filter_by(id=livreur_id, boutique_id=current_user.id).first_or_404()
+    livreur.code_acces = nouveau_code_lien()
+    db.session.commit()
+    flash(f"Nouveau lien créé pour {livreur.nom} : l'ancien ne marche plus. Renvoyez-lui son espace.", 'success')
+    return redirect(url_for('boutique.livreurs'))
+

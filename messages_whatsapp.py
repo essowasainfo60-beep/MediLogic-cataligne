@@ -43,6 +43,16 @@ def livreur_en_route_client(commande):
             f"Merci beaucoup pour votre confiance ! 🙏\n{commande.boutique.nom_boutique}")
 
 
+def espace_livreur(livreur, lien_espace):
+    return (f"🛵 *ESPACE LIVREUR - {livreur.boutique.nom_boutique}*\n{TRAIT}\n"
+            f"Bonjour {livreur.nom},\n\n"
+            f"Voici votre espace personnel : vous y verrez toutes les livraisons qui vous sont confiées "
+            f"(client, adresse, carte, montant), et vous marquerez chaque commande « Livrée » une fois remise.\n\n"
+            f"👉 {lien_espace}\n\n"
+            f"Astuce : ouvrez le lien puis « Ajouter à l'écran d'accueil » pour l'installer comme une application.\n"
+            f"⚠️ Ce lien est personnel, ne le partagez pas.")
+
+
 def course_livreur(commande, lien_livraison):
     texte = (f"📦 *NOUVELLE LIVRAISON - COMMANDE N°{commande.numero}*\n{TRAIT}\n"
              f"Boutique : {commande.boutique.nom_boutique}\n\n"

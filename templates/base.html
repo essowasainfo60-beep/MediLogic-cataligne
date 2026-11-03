@@ -14,7 +14,7 @@
         })();
     </script>
     <!-- Application installable "LivraPlus" (téléphone / tablette / PC) -->
-    <link rel="manifest" href="{{ url_for('app_manifest') }}">
+    {% block manifest %}<link rel="manifest" href="{{ url_for('app_manifest') }}">{% endblock %}
     <meta name="theme-color" content="#0b1d35">
     <link rel="icon" type="image/png" sizes="192x192" href="{{ url_for('static', filename='icons/icon-192.png') }}">
     <link rel="apple-touch-icon" href="{{ url_for('static', filename='icons/icon-192.png') }}">

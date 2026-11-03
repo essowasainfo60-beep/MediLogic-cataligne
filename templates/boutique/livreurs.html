@@ -38,7 +38,17 @@
                 </p>
                 <p class="text-sm text-gray-500"><i class="fab fa-whatsapp mr-1"></i>{{ l.telephone }}</p>
             </div>
-            <div class="flex gap-2">
+            <div class="flex flex-wrap gap-2">
+                {% if l.actif %}
+                <a href="{{ url_for('boutique.envoyer_espace_livreur', livreur_id=l.id) }}" target="_blank"
+                   title="Envoie au livreur, par WhatsApp, le lien de son espace « Mes livraisons »"
+                   class="text-sm bg-purple-600 text-white px-3 py-1.5 rounded-lg"><i class="fas fa-mobile-screen mr-1"></i> Envoyer son espace</a>
+                <form method="POST" action="{{ url_for('boutique.nouveau_lien_livreur', livreur_id=l.id) }}"
+                      data-question="Créer un nouveau lien pour {{ l.nom }} ? L'ancien ne fonctionnera plus (téléphone perdu, livreur parti…)."
+                      onsubmit="return confirm(this.dataset.question)">
+                    <button type="submit" class="text-sm bg-gray-100 text-gray-700 px-3 py-1.5 rounded-lg" title="Couper l'ancien accès"><i class="fas fa-rotate"></i></button>
+                </form>
+                {% endif %}
                 <a href="https://wa.me/{{ l.telephone_whatsapp }}" target="_blank"
                    class="text-sm bg-green-500 text-white px-3 py-1.5 rounded-lg"><i class="fab fa-whatsapp"></i> Écrire</a>
                 <form method="POST" action="{{ url_for('boutique.basculer_livreur', livreur_id=l.id) }}">
