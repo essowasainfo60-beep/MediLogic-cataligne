@@ -9,8 +9,11 @@ class Config:
 
     # Base Neon (PostgreSQL) en production, SQLite en local si DATABASE_URL absent
     DATABASE_URL = os.environ.get('DATABASE_URL', '')
-    if DATABASE_URL.startswith('postgres://'):
-        DATABASE_URL = DATABASE_URL.replace('postgres://', 'postgresql://', 1)
+    # Pilote psycopg2 imposé : SQLAlchemy 2.1 choisit sinon psycopg (v3), non installé
+    for prefixe in ('postgres://', 'postgresql://', 'postgresql+pg8000://'):
+        if DATABASE_URL.startswith(prefixe):
+            DATABASE_URL = 'postgresql+psycopg2://' + DATABASE_URL[len(prefixe):]
+            break
     SQLALCHEMY_DATABASE_URI = DATABASE_URL if DATABASE_URL.startswith(('postgresql', 'sqlite')) else 'sqlite:///medilogic.db'
     SQLALCHEMY_TRACK_MODIFICATIONS = False
     # Neon coupe les connexions inactives : on les vérifie avant usage
