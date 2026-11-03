@@ -1,85 +1,75 @@
-import os
-import time
-from PIL import Image
 import io
-import requests
-from werkzeug.utils import secure_filename
-from flask import current_app
+import re
 
-def compress_image(file, max_size_mb=10):
-    """Compresse une image avant upload"""
+from PIL import Image, ImageOps
+from flask import url_for
+
+from models import db, Photo
+
+# Les photos sont stockées directement dans la base Neon (colonne bytea),
+# comme les fichiers et signatures de GHP. On les réduit avant stockage pour
+# garder la base légère : 1280 px max, JPEG qualité 80 (~100-250 Ko/photo).
+TAILLE_MAX_PX = 1280
+TAILLE_LOGO_PX = 400
+QUALITE_JPEG = 80
+
+PHOTO_URL_RE = re.compile(r'^/photo/(\d+)$')
+
+
+def compresser_image(fichier, taille_max=TAILLE_MAX_PX):
+    """Retourne (octets, mime) d'une image redimensionnée et compressée,
+    ou None si le fichier n'est pas une image lisible."""
     try:
-        img = Image.open(file)
-        
-        # Convertir en RGB si nécessaire (pour PNG avec transparence)
-        if img.mode in ('RGBA', 'LA', 'P'):
-            img = img.convert('RGB')
-        
-        # Redimensionner si trop grande (max 2000px)
-        if img.width > 2000 or img.height > 2000:
-            ratio = min(2000/img.width, 2000/img.height)
-            new_size = (int(img.width*ratio), int(img.height*ratio))
-            img = img.resize(new_size, Image.Resampling.LANCZOS)
-        
-        # Compresser
+        img = Image.open(fichier)
+        img = ImageOps.exif_transpose(img)  # photos de téléphone : respecte l'orientation
+        img.thumbnail((taille_max, taille_max), Image.Resampling.LANCZOS)
+
         buffer = io.BytesIO()
-        img.save(buffer, format='JPEG', quality=75, optimize=True)
-        buffer.seek(0)
-        
-        return buffer
-    except Exception as e:
-        print(f"Erreur compression: {e}")
-        return file
+        if img.mode in ('RGBA', 'LA', 'P') and taille_max <= TAILLE_LOGO_PX:
+            # Logo : on garde la transparence en PNG
+            img.save(buffer, format='PNG', optimize=True)
+            return buffer.getvalue(), 'image/png'
 
-def upload_to_imgbb(file, custom_name=None):
-    """Upload vers Supabase avec compression"""
-    try:
-        supabase_url = current_app.config.get('SUPABASE_URL')
-        supabase_key = current_app.config.get('SUPABASE_KEY')
-        
-        if not supabase_url or not supabase_key:
-            return None
-        
-        # Compresser l'image
-        compressed_file = compress_image(file)
-        
-        # Ajouter un timestamp pour éviter les doublons
-        timestamp = int(time.time())
-        original_name = secure_filename(custom_name or file.filename)
-        name, ext = os.path.splitext(original_name)
-        filename = f"{name}_{timestamp}{ext}"
-        
-        # Upload vers Supabase
-        file_path = f"articles/{filename}"
-        
-        headers = {
-            "apikey": supabase_key,
-            "Authorization": f"Bearer {supabase_key}"
-        }
-        
-        files = {'file': (filename, compressed_file, 'image/jpeg')}
-        
-        upload_url = f"{supabase_url}/storage/v1/object/mediLogic-images/{file_path}"
-        response = requests.post(upload_url, headers=headers, files=files)
-        
-        if response.status_code in [200, 201]:
-            public_url = f"{supabase_url}/storage/v1/object/public/mediLogic-images/{file_path}"
-            print(f"✅ Image uploadée sur Supabase: {public_url}")
-            return public_url
-        else:
-            print(f"❌ Erreur: {response.status_code} - {response.text}")
-            return None
-            
+        if img.mode != 'RGB':
+            img = img.convert('RGB')
+        img.save(buffer, format='JPEG', quality=QUALITE_JPEG, optimize=True, progressive=True)
+        return buffer.getvalue(), 'image/jpeg'
     except Exception as e:
-        print(f"❌ Exception: {e}")
+        print(f"Image illisible ({getattr(fichier, 'filename', '?')}): {e}")
         return None
 
-def upload_multiple_images(files, boutique_id, article_id=None):
-    urls = []
-    for idx, file in enumerate(files):
-        if file and file.filename:
-            custom_name = f"boutique_{boutique_id}_article_{article_id or idx}_{idx}"
-            url = upload_to_imgbb(file, custom_name)
-            if url:
-                urls.append(url)
-    return urls
+
+def enregistrer_photo(fichier, boutique_id, taille_max=TAILLE_MAX_PX):
+    """Enregistre une image en base et retourne son URL (/photo/<id>), ou None."""
+    if not fichier or not fichier.filename:
+        return None
+    resultat = compresser_image(fichier, taille_max)
+    if not resultat:
+        return None
+    donnees, mime = resultat
+    photo = Photo(boutique_id=boutique_id, donnees=donnees, mime=mime)
+    db.session.add(photo)
+    db.session.flush()  # attribue l'id sans valider la transaction
+    return url_for('client.photo', photo_id=photo.id)
+
+
+def enregistrer_photos(fichiers, boutique_id):
+    """Enregistre plusieurs images. Retourne (urls, nombre_d_echecs)."""
+    urls, echecs = [], 0
+    for fichier in fichiers:
+        if not fichier or not fichier.filename:
+            continue
+        url = enregistrer_photo(fichier, boutique_id)
+        if url:
+            urls.append(url)
+        else:
+            echecs += 1
+    return urls, echecs
+
+
+def supprimer_photo_stockee(url, boutique_id):
+    """Supprime de la base la photo derrière une URL /photo/<id>.
+    Les anciennes URLs externes (ImgBB, Supabase) sont simplement ignorées."""
+    m = PHOTO_URL_RE.match(url or '')
+    if m:
+        Photo.query.filter_by(id=int(m.group(1)), boutique_id=boutique_id).delete()

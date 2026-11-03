@@ -1,14 +1,11 @@
-from flask import Blueprint, render_template, redirect, url_for, flash, request, session
-from flask_login import login_user, logout_user, login_required, current_user
-from models import db, Boutique
-from werkzeug.security import generate_password_hash, check_password_hash
+import hmac
 from functools import wraps
 
-admin_bp = Blueprint('admin', __name__)
+from flask import Blueprint, render_template, redirect, url_for, flash, request, session, current_app
 
-# Configuration admin (à mettre dans config.py plus tard)
-ADMIN_EMAIL = 'admin@medilogic.com'
-ADMIN_PASSWORD_HASH = generate_password_hash('Admin@2025MediLogic!')
+from models import db, Boutique
+
+admin_bp = Blueprint('admin', __name__)
 
 def admin_required(f):
     @wraps(f)
@@ -28,7 +25,8 @@ def admin_login():
         email = request.form.get('email')
         password = request.form.get('password')
         
-        if email == ADMIN_EMAIL and check_password_hash(ADMIN_PASSWORD_HASH, password):
+        cfg = current_app.config
+        if (email or '').strip().lower() == cfg['ADMIN_EMAIL'].lower() and                 hmac.compare_digest((password or '').encode(), cfg['ADMIN_PASSWORD'].encode()):
             session['is_admin'] = True
             flash('Connexion administrateur réussie', 'success')
             return redirect(url_for('admin.admin_dashboard'))
@@ -92,11 +90,11 @@ def reinitialiser_mdp(boutique_id):
     
     return render_template('admin/reinitialiser_mdp.html', boutique=boutique)
 
-@admin_bp.route('/supprimer/<int:boutique_id>')
+@admin_bp.route('/supprimer/<int:boutique_id>', methods=['POST'])
 @admin_required
 def supprimer_boutique(boutique_id):
     boutique = Boutique.query.get_or_404(boutique_id)
-    db.session.delete(boutique)
+    db.session.delete(boutique)  # supprime aussi articles, photos, vendeurs et commandes
     db.session.commit()
     flash(f'La boutique "{boutique.nom_boutique}" a été supprimée', 'danger')
     return redirect(url_for('admin.admin_dashboard'))

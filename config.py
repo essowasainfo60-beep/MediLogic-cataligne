@@ -3,29 +3,22 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+
 class Config:
     SECRET_KEY = os.environ.get('SECRET_KEY') or 'medilogic-super-secret-key-2025'
-    
-    DATABASE_URL = os.environ.get('DATABASE_URL')
-    
-    if DATABASE_URL and 'postgresql' in DATABASE_URL:
-        SQLALCHEMY_DATABASE_URI = DATABASE_URL
-    else:
-        SQLALCHEMY_DATABASE_URI = 'sqlite:///medilogic.db'
-    
+
+    # Base Neon (PostgreSQL) en production, SQLite en local si DATABASE_URL absent
+    DATABASE_URL = os.environ.get('DATABASE_URL', '')
+    if DATABASE_URL.startswith('postgres://'):
+        DATABASE_URL = DATABASE_URL.replace('postgres://', 'postgresql://', 1)
+    SQLALCHEMY_DATABASE_URI = DATABASE_URL if DATABASE_URL.startswith(('postgresql', 'sqlite')) else 'sqlite:///medilogic.db'
     SQLALCHEMY_TRACK_MODIFICATIONS = False
-    
-    # Uploads
-    MAX_CONTENT_LENGTH = 16 * 1024 * 1024
-    ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif', 'webp'}
-    
-    # Admin global
-    ADMIN_EMAIL = os.environ.get('ADMIN_EMAIL') or ''
-    ADMIN_PASSWORD = os.environ.get('ADMIN_PASSWORD') or ''
-    
-    # WhatsApp
-    WHATSAPP_BASE_URL = "https://wa.me/"
-    
-    # Supabase Storage
-    SUPABASE_URL = os.environ.get('SUPABASE_URL')
-    SUPABASE_KEY = os.environ.get('SUPABASE_KEY')
+    # Neon coupe les connexions inactives : on les vérifie avant usage
+    SQLALCHEMY_ENGINE_OPTIONS = {'pool_pre_ping': True, 'pool_recycle': 280}
+
+    # Uploads : les photos sont compressées puis stockées dans la base
+    MAX_CONTENT_LENGTH = 32 * 1024 * 1024  # total d'un envoi (plusieurs photos)
+
+    # Admin global (identifiants à définir dans l'environnement)
+    ADMIN_EMAIL = os.environ.get('ADMIN_EMAIL') or 'admin@medilogic.com'
+    ADMIN_PASSWORD = os.environ.get('ADMIN_PASSWORD') or 'Admin@2025MediLogic!'

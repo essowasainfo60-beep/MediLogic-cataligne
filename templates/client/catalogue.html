@@ -267,7 +267,7 @@
                         <i class="fas fa-shopping-cart mr-2 text-purple-600"></i>
                         Mon panier
                         <span id="panierCount" class="ml-2 bg-gradient-to-r from-purple-600 to-blue-600 text-white rounded-full w-6 h-6 flex items-center justify-center text-xs font-bold">
-                            {{ panier|length if panier else 0 }}
+                            {{ panier_quantite }}
                         </span>
                     </div>
                 </a>
@@ -281,7 +281,7 @@
             <div class="bg-gradient-to-r from-purple-600 to-blue-600 text-white px-5 py-3 rounded-full shadow-lg hover:shadow-xl transition-all flex items-center">
                 <i class="fas fa-shopping-cart mr-2"></i>
                 <span id="panierCountFloating" class="bg-red-500 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs ml-1">
-                    {{ panier|length if panier else 0 }}
+                    {{ panier_quantite }}
                 </span>
             </div>
         </a>
@@ -490,6 +490,7 @@ function handleAddToCart(event, form) {
         method: 'POST',
         headers: {
             'Content-Type': 'application/x-www-form-urlencoded',
+            'Accept': 'application/json',
         },
         body: formData.toString()
     })

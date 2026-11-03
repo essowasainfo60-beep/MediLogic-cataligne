@@ -37,17 +37,24 @@
                     <label class="block text-gray-700 text-sm font-bold mb-2">Photos actuelles</label>
                     <div class="grid grid-cols-3 gap-3">
                         {% for photo_url in article.photos_urls %}
-                        <div class="relative group">
-                            <img src="{{ photo_url }}" class="w-full h-28 object-cover rounded-lg border border-gray-200">
-                            <a href="{{ url_for('boutique.supprimer_photo', article_id=article.id, photo_index=loop.index0) }}" 
-                               class="absolute top-1 right-1 bg-red-500 text-white rounded-full w-6 h-6 flex items-center justify-center text-xs hover:bg-red-600 opacity-0 group-hover:opacity-100 transition"
-                               onclick="return confirm('Supprimer cette photo définitivement ?')">
+                        <div class="relative">
+                            <img src="{{ photo_url }}" class="w-full h-28 object-cover rounded-lg border {{ 'border-primary border-2' if loop.first else 'border-gray-200' }}">
+                            {% if loop.first %}
+                            <span class="absolute bottom-1 left-1 bg-primary text-white text-xs px-2 py-0.5 rounded">Principale</span>
+                            {% else %}
+                            <button type="submit" form="principale-{{ loop.index0 }}" title="Mettre en photo principale"
+                                    class="absolute bottom-1 left-1 bg-white bg-opacity-90 text-gray-700 text-xs px-2 py-0.5 rounded hover:bg-primary hover:text-white transition">
+                                <i class="fas fa-star"></i>
+                            </button>
+                            {% endif %}
+                            <button type="submit" form="supprimer-{{ loop.index0 }}" title="Supprimer cette photo"
+                                    class="absolute top-1 right-1 bg-red-500 text-white rounded-full w-7 h-7 flex items-center justify-center text-xs hover:bg-red-600 transition">
                                 <i class="fas fa-times"></i>
-                            </a>
+                            </button>
                         </div>
                         {% endfor %}
                     </div>
-                    <p class="text-xs text-gray-500 mt-2">Cliquez sur le × pour supprimer une photo</p>
+                    <p class="text-xs text-gray-500 mt-2">× : supprimer la photo · <i class="fas fa-star"></i> : en faire la photo principale (affichée dans le catalogue)</p>
                 </div>
                 {% endif %}
 
@@ -75,6 +82,15 @@
                 </a>
             </div>
         </form>
+
+        {# Formulaires séparés (un <form> ne peut pas être imbriqué dans un autre) #}
+        {% for photo_url in article.photos_urls or [] %}
+        <form id="supprimer-{{ loop.index0 }}" method="POST" class="hidden"
+              action="{{ url_for('boutique.supprimer_photo', article_id=article.id, photo_index=loop.index0) }}"
+              onsubmit="return confirm('Supprimer cette photo définitivement ?')"></form>
+        <form id="principale-{{ loop.index0 }}" method="POST" class="hidden"
+              action="{{ url_for('boutique.photo_principale', article_id=article.id, photo_index=loop.index0) }}"></form>
+        {% endfor %}
     </div>
 </div>
 

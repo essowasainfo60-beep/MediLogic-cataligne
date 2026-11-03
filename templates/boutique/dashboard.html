@@ -65,7 +65,11 @@
                 <i class="fas fa-shopping-cart text-5xl opacity-30"></i>
             </div>
             <p class="mt-3 text-purple-100 text-sm">
-                <i class="fas fa-arrow-right"></i> Voir les commandes
+                {% if nouvelles_count %}
+                    <span class="bg-white text-purple-700 font-bold rounded-full px-2 py-0.5 mr-1">{{ nouvelles_count }}</span> nouvelle(s) à traiter
+                {% else %}
+                    <i class="fas fa-arrow-right"></i> Voir les commandes
+                {% endif %}
             </p>
         </a>
     </div>

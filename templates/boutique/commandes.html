@@ -2,36 +2,61 @@
 
 {% block title %}Commandes reçues{% endblock %}
 
+{% macro fcfa(v) %}{{ "{:,.0f}".format(v).replace(',', ' ') }} FCFA{% endmacro %}
+
 {% block content %}
 <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-    <h1 class="text-2xl md:text-3xl font-bold text-gray-800 mb-6">
+    <h1 class="text-2xl md:text-3xl font-bold text-gray-800 mb-4">
         <i class="fas fa-shopping-cart text-purple-500 mr-2"></i> Commandes reçues
     </h1>
+
+    <!-- Filtres par statut -->
+    <div class="flex flex-wrap gap-2 mb-6">
+        <a href="{{ url_for('boutique.commandes') }}"
+           class="px-3 py-1.5 rounded-full text-sm {{ 'bg-purple-600 text-white' if not statut_actif else 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50' }}">
+            Toutes <span class="opacity-75">({{ compteurs.values()|sum }})</span>
+        </a>
+        {% for code, (libelle, classe) in statuts.items() %}
+        <a href="{{ url_for('boutique.commandes', statut=code) }}"
+           class="px-3 py-1.5 rounded-full text-sm {{ 'bg-purple-600 text-white' if statut_actif == code else 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50' }}">
+            {{ libelle }} <span class="opacity-75">({{ compteurs.get(code, 0) }})</span>
+        </a>
+        {% endfor %}
+    </div>
 
     {% if commandes %}
         <div class="space-y-4">
             {% for commande in commandes %}
-                <div class="bg-white rounded-xl shadow-md overflow-hidden hover:shadow-lg transition">
+                <div class="bg-white rounded-xl shadow-md overflow-hidden hover:shadow-lg transition {{ 'ring-2 ring-blue-400' if commande.statut == 'nouvelle' }}">
                     <div class="p-6">
                         <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-4">
                             <div>
-                                <p class="text-sm text-gray-500">Commande #{{ commande.numero_commande or commande.id }}</p>
+                                <p class="text-sm text-gray-500">
+                                    Commande n°{{ commande.numero_commande or commande.id }}
+                                    <span class="ml-2 px-2 py-0.5 rounded-full text-xs font-semibold {{ commande.statut_classe }}">{{ commande.statut_libelle }}</span>
+                                </p>
                                 <p class="font-semibold text-gray-800">{{ commande.client_nom }}</p>
                                 <p class="text-gray-600 text-sm">
                                     <i class="fas fa-phone mr-1"></i> {{ commande.client_telephone }}
                                 </p>
                             </div>
                             <div class="mt-2 md:mt-0 text-right">
-                                <p class="text-2xl font-bold text-primary">{{ "%.0f"|format(commande.total) }} FCFA</p>
+                                <p class="text-2xl font-bold text-primary">{{ fcfa(commande.total) }}</p>
                                 <p class="text-xs text-gray-500">{{ commande.date_commande.strftime('%d/%m/%Y à %H:%M') }}</p>
                             </div>
                         </div>
 
                         <div class="border-t border-gray-200 pt-3 mb-3">
                             <p class="text-sm text-gray-600">
-                                <i class="fas fa-map-marker-alt mr-1"></i> 
+                                <i class="fas fa-map-marker-alt mr-1"></i>
                                 <strong>Adresse :</strong> {{ commande.client_adresse }}
                             </p>
+                            {% if commande.instructions %}
+                            <p class="text-sm text-gray-600 mt-1">
+                                <i class="fas fa-pen-alt mr-1"></i>
+                                <strong>Instructions :</strong> {{ commande.instructions }}
+                            </p>
+                            {% endif %}
                         </div>
 
                         <div class="mb-3">
@@ -40,22 +65,30 @@
                                 {% for article in commande.articles_json %}
                                     <div class="flex justify-between text-sm">
                                         <span>{{ article.nom }} x{{ article.quantite }}</span>
-                                        <span class="font-medium">{{ "%.0f"|format(article.prix * article.quantite) }} FCFA</span>
+                                        <span class="font-medium">{{ fcfa(article.prix * article.quantite) }}</span>
                                     </div>
                                 {% endfor %}
                             </div>
                         </div>
 
-                        <div class="flex flex-wrap gap-2 mt-4">
-                            <a href="{{ url_for('boutique.commande_details', commande_id=commande.id) }}" 
+                        <div class="flex flex-wrap items-center gap-2 mt-4">
+                            <a href="{{ url_for('boutique.commande_details', commande_id=commande.id) }}"
                                class="bg-blue-500 text-white px-4 py-2 rounded-lg hover:bg-blue-600 transition">
                                 <i class="fas fa-eye mr-1"></i> Détails
                             </a>
-                            <a href="{{ url_for('boutique.envoyer_confirmation_client', commande_id=commande.id) }}" 
+                            <a href="{{ url_for('boutique.envoyer_confirmation_client', commande_id=commande.id) }}"
                                target="_blank"
                                class="bg-emerald-600 text-white px-4 py-2 rounded-lg hover:bg-emerald-700 transition">
-                                <i class="fab fa-whatsapp mr-1"></i> 📱 Confirmation client
+                                <i class="fab fa-whatsapp mr-1"></i> Confirmer au client
                             </a>
+                            <form method="POST" action="{{ url_for('boutique.changer_statut_commande', commande_id=commande.id) }}" class="flex items-center gap-1">
+                                <select name="statut" onchange="this.form.submit()"
+                                        class="border border-gray-300 rounded-lg px-2 py-2 text-sm">
+                                    {% for code, (libelle, classe) in statuts.items() %}
+                                    <option value="{{ code }}" {{ 'selected' if commande.statut == code }}>{{ libelle }}</option>
+                                    {% endfor %}
+                                </select>
+                            </form>
                         </div>
                     </div>
                 </div>

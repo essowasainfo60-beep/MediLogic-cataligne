@@ -1,33 +1,30 @@
-import os
-from flask import Flask, render_template, redirect, url_for, flash, request, session
-from flask_login import LoginManager, login_user, logout_user, login_required, current_user
-from models import db, Boutique, Vendeur, Article, Commande
-from utils import upload_to_imgbb, upload_multiple_images
-from datetime import datetime
-from models import db
+from flask import Flask, flash, redirect, request, url_for
+from flask_login import LoginManager
+from sqlalchemy import inspect, text
+from werkzeug.exceptions import RequestEntityTooLarge
+from werkzeug.middleware.proxy_fix import ProxyFix
+
+from models import db, Boutique, Vendeur
 
 app = Flask(__name__)
 app.config.from_object('config.Config')
+app.wsgi_app = ProxyFix(app.wsgi_app, x_proto=1, x_host=1)  # Render : URLs en https
 
-# Initialisation de la base de données
 db.init_app(app)
 
-# Configuration de Flask-Login
 login_manager = LoginManager()
 login_manager.init_app(app)
-login_manager.login_view = 'boutique.connexion'  # ← Change ici
+login_manager.login_view = 'boutique.connexion'
 login_manager.login_message = 'Veuillez vous connecter pour accéder à cette page'
+
 
 @login_manager.user_loader
 def load_user(user_id):
-    # Gérer les vendeurs si nécessaire
     if user_id.startswith('vendeur_'):
-        vendeur_id = int(user_id.split('_')[1])
-        return Vendeur.query.get(vendeur_id)
-    else:
-        return Boutique.query.get(int(user_id))
+        return db.session.get(Vendeur, int(user_id.split('_')[1]))
+    return db.session.get(Boutique, int(user_id))
 
-# Import des routes (après création des fichiers)
+
 from admin_routes import admin_bp
 from boutique_routes import boutique_bp
 from client_routes import client_bp
@@ -37,15 +34,25 @@ app.register_blueprint(boutique_bp, url_prefix='/boutique')
 app.register_blueprint(client_bp, url_prefix='/')
 
 
+@app.errorhandler(RequestEntityTooLarge)
+def fichier_trop_gros(e):
+    flash('Les photos envoyées sont trop lourdes (32 Mo max au total). Envoyez-en moins à la fois.', 'danger')
+    return redirect(request.referrer or url_for('client.accueil'))
+
+
+def mettre_a_jour_schema():
+    """Crée les tables manquantes (dont `photos`) et ajoute les colonnes
+    récentes sur une base existante, sans toucher aux données."""
+    db.create_all()
+    colonnes = {c['name'] for c in inspect(db.engine).get_columns('commandes')}
+    if 'statut' not in colonnes:
+        with db.engine.begin() as conn:
+            conn.execute(text("ALTER TABLE commandes ADD COLUMN statut VARCHAR(20) NOT NULL DEFAULT 'nouvelle'"))
+
+
+with app.app_context():
+    mettre_a_jour_schema()
+
+
 if __name__ == '__main__':
-    with app.app_context():
-        db.create_all()
-        
-        # Créer le compte admin global s'il n'existe pas déjà
-        from werkzeug.security import generate_password_hash
-        admin = Boutique.query.filter_by(email=app.config['ADMIN_EMAIL']).first()
-        if not admin and app.config['ADMIN_EMAIL'] != 'admin@medilogic.com':
-            # En production, l'admin n'est pas une boutique mais un vrai admin
-            pass
-    
     app.run(debug=True, host='0.0.0.0', port=5000)
