@@ -1,0 +1,117 @@
+{% extends "base.html" %}
+
+{% block title %}Livreurs - {{ current_user.nom_boutique }}{% endblock %}
+
+{% block content %}
+<div class="max-w-4xl mx-auto px-4 py-6">
+    <h1 class="text-2xl md:text-3xl font-bold text-gray-800 mb-6">
+        <i class="fas fa-motorcycle text-purple-500 mr-2"></i> Livreurs
+    </h1>
+
+    <!-- Ajouter -->
+    <form method="POST" class="bg-white rounded-xl shadow-md p-5 mb-6 grid grid-cols-1 md:grid-cols-3 gap-3 items-end">
+        <div>
+            <label class="block text-sm font-bold text-gray-700 mb-1">Nom du livreur *</label>
+            <input type="text" name="nom" required placeholder="Ex : Kossi"
+                   class="w-full px-3 py-2 border border-gray-300 rounded-lg">
+        </div>
+        <div>
+            <label class="block text-sm font-bold text-gray-700 mb-1">Numéro WhatsApp *</label>
+            <input type="tel" name="telephone" required placeholder="+228 90 00 00 00"
+                   class="w-full px-3 py-2 border border-gray-300 rounded-lg">
+        </div>
+        <button type="submit" class="bg-purple-600 text-white py-2 rounded-lg hover:bg-purple-700">
+            <i class="fas fa-plus mr-1"></i> Ajouter
+        </button>
+    </form>
+
+    {% if livreurs %}
+    <div class="bg-white rounded-xl shadow-md divide-y">
+        {% for l in livreurs %}
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 p-4 {{ 'opacity-50' if not l.actif }}">
+            <div>
+                <p class="font-semibold text-gray-800">{{ l.nom }}
+                    {% if en_cours.get(l.id) %}<span class="ml-2 text-xs bg-purple-100 text-purple-800 px-2 py-0.5 rounded-full">{{ en_cours[l.id] }} en cours</span>{% endif %}
+                    {% if not l.actif %}<span class="ml-2 text-xs bg-gray-200 text-gray-600 px-2 py-0.5 rounded-full">désactivé</span>{% endif %}
+                </p>
+                <p class="text-sm text-gray-500"><i class="fab fa-whatsapp mr-1"></i>{{ l.telephone }}</p>
+            </div>
+            <div class="flex gap-2">
+                <a href="https://wa.me/{{ l.telephone_whatsapp }}" target="_blank"
+                   class="text-sm bg-green-500 text-white px-3 py-1.5 rounded-lg"><i class="fab fa-whatsapp"></i> Écrire</a>
+                <form method="POST" action="{{ url_for('boutique.basculer_livreur', livreur_id=l.id) }}">
+                    <button type="submit" class="text-sm px-3 py-1.5 rounded-lg {{ 'bg-gray-200 text-gray-700' if l.actif else 'bg-blue-500 text-white' }}">
+                        {{ 'Désactiver' if l.actif else 'Réactiver' }}
+                    </button>
+                </form>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    {% else %}
+    <div class="bg-white rounded-xl shadow-md p-10 text-center text-gray-500">
+        <i class="fas fa-motorcycle text-5xl text-gray-300 mb-3"></i>
+        <p>Aucun livreur. Ajoutez-en un pour pouvoir lui confier des commandes.</p>
+    </div>
+    {% endif %}
+
+    <!-- Zones de livraison -->
+    <h2 id="zones" class="text-xl md:text-2xl font-bold text-gray-800 mt-10 mb-2">
+        <i class="fas fa-map-location-dot text-purple-500 mr-2"></i> Zones de livraison
+    </h2>
+    <p class="text-sm text-gray-500 mb-4">Chaque zone regroupe des quartiers et a son livreur attitré : il est proposé d'office pour les commandes de cette zone. Le client choisit sa zone en commandant.</p>
+
+    <form method="POST" action="{{ url_for('boutique.ajouter_zone') }}" class="bg-white rounded-xl shadow-md p-5 mb-6 grid grid-cols-1 md:grid-cols-4 gap-3 items-end">
+        <div>
+            <label class="block text-sm font-bold text-gray-700 mb-1">Nom de la zone *</label>
+            <input type="text" name="nom" required placeholder="Ex : Lomé Est" class="w-full px-3 py-2 border border-gray-300 rounded-lg">
+        </div>
+        <div>
+            <label class="block text-sm font-bold text-gray-700 mb-1">Quartiers couverts</label>
+            <input type="text" name="quartiers" placeholder="Bè, Kpota, Ablogamé…" class="w-full px-3 py-2 border border-gray-300 rounded-lg">
+        </div>
+        <div>
+            <label class="block text-sm font-bold text-gray-700 mb-1">Frais de livraison (FCFA)</label>
+            <input type="number" name="frais" min="0" step="50" placeholder="Ex : 1000" class="w-full px-3 py-2 border border-gray-300 rounded-lg">
+        </div>
+        <div>
+            <label class="block text-sm font-bold text-gray-700 mb-1">Livreur attitré</label>
+            <select name="livreur_id" class="w-full px-3 py-2 border border-gray-300 rounded-lg">
+                <option value="">— Aucun —</option>
+                {% for l in livreurs_actifs %}<option value="{{ l.id }}">{{ l.nom }}</option>{% endfor %}
+            </select>
+        </div>
+        <button type="submit" class="md:col-span-4 bg-purple-600 text-white py-2 rounded-lg hover:bg-purple-700">
+            <i class="fas fa-plus mr-1"></i> Créer la zone
+        </button>
+    </form>
+
+    {% if zones %}
+    <div class="space-y-3">
+        {% for z in zones %}
+        <form method="POST" action="{{ url_for('boutique.modifier_zone', zone_id=z.id) }}"
+              class="bg-white rounded-xl shadow-md p-4 grid grid-cols-1 md:grid-cols-12 gap-2 items-center {{ 'opacity-50' if not z.active }}">
+            <input type="text" name="nom" value="{{ z.nom }}" required class="md:col-span-3 px-3 py-2 border border-gray-200 rounded-lg font-semibold">
+            <input type="text" name="quartiers" value="{{ z.quartiers or '' }}" placeholder="Quartiers" class="md:col-span-3 px-3 py-2 border border-gray-200 rounded-lg text-sm">
+            <div class="md:col-span-2 relative">
+                <input type="number" name="frais" value="{{ '%.0f'|format(z.frais or 0) }}" min="0" step="50" title="Frais de livraison"
+                       class="w-full px-3 py-2 pr-14 border border-gray-200 rounded-lg text-sm">
+                <span class="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-gray-400">FCFA</span>
+            </div>
+            <select name="livreur_id" class="md:col-span-2 px-3 py-2 border border-gray-200 rounded-lg text-sm">
+                <option value="">— Aucun livreur —</option>
+                {% for l in livreurs_actifs %}<option value="{{ l.id }}" {{ 'selected' if z.livreur_id == l.id }}>{{ l.nom }}</option>{% endfor %}
+            </select>
+            <button type="submit" class="md:col-span-1 bg-gray-800 text-white py-2 rounded-lg text-sm">Enregistrer</button>
+            <button type="submit" name="active" value="{{ '0' if z.active else '1' }}" formnovalidate
+                    class="md:col-span-1 py-2 rounded-lg text-sm {{ 'bg-gray-200 text-gray-700' if z.active else 'bg-blue-500 text-white' }}">
+                {{ 'Désactiver' if z.active else 'Activer' }}
+            </button>
+        </form>
+        {% endfor %}
+    </div>
+    {% else %}
+    <div class="bg-white rounded-xl shadow-md p-8 text-center text-gray-500">Aucune zone pour l'instant.</div>
+    {% endif %}
+</div>
+{% endblock %}

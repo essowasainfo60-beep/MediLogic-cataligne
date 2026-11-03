@@ -25,8 +25,16 @@
                     {% endfor %}
                     <div class="border-t border-gray-200 pt-2 mt-2 font-bold">
                         <div class="flex justify-between">
-                            <span>Total</span>
-                            <span class="text-primary">{{ "%.0f"|format(total) }} FCFA</span>
+                            <span>Articles</span>
+                            <span>{{ "%.0f"|format(total) }} FCFA</span>
+                        </div>
+                        <div class="flex justify-between font-normal" id="ligneFrais" {% if not zones %}hidden{% endif %}>
+                            <span>Livraison</span>
+                            <span id="fraisAffiches">{{ 'à choisir (zone)' if zones else '0 FCFA' }}</span>
+                        </div>
+                        <div class="flex justify-between">
+                            <span>Total à payer à la livraison</span>
+                            <span class="text-primary" id="totalAffiche" data-sous-total="{{ total }}">{{ "%.0f"|format(total) }} FCFA</span>
                         </div>
                     </div>
                 </div>
@@ -53,10 +61,25 @@
                         <label class="block text-gray-700 text-sm font-bold mb-2">Adresse de livraison *</label>
                         <textarea name="client_adresse" rows="2" required 
                                   class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 transition"
-                                  placeholder="Votre adresse complète..."></textarea>
+                                  placeholder="Quartier, rue, repère (ex : près de la pharmacie...)"></textarea>
+                        {% if zones %}
+                        <select name="zone_id" id="zoneClient" required onchange="majFrais()" class="mt-2 w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500">
+                            <option value="">Votre zone de livraison… *</option>
+                            {% for z in zones %}
+                            <option value="{{ z.id }}" data-frais="{{ z.frais or 0 }}">{{ z.nom }}{% if z.quartiers %} ({{ z.quartiers }}){% endif %} · livraison {{ '{:,.0f}'.format(z.frais or 0).replace(',', ' ') }} FCFA</option>
+                            {% endfor %}
+                        </select>
+                        {% endif %}
+                        <input type="hidden" name="latitude" id="latitude">
+                        <input type="hidden" name="longitude" id="longitude">
+                        <button type="button" id="btnPosition" onclick="partagerPosition()"
+                                class="mt-2 w-full border-2 border-dashed border-green-400 text-green-700 py-2 rounded-lg hover:bg-green-50 transition text-sm font-semibold">
+                            📍 Partager ma position (le livreur vous trouvera plus vite)
+                        </button>
+                        <p id="positionInfo" class="text-xs mt-1 hidden"></p>
                     </div>
 
-                    <!-- NOUVEAU : Instructions spéciales -->
+                    <!-- Instructions spéciales -->
                     <div>
                         <label class="block text-gray-700 text-sm font-bold mb-2">
                             <i class="fas fa-pen-alt mr-1"></i> Instructions spéciales
@@ -79,6 +102,41 @@
 </div>
 
 <script>
+function majFrais() {
+    const choix = document.getElementById('zoneClient').selectedOptions[0];
+    const frais = choix && choix.dataset.frais ? +choix.dataset.frais : 0;
+    const total = document.getElementById('totalAffiche');
+    const fmt = (v) => Math.round(v).toLocaleString('fr-FR') + ' FCFA';
+    document.getElementById('fraisAffiches').textContent = choix && choix.value ? fmt(frais) : 'à choisir (zone)';
+    total.textContent = fmt(+total.dataset.sousTotal + frais);
+}
+
+function partagerPosition() {
+    const info = document.getElementById('positionInfo');
+    const bouton = document.getElementById('btnPosition');
+    info.classList.remove('hidden');
+    if (!navigator.geolocation) {
+        info.className = 'text-xs mt-1 text-red-600';
+        info.textContent = "Votre téléphone ne permet pas de partager la position. L'adresse suffira.";
+        return;
+    }
+    bouton.disabled = true;
+    bouton.textContent = '📍 Recherche de votre position…';
+    navigator.geolocation.getCurrentPosition(function (pos) {
+        document.getElementById('latitude').value = pos.coords.latitude.toFixed(6);
+        document.getElementById('longitude').value = pos.coords.longitude.toFixed(6);
+        bouton.textContent = '✅ Position enregistrée';
+        bouton.className = 'mt-2 w-full border-2 border-green-500 bg-green-50 text-green-700 py-2 rounded-lg text-sm font-semibold';
+        info.className = 'text-xs mt-1 text-green-700';
+        info.textContent = 'Précision : environ ' + Math.round(pos.coords.accuracy) + ' m';
+    }, function () {
+        bouton.disabled = false;
+        bouton.textContent = '📍 Réessayer de partager ma position';
+        info.className = 'text-xs mt-1 text-red-600';
+        info.textContent = "Position non autorisée. Ce n'est pas grave : l'adresse suffira.";
+    }, { enableHighAccuracy: true, timeout: 15000 });
+}
+
 document.getElementById('commandeForm').addEventListener('submit', function() {
     document.getElementById('btnText').classList.add('hidden');
     document.getElementById('btnSpinner').classList.remove('hidden');

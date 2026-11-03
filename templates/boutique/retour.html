@@ -1,0 +1,65 @@
+{% extends "base.html" %}
+
+{% block title %}Retour - commande n°{{ commande.numero }}{% endblock %}
+
+{% block content %}
+<div class="max-w-2xl mx-auto px-4 py-6">
+    <h1 class="text-2xl font-bold text-gray-800 mb-1">
+        <i class="fas fa-rotate-left text-orange-500 mr-2"></i> Retour / échange
+    </h1>
+    <p class="text-gray-500 mb-6">Commande n°{{ commande.numero }} · {{ commande.client_nom }} · livrée{% if commande.date_livraison %} le {{ commande.date_livraison.strftime('%d/%m/%Y') }}{% endif %}</p>
+
+    <form method="POST" class="space-y-5">
+        <div class="bg-white rounded-xl shadow-md p-5">
+            <p class="font-semibold text-gray-800 mb-3">Que fait le client ?</p>
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <label class="cursor-pointer">
+                    <input type="radio" name="type" value="echange" class="peer hidden" checked>
+                    <div class="border-2 rounded-xl p-4 peer-checked:border-orange-500 peer-checked:bg-orange-50">
+                        <p class="font-semibold">🔄 Échange</p>
+                        <p class="text-sm text-gray-500">Il rend l'article et en reçoit un autre (taille, couleur…).</p>
+                    </div>
+                </label>
+                <label class="cursor-pointer">
+                    <input type="radio" name="type" value="retour" class="peer hidden">
+                    <div class="border-2 rounded-xl p-4 peer-checked:border-orange-500 peer-checked:bg-orange-50">
+                        <p class="font-semibold">↩️ Retour définitif</p>
+                        <p class="text-sm text-gray-500">Il rend l'article et ne le remplace pas (remboursement).</p>
+                    </div>
+                </label>
+            </div>
+        </div>
+
+        <div class="bg-white rounded-xl shadow-md p-5">
+            <p class="font-semibold text-gray-800 mb-3">Articles rapportés</p>
+            <div class="divide-y">
+                {% for ligne in commande.articles_json %}
+                {% set reste = restant.get(loop.index0, 0) %}
+                <div class="flex items-center justify-between py-2 {{ 'opacity-50' if not reste }}">
+                    <div>
+                        <p class="font-medium">{{ ligne.nom }}</p>
+                        <p class="text-xs text-gray-500">{{ fcfa(ligne.prix) }} · livré : {{ ligne.quantite }}{% if reste < ligne.quantite %} · déjà rendu : {{ ligne.quantite - reste }}{% endif %}</p>
+                    </div>
+                    <input type="number" name="qte_{{ loop.index0 }}" value="0" min="0" max="{{ reste }}" {{ 'disabled' if not reste }}
+                           class="w-20 border border-gray-300 rounded-lg px-2 py-1.5 text-center">
+                </div>
+                {% endfor %}
+            </div>
+            <p class="text-xs text-gray-500 mt-2">Les quantités rapportées sont remises en stock automatiquement.</p>
+        </div>
+
+        <div class="bg-white rounded-xl shadow-md p-5">
+            <label class="block font-semibold text-gray-800 mb-2">Motif</label>
+            <textarea name="motif" rows="2" placeholder="Ex : taille trop petite, article abîmé, client a changé d'avis…"
+                      class="w-full px-3 py-2 border border-gray-300 rounded-lg"></textarea>
+        </div>
+
+        <div class="flex gap-3">
+            <button type="submit" class="flex-1 bg-orange-500 text-white py-3 rounded-xl font-semibold hover:bg-orange-600">
+                <i class="fas fa-check mr-1"></i> Enregistrer le retour
+            </button>
+            <a href="{{ url_for('boutique.commande_details', commande_id=commande.id) }}" class="flex-1 text-center bg-gray-200 py-3 rounded-xl">Annuler</a>
+        </div>
+    </form>
+</div>
+{% endblock %}

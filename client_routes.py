@@ -1,15 +1,26 @@
+from datetime import datetime
 from urllib.parse import quote
 
 from flask import (Blueprint, Response, abort, flash, jsonify, redirect,
                    render_template, request, session, url_for)
 
-from models import db, Boutique, Article, Commande, Photo
+import messages_whatsapp as msg
+import stock
+from models import db, Boutique, Article, Commande, Photo, Zone
 
 client_bp = Blueprint('client', __name__)
 
 
 def nombre_articles(panier):
     return sum(item['quantite'] for item in panier.values())
+
+
+def lire_coordonnee(valeur, limite):
+    try:
+        v = float(valeur)
+        return v if -limite <= v <= limite else None
+    except (TypeError, ValueError):
+        return None
 
 
 def boutique_du_panier(panier):
@@ -36,31 +47,31 @@ def photo(photo_id):
 
 # ==================== ACCUEIL & SELECTION BOUTIQUE ====================
 
+def boutique_visitee():
+    """Boutique dont le client a ouvert le lien secret (sinon None)."""
+    boutique_id = session.get('last_boutique_id')
+    boutique = db.session.get(Boutique, boutique_id) if boutique_id else None
+    return boutique if boutique and boutique.active else None
+
+
 @client_bp.route('/')
 def accueil():
-    # Retour à la dernière boutique visitée si elle est toujours active
-    last_boutique_id = session.get('last_boutique_id')
-    if last_boutique_id:
-        boutique = db.session.get(Boutique, last_boutique_id)
-        if boutique and boutique.active:
-            return redirect(url_for('client.afficher_boutique', boutique_id=last_boutique_id))
+    # Un client ne revient que vers la boutique dont il a reçu le lien.
+    # Jamais de redirection vers « une boutique au hasard » : sans lien, pas de catalogue.
+    boutique = boutique_visitee()
+    if boutique:
+        return redirect(url_for('client.catalogue', code=boutique.lien_public))
+    return redirect(url_for('boutique.connexion'))
 
-    premiere_boutique = Boutique.query.filter_by(active=True).order_by(Boutique.id).first()
-    if premiere_boutique:
-        return redirect(url_for('client.afficher_boutique', boutique_id=premiere_boutique.id))
-
-    return "Aucune boutique disponible pour le moment"
-
-@client_bp.route('/boutique/<int:boutique_id>')
-def afficher_boutique(boutique_id):
-    boutique = Boutique.query.get_or_404(boutique_id)
-
-    if not boutique.active:
+@client_bp.route('/c/<code>')
+def catalogue(code):
+    boutique = Boutique.query.filter_by(lien_public=code).first()
+    if not boutique or not boutique.active:
         session.pop('last_boutique_id', None)
-        flash('Cette boutique n\'est pas disponible', 'danger')
-        return redirect(url_for('client.accueil'))
+        return render_template('client/lien_invalide.html'), 404
 
-    session['last_boutique_id'] = boutique_id
+    session['last_boutique_id'] = boutique.id
+    boutique_id = boutique.id
     articles = (Article.query.filter_by(boutique_id=boutique_id, archive=False)
                 .order_by(Article.created_at.desc()).all())
 
@@ -77,9 +88,12 @@ def ajouter_panier():
     quantite = max(1, min(request.form.get('quantite', 1, type=int) or 1, 999))
     veut_json = request.accept_mimetypes.best == 'application/json'
 
-    if article.archive or not article.boutique.active:
+    # On ne commande que dans la boutique dont on a ouvert le lien
+    visitee = boutique_visitee()
+    epuise = article.stock is not None and article.stock <= 0
+    if article.archive or epuise or not visitee or article.boutique_id != visitee.id:
         if veut_json:
-            return jsonify(success=False, message='Article indisponible'), 400
+            return jsonify(success=False, message='Article épuisé' if epuise else 'Article indisponible'), 400
         flash('Article indisponible', 'danger')
         return redirect(url_for('client.accueil'))
 
@@ -97,6 +111,7 @@ def ajouter_panier():
             'prix': article.prix,
             'quantite': quantite,
             'boutique_id': article.boutique_id,
+            'article_id': article.id,
             'photo': (article.photos_urls or [None])[0],
         }
 
@@ -106,7 +121,7 @@ def ajouter_panier():
     if veut_json:
         return jsonify(success=True, panier_count=nombre_articles(panier))
     flash(f'{article.nom} ajouté au panier', 'success')
-    return redirect(url_for('client.afficher_boutique', boutique_id=article.boutique_id))
+    return redirect(url_for('client.catalogue', code=visitee.lien_public))
 
 @client_bp.route('/panier')
 def voir_panier():
@@ -149,9 +164,6 @@ def vider_panier():
     session.pop('panier', None)
     flash('Panier vidé', 'info')
 
-    last_boutique_id = session.get('last_boutique_id')
-    if last_boutique_id:
-        return redirect(url_for('client.afficher_boutique', boutique_id=last_boutique_id))
     return redirect(url_for('client.accueil'))
 
 # ==================== VALIDATION COMMANDE & WHATSAPP ====================
@@ -173,7 +185,8 @@ def valider_commande():
     total = sum(item['prix'] * item['quantite'] for item in panier.values())
 
     if request.method == 'GET':
-        return render_template('client/commande.html', panier=panier, total=total, boutique=boutique)
+        return render_template('client/commande.html', panier=panier, total=total, boutique=boutique,
+                               zones=[z for z in boutique.zones if z.active])
 
     client_nom = (request.form.get('client_nom') or '').strip()
     client_telephone = (request.form.get('client_telephone') or '').strip()
@@ -182,13 +195,13 @@ def valider_commande():
 
     if not client_nom or not client_telephone or not client_adresse:
         flash('Nom, téléphone et adresse sont obligatoires', 'danger')
-        return render_template('client/commande.html', panier=panier, total=total, boutique=boutique)
+        return render_template('client/commande.html', panier=panier, total=total, boutique=boutique,
+                               zones=[z for z in boutique.zones if z.active])
 
-    # Numéro propre à la boutique : 1, 2, 3… (max + 1, sûr même après suppression)
-    dernier = db.session.query(db.func.max(Commande.numero_commande)).filter(
-        Commande.boutique_id == boutique.id).scalar() or 0
-    numero_commande = dernier + 1
+    numero_commande = Commande.prochain_numero(boutique.id)
 
+    zone = Zone.query.filter_by(id=request.form.get('zone_id', type=int), boutique_id=boutique.id, active=True).first()
+    frais = zone.frais if zone else 0
     commande = Commande(
         boutique_id=boutique.id,
         client_nom=client_nom,
@@ -196,10 +209,16 @@ def valider_commande():
         client_adresse=client_adresse,
         instructions=instructions or None,
         articles_json=list(panier.values()),
-        total=total,
+        total=total + frais,
         numero_commande=numero_commande,
         statut='nouvelle',
+        zone=zone,
+        frais_livraison=frais,
+        latitude=lire_coordonnee(request.form.get('latitude'), 90),
+        longitude=lire_coordonnee(request.form.get('longitude'), 180),
     )
+    if commande.latitude is None or commande.longitude is None:
+        commande.latitude = commande.longitude = None
     db.session.add(commande)
     db.session.commit()
 
@@ -209,6 +228,10 @@ def valider_commande():
     message += f"👤 *Client:* {client_nom}\n"
     message += f"📱 *Tél:* {client_telephone}\n"
     message += f"📍 *Adresse:* {client_adresse}\n"
+    if commande.zone:
+        message += f"🧭 *Zone:* {commande.zone.nom}\n"
+    if commande.latitude is not None:
+        message += f"🗺️ *Position GPS:* https://maps.google.com/?q={commande.latitude},{commande.longitude}\n"
     if instructions:
         message += f"\n📝 *Instructions:*\n\"{instructions}\"\n"
     message += "━━━━━━━━━━━━━━━━━━\n"
@@ -227,7 +250,9 @@ def valider_commande():
         message += "\n"
 
     message += "━━━━━━━━━━━━━━━━━━\n"
-    message += f"💰 *TOTAL: {total:,.0f} FCFA*\n"
+    if frais:
+        message += f"🛵 *Livraison ({zone.nom}):* {frais:,.0f} FCFA\n"
+    message += f"💰 *TOTAL: {commande.total:,.0f} FCFA*\n"
     message += "━━━━━━━━━━━━━━━━━━"
 
     numero_boutique = ''.join(c for c in (boutique.whatsapp or '') if c.isdigit())
@@ -239,3 +264,19 @@ def valider_commande():
                            whatsapp_boutique_url=whatsapp_boutique_url,
                            commande=commande,
                            boutique=boutique)
+
+# ==================== PAGE DU LIVREUR (lien secret, sans compte) ====================
+
+@client_bp.route('/livraison/<code>', methods=['GET', 'POST'])
+def livraison(code):
+    commande = Commande.query.filter_by(code_livraison=code).first()
+    if not commande or not commande.livreur:
+        return render_template('client/lien_invalide.html'), 404
+
+    if request.method == 'POST' and commande.statut == 'en_livraison':
+        stock.changer_statut(commande, 'livree')
+        db.session.commit()
+
+    wa_merci = msg.lien_whatsapp(commande.client_telephone, msg.livree_client(commande))         if commande.statut == 'livree' else None
+    return render_template('client/livraison.html', commande=commande, wa_merci=wa_merci,
+                           fcfa=msg.fcfa)

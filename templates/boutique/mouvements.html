@@ -1,0 +1,45 @@
+{% extends "base.html" %}
+
+{% block title %}Mouvements de stock{% endblock %}
+
+{% block content %}
+<div class="max-w-6xl mx-auto px-4 py-6">
+    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
+        <h1 class="text-2xl font-bold text-gray-800"><i class="fas fa-list text-purple-500 mr-2"></i> Mouvements de stock</h1>
+        <a href="{{ url_for('boutique.inventaire') }}" class="text-purple-700 hover:underline"><i class="fas fa-arrow-left mr-1"></i> Inventaire</a>
+    </div>
+
+    <form method="GET" class="mb-4">
+        <select name="article" onchange="this.form.submit()" class="border border-gray-300 rounded-lg px-3 py-2">
+            <option value="">Tous les articles</option>
+            {% for a in articles %}<option value="{{ a.id }}" {{ 'selected' if article_id == a.id }}>{{ a.nom }}</option>{% endfor %}
+        </select>
+    </form>
+
+    <div class="bg-white rounded-xl shadow-md overflow-x-auto">
+        <table class="w-full text-sm">
+            <thead class="bg-gray-50 text-gray-600 text-left">
+                <tr><th class="px-3 py-2">Date</th><th class="px-3 py-2">Article</th><th class="px-3 py-2">Type</th>
+                    <th class="px-3 py-2 text-right">Quantité</th><th class="px-3 py-2 text-right">Stock après</th><th class="px-3 py-2">Détail</th></tr>
+            </thead>
+            <tbody class="divide-y">
+                {% for m in mouvements %}
+                <tr>
+                    <td class="px-3 py-2 whitespace-nowrap">{{ m.date.strftime('%d/%m/%Y %H:%M') }}</td>
+                    <td class="px-3 py-2">{{ m.article.nom }}</td>
+                    <td class="px-3 py-2">{{ m.type_libelle }}</td>
+                    <td class="px-3 py-2 text-right font-bold {{ 'text-green-600' if m.quantite > 0 else 'text-red-600' }}">{{ '%+d'|format(m.quantite) }}</td>
+                    <td class="px-3 py-2 text-right">{{ m.stock_apres }}</td>
+                    <td class="px-3 py-2 text-gray-600">
+                        {% if m.commande %}<a href="{{ url_for('boutique.commande_details', commande_id=m.commande_id) }}" class="text-purple-700 hover:underline">{{ m.note }}</a>
+                        {% else %}{{ m.note or '' }}{% endif %}
+                    </td>
+                </tr>
+                {% else %}
+                <tr><td colspan="6" class="px-3 py-10 text-center text-gray-500">Aucun mouvement enregistré.</td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}

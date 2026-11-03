@@ -1,0 +1,145 @@
+{% extends "base.html" %}
+
+{% block title %}Nouvelle commande{% endblock %}
+
+{% block content %}
+<div class="max-w-3xl mx-auto px-4 py-6">
+    <h1 class="text-2xl md:text-3xl font-bold text-gray-800 mb-1">
+        <i class="fas fa-pen-to-square text-purple-500 mr-2"></i> Saisir une commande
+    </h1>
+    <p class="text-gray-500 mb-6">Pour un client d'un live TikTok, d'un appel, de Facebook… La commande suit ensuite le même circuit : livreur, facture, livraison.</p>
+
+    <form method="POST" id="formCommande" class="space-y-6">
+        <!-- Provenance -->
+        <div class="bg-white rounded-xl shadow-md p-5">
+            <label class="block text-sm font-bold text-gray-700 mb-2">Provenance de la commande</label>
+            <div class="flex flex-wrap gap-2">
+                {% for code, libelle in sources.items() if code != 'catalogue' %}
+                <label class="cursor-pointer">
+                    <input type="radio" name="source" value="{{ code }}" class="peer hidden"
+                           {{ 'checked' if (form.get('source') or 'tiktok') == code }}>
+                    <span class="inline-block px-3 py-1.5 rounded-full border border-gray-300 text-sm peer-checked:bg-purple-600 peer-checked:text-white peer-checked:border-purple-600">
+                        {{ libelle }}
+                    </span>
+                </label>
+                {% endfor %}
+            </div>
+        </div>
+
+        <!-- Client -->
+        <div class="bg-white rounded-xl shadow-md p-5 grid grid-cols-1 md:grid-cols-2 gap-4">
+            <h2 class="md:col-span-2 font-semibold text-gray-800"><i class="fas fa-user text-purple-500 mr-2"></i>Client</h2>
+            <div>
+                <label class="block text-sm font-bold text-gray-700 mb-1">Nom *</label>
+                <input type="text" name="client_nom" required value="{{ form.get('client_nom', '') }}" placeholder="Nom ou pseudo TikTok"
+                       class="w-full px-3 py-2 border border-gray-300 rounded-lg">
+            </div>
+            <div>
+                <label class="block text-sm font-bold text-gray-700 mb-1">Numéro WhatsApp *</label>
+                <input type="tel" name="client_telephone" required value="{{ form.get('client_telephone', '') }}" placeholder="+228 90 00 00 00"
+                       class="w-full px-3 py-2 border border-gray-300 rounded-lg">
+            </div>
+            <div class="md:col-span-2">
+                <label class="block text-sm font-bold text-gray-700 mb-1">Adresse de livraison *</label>
+                <textarea name="client_adresse" required rows="2" placeholder="Quartier, rue, repère…"
+                          class="w-full px-3 py-2 border border-gray-300 rounded-lg">{{ form.get('client_adresse', '') }}</textarea>
+            </div>
+            {% if zones %}
+            <div class="md:col-span-2">
+                <label class="block text-sm font-bold text-gray-700 mb-1">Zone de livraison</label>
+                <select name="zone_id" id="zoneSaisie" onchange="appliquerFraisZone()" class="w-full px-3 py-2 border border-gray-300 rounded-lg">
+                    <option value="" data-frais="0">— Non précisée —</option>
+                    {% for z in zones %}
+                    <option value="{{ z.id }}" data-frais="{{ z.frais or 0 }}" {{ 'selected' if form.get('zone_id') == z.id|string }}>{{ z.nom }}{% if z.quartiers %} — {{ z.quartiers }}{% endif %}{% if z.livreur %} (livreur : {{ z.livreur.nom }}){% endif %}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            {% endif %}
+            <div class="md:col-span-2">
+                <label class="block text-sm font-bold text-gray-700 mb-1">Instructions (taille, couleur, heure…)</label>
+                <textarea name="instructions" rows="2" class="w-full px-3 py-2 border border-gray-300 rounded-lg">{{ form.get('instructions', '') }}</textarea>
+            </div>
+        </div>
+
+        <!-- Articles -->
+        <div class="bg-white rounded-xl shadow-md p-5">
+            <h2 class="font-semibold text-gray-800 mb-3"><i class="fas fa-boxes text-purple-500 mr-2"></i>Articles</h2>
+
+            <div id="lignes" class="space-y-2"></div>
+            <div class="flex flex-wrap gap-2 mt-3">
+                {% if catalogue %}
+                <button type="button" onclick="ajouterLigne()" class="text-sm bg-purple-50 text-purple-700 px-3 py-2 rounded-lg hover:bg-purple-100">
+                    <i class="fas fa-plus mr-1"></i> Article du catalogue
+                </button>
+                {% endif %}
+                <button type="button" onclick="ajouterLibre()" class="text-sm bg-gray-100 text-gray-700 px-3 py-2 rounded-lg hover:bg-gray-200">
+                    <i class="fas fa-plus mr-1"></i> Article hors catalogue
+                </button>
+            </div>
+
+            <div class="flex justify-between items-center mt-5 pt-4 border-t">
+                <label for="fraisLivraison" class="text-gray-700">Frais de livraison (FCFA)</label>
+                <input type="number" name="frais_livraison" id="fraisLivraison" min="0" step="50" value="{{ form.get('frais_livraison', '') }}"
+                       placeholder="0" oninput="calculer()" class="w-32 border border-gray-300 rounded-lg px-2 py-1.5 text-right">
+            </div>
+            <div class="flex justify-between items-center mt-3">
+                <span class="font-bold text-gray-800">Total à encaisser</span>
+                <span id="total" class="text-2xl font-bold text-purple-700">0 FCFA</span>
+            </div>
+        </div>
+
+        <button type="submit" class="w-full bg-purple-600 text-white py-3 rounded-xl font-semibold hover:bg-purple-700">
+            <i class="fas fa-check mr-2"></i> Enregistrer la commande
+        </button>
+    </form>
+</div>
+
+<template id="modeleLigne">
+    <div class="ligne flex gap-2 items-center">
+        <select name="article_id" class="flex-1 min-w-0 border border-gray-300 rounded-lg px-2 py-2 text-sm">
+            {% for a in catalogue %}
+            <option value="{{ a.id }}" data-prix="{{ a.prix }}">{{ a.nom }} — {{ "{:,.0f}".format(a.prix).replace(',', ' ') }} FCFA</option>
+            {% endfor %}
+        </select>
+        <input type="number" name="quantite" value="1" min="1" class="w-16 border border-gray-300 rounded-lg px-2 py-2 text-sm text-center">
+        <button type="button" class="retirer text-red-500 px-2" aria-label="Retirer"><i class="fas fa-trash"></i></button>
+    </div>
+</template>
+<template id="modeleLibre">
+    <div class="ligne flex gap-2 items-center">
+        <input type="text" name="libre_nom" placeholder="Nom de l'article" class="flex-1 min-w-0 border border-gray-300 rounded-lg px-2 py-2 text-sm">
+        <input type="number" name="libre_prix" placeholder="Prix" min="0" class="w-24 border border-gray-300 rounded-lg px-2 py-2 text-sm">
+        <input type="number" name="libre_quantite" value="1" min="1" class="w-16 border border-gray-300 rounded-lg px-2 py-2 text-sm text-center">
+        <button type="button" class="retirer text-red-500 px-2" aria-label="Retirer"><i class="fas fa-trash"></i></button>
+    </div>
+</template>
+
+<script>
+const lignes = document.getElementById('lignes');
+function brancher(ligne) {
+    ligne.querySelectorAll('select, input').forEach((el) => el.addEventListener('input', calculer));
+    ligne.querySelector('.retirer').addEventListener('click', () => { ligne.remove(); calculer(); });
+    lignes.appendChild(ligne);
+    calculer();
+}
+function ajouterLigne() { brancher(document.getElementById('modeleLigne').content.firstElementChild.cloneNode(true)); }
+function ajouterLibre() { brancher(document.getElementById('modeleLibre').content.firstElementChild.cloneNode(true)); }
+function calculer() {
+    let total = 0;
+    lignes.querySelectorAll('.ligne').forEach((l) => {
+        const select = l.querySelector('select');
+        const prix = select ? +select.selectedOptions[0].dataset.prix : +(l.querySelector('[name="libre_prix"]').value || 0);
+        const qte = +(l.querySelector('[name="quantite"], [name="libre_quantite"]').value || 0);
+        total += prix * qte;
+    });
+    total += +(document.getElementById('fraisLivraison').value || 0);
+    document.getElementById('total').textContent = Math.round(total).toLocaleString('fr-FR') + ' FCFA';
+}
+function appliquerFraisZone() {
+    const choix = document.getElementById('zoneSaisie').selectedOptions[0];
+    document.getElementById('fraisLivraison').value = Math.round(+(choix.dataset.frais || 0)) || '';
+    calculer();
+}
+{% if catalogue %}ajouterLigne();{% else %}ajouterLibre();{% endif %}
+</script>
+{% endblock %}

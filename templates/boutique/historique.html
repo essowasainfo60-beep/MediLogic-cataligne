@@ -1,0 +1,94 @@
+{% extends "base.html" %}
+
+{% block title %}Historique - {{ current_user.nom_boutique }}{% endblock %}
+
+{% block content %}
+<div class="max-w-7xl mx-auto px-4 py-6">
+    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
+        <h1 class="text-2xl md:text-3xl font-bold text-gray-800">
+            <i class="fas fa-clock-rotate-left text-purple-500 mr-2"></i> Historique des commandes et livraisons
+        </h1>
+        <a href="{{ url_for('boutique.historique_csv', **f.to_dict()) }}" class="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 text-center">
+            <i class="fas fa-file-excel mr-1"></i> Exporter (Excel)
+        </a>
+    </div>
+
+    <!-- Filtres -->
+    <form method="GET" class="bg-white rounded-xl shadow-md p-4 mb-6 grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-2 text-sm">
+        <div><label class="text-gray-500">Du</label><input type="date" name="du" value="{{ f.get('du', '') }}" class="w-full border rounded-lg px-2 py-1.5"></div>
+        <div><label class="text-gray-500">Au</label><input type="date" name="au" value="{{ f.get('au', '') }}" class="w-full border rounded-lg px-2 py-1.5"></div>
+        <div><label class="text-gray-500">Statut</label>
+            <select name="statut" class="w-full border rounded-lg px-2 py-1.5"><option value="">Tous</option>
+                {% for code, (libelle, c) in statuts.items() %}<option value="{{ code }}" {{ 'selected' if f.get('statut') == code }}>{{ libelle }}</option>{% endfor %}
+            </select></div>
+        <div><label class="text-gray-500">Livreur</label>
+            <select name="livreur" class="w-full border rounded-lg px-2 py-1.5"><option value="">Tous</option>
+                {% for l in livreurs %}<option value="{{ l.id }}" {{ 'selected' if f.get('livreur') == l.id|string }}>{{ l.nom }}</option>{% endfor %}
+            </select></div>
+        <div><label class="text-gray-500">Zone</label>
+            <select name="zone" class="w-full border rounded-lg px-2 py-1.5"><option value="">Toutes</option>
+                {% for z in zones %}<option value="{{ z.id }}" {{ 'selected' if f.get('zone') == z.id|string }}>{{ z.nom }}</option>{% endfor %}
+            </select></div>
+        <div><label class="text-gray-500">Provenance</label>
+            <select name="source" class="w-full border rounded-lg px-2 py-1.5"><option value="">Toutes</option>
+                {% for code, libelle in sources.items() %}<option value="{{ code }}" {{ 'selected' if f.get('source') == code }}>{{ libelle }}</option>{% endfor %}
+            </select></div>
+        <div><label class="text-gray-500">Client</label><input type="search" name="q" value="{{ f.get('q', '') }}" placeholder="Nom, tél…" class="w-full border rounded-lg px-2 py-1.5"></div>
+        <div class="flex items-end gap-1">
+            <button type="submit" class="flex-1 bg-purple-600 text-white rounded-lg py-1.5">Filtrer</button>
+            <a href="{{ url_for('boutique.historique') }}" class="px-2 py-1.5 bg-gray-100 rounded-lg" title="Effacer"><i class="fas fa-xmark"></i></a>
+        </div>
+    </form>
+
+    <!-- Résumé -->
+    <div class="grid grid-cols-2 md:grid-cols-5 gap-3 mb-6">
+        <div class="bg-white rounded-xl shadow p-4"><p class="text-xs text-gray-500">Commandes</p><p class="text-2xl font-bold">{{ resume.nombre }}</p></div>
+        <div class="bg-white rounded-xl shadow p-4"><p class="text-xs text-gray-500">Livrées</p><p class="text-2xl font-bold text-green-600">{{ resume.livrees }}</p></div>
+        <div class="bg-white rounded-xl shadow p-4"><p class="text-xs text-gray-500">En livraison</p><p class="text-2xl font-bold text-purple-600">{{ resume.en_livraison }}</p></div>
+        <div class="bg-white rounded-xl shadow p-4"><p class="text-xs text-gray-500">Annulées</p><p class="text-2xl font-bold text-red-500">{{ resume.annulees }}</p></div>
+        <div class="bg-white rounded-xl shadow p-4 col-span-2 md:col-span-1"><p class="text-xs text-gray-500">Montant livré</p><p class="text-xl font-bold text-green-700">{{ fcfa(resume.montant_livre) }}</p>
+            <p class="text-xs text-gray-500">dont livraison {{ fcfa(resume.frais_livraison) }}</p></div>
+    </div>
+
+    {% if par_livreur %}
+    <div class="bg-white rounded-xl shadow-md p-4 mb-6">
+        <h2 class="font-semibold text-gray-800 mb-2"><i class="fas fa-motorcycle text-purple-500 mr-1"></i> Bilan par livreur (commandes livrées)</h2>
+        <div class="flex flex-wrap gap-2 text-sm">
+            {% for nom, (n, montant) in par_livreur %}
+            <span class="bg-purple-50 border border-purple-200 rounded-lg px-3 py-1.5"><strong>{{ nom }}</strong> : {{ n }} livraison(s) · {{ fcfa(montant) }}</span>
+            {% endfor %}
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Tableau -->
+    <div class="bg-white rounded-xl shadow-md overflow-x-auto">
+        <table class="w-full text-sm">
+            <thead class="bg-gray-50 text-gray-600 text-left">
+                <tr>
+                    <th class="px-3 py-2">N°</th><th class="px-3 py-2">Date</th><th class="px-3 py-2">Client</th>
+                    <th class="px-3 py-2">Zone</th><th class="px-3 py-2">Provenance</th><th class="px-3 py-2 text-right">Total</th>
+                    <th class="px-3 py-2">Statut</th><th class="px-3 py-2">Livreur</th><th class="px-3 py-2">Livrée le</th>
+                </tr>
+            </thead>
+            <tbody class="divide-y">
+                {% for c in commandes %}
+                <tr class="hover:bg-gray-50 cursor-pointer" onclick="location.href='{{ url_for('boutique.commande_details', commande_id=c.id) }}'">
+                    <td class="px-3 py-2 font-semibold">{{ c.numero }}</td>
+                    <td class="px-3 py-2 whitespace-nowrap">{{ c.date_commande.strftime('%d/%m/%Y %H:%M') }}</td>
+                    <td class="px-3 py-2">{{ c.client_nom }}<br><span class="text-xs text-gray-500">{{ c.client_telephone }}</span></td>
+                    <td class="px-3 py-2">{{ c.zone.nom if c.zone else '—' }}</td>
+                    <td class="px-3 py-2">{{ c.source_libelle }}</td>
+                    <td class="px-3 py-2 text-right whitespace-nowrap">{{ fcfa(c.total) }}</td>
+                    <td class="px-3 py-2"><span class="px-2 py-0.5 rounded-full text-xs font-semibold {{ c.statut_classe }}">{{ c.statut_libelle }}</span></td>
+                    <td class="px-3 py-2">{{ c.livreur.nom if c.livreur else '—' }}</td>
+                    <td class="px-3 py-2 whitespace-nowrap">{{ c.date_livraison.strftime('%d/%m/%Y %H:%M') if c.date_livraison else '—' }}</td>
+                </tr>
+                {% else %}
+                <tr><td colspan="9" class="px-3 py-10 text-center text-gray-500">Aucune commande pour ces critères.</td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}

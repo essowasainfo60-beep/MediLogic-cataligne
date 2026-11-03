@@ -1,0 +1,85 @@
+{% extends "base.html" %}
+
+{% block title %}Inventaire - {{ current_user.nom_boutique }}{% endblock %}
+
+{% block content %}
+<div class="max-w-6xl mx-auto px-4 py-6">
+    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
+        <h1 class="text-2xl md:text-3xl font-bold text-gray-800">
+            <i class="fas fa-warehouse text-purple-500 mr-2"></i> Stock et inventaire
+        </h1>
+        <a href="{{ url_for('boutique.mouvements_stock') }}" class="bg-gray-800 text-white px-4 py-2 rounded-lg text-center">
+            <i class="fas fa-list mr-1"></i> Historique des mouvements
+        </a>
+    </div>
+
+    <div class="grid grid-cols-2 md:grid-cols-5 gap-3 mb-6">
+        <div class="bg-white rounded-xl shadow p-4"><p class="text-xs text-gray-500">Articles suivis</p><p class="text-2xl font-bold">{{ resume.suivis }}</p></div>
+        <div class="bg-white rounded-xl shadow p-4"><p class="text-xs text-gray-500">Unités en stock</p><p class="text-2xl font-bold">{{ resume.unites }}</p></div>
+        <div class="bg-white rounded-xl shadow p-4 col-span-2 md:col-span-1"><p class="text-xs text-gray-500">Valeur du stock</p><p class="text-xl font-bold text-purple-700">{{ fcfa(resume.valeur) }}</p></div>
+        <div class="bg-white rounded-xl shadow p-4"><p class="text-xs text-gray-500">En rupture</p><p class="text-2xl font-bold text-red-600">{{ resume.ruptures }}</p></div>
+        <div class="bg-white rounded-xl shadow p-4"><p class="text-xs text-gray-500">Stock faible (≤ 3)</p><p class="text-2xl font-bold text-orange-500">{{ resume.faibles }}</p></div>
+    </div>
+
+    <!-- Entrée de marchandise -->
+    {% if articles %}
+    <form method="POST" action="{{ url_for('boutique.entree_stock') }}" class="bg-white rounded-xl shadow-md p-4 mb-6 grid grid-cols-1 md:grid-cols-6 gap-2 items-end">
+        <div class="md:col-span-3">
+            <label class="block text-sm font-bold text-gray-700 mb-1"><i class="fas fa-truck-ramp-box mr-1"></i> Réception de marchandise</label>
+            <select name="article_id" class="w-full border border-gray-300 rounded-lg px-3 py-2">
+                {% for a in articles if not a.archive %}<option value="{{ a.id }}">{{ a.nom }}{% if a.stock is not none %} (stock : {{ a.stock }}){% endif %}</option>{% endfor %}
+            </select>
+        </div>
+        <div><label class="block text-sm text-gray-600 mb-1">Quantité reçue</label>
+            <input type="number" name="quantite" min="1" required class="w-full border border-gray-300 rounded-lg px-3 py-2"></div>
+        <div><label class="block text-sm text-gray-600 mb-1">Note</label>
+            <input type="text" name="note" placeholder="Fournisseur…" class="w-full border border-gray-300 rounded-lg px-3 py-2"></div>
+        <button type="submit" class="bg-green-600 text-white py-2 rounded-lg hover:bg-green-700"><i class="fas fa-plus mr-1"></i> Ajouter</button>
+    </form>
+    {% endif %}
+
+    <!-- Comptage -->
+    <form method="POST" class="bg-white rounded-xl shadow-md overflow-hidden">
+        <div class="p-4 border-b bg-gray-50">
+            <p class="font-semibold text-gray-800">Faire l'inventaire</p>
+            <p class="text-sm text-gray-500">Saisissez la quantité réellement comptée. Laissez vide pour ne pas toucher à un article. Les écarts sont corrigés et tracés.</p>
+        </div>
+        <div class="overflow-x-auto">
+        <table class="w-full text-sm">
+            <thead class="text-gray-600 text-left bg-gray-50">
+                <tr><th class="px-3 py-2">Article</th><th class="px-3 py-2 text-right">Prix</th><th class="px-3 py-2 text-right">Stock actuel</th><th class="px-3 py-2 text-right">Valeur</th><th class="px-3 py-2">Compté</th></tr>
+            </thead>
+            <tbody class="divide-y">
+                {% for a in articles %}
+                <tr class="{{ 'opacity-60' if a.archive }}">
+                    <td class="px-3 py-2">
+                        <a href="{{ url_for('boutique.mouvements_stock', article=a.id) }}" class="font-medium hover:underline">{{ a.nom }}</a>
+                        {% if a.archive %}<span class="text-xs text-gray-400 ml-1">(archivé)</span>{% endif %}
+                    </td>
+                    <td class="px-3 py-2 text-right whitespace-nowrap">{{ fcfa(a.prix) }}</td>
+                    <td class="px-3 py-2 text-right">
+                        {% if a.stock is none %}<span class="text-gray-400">non suivi</span>
+                        {% elif a.stock <= 0 %}<span class="font-bold text-red-600">{{ a.stock }} · rupture</span>
+                        {% elif a.stock <= 3 %}<span class="font-bold text-orange-500">{{ a.stock }}</span>
+                        {% else %}<span class="font-bold">{{ a.stock }}</span>{% endif %}
+                    </td>
+                    <td class="px-3 py-2 text-right whitespace-nowrap">{{ fcfa(a.stock * a.prix) if a.stock and a.stock > 0 else '—' }}</td>
+                    <td class="px-3 py-2"><input type="number" name="compte_{{ a.id }}" min="0" placeholder="{{ a.stock if a.stock is not none else '' }}" class="w-24 border border-gray-300 rounded-lg px-2 py-1"></td>
+                </tr>
+                {% else %}
+                <tr><td colspan="5" class="px-3 py-10 text-center text-gray-500">Aucun article dans le catalogue.</td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        </div>
+        {% if articles %}
+        <div class="p-4 border-t">
+            <button type="submit" class="w-full md:w-auto bg-purple-600 text-white px-6 py-2.5 rounded-lg hover:bg-purple-700"
+                    onclick="return confirm('Enregistrer l\'inventaire et corriger les écarts ?')">
+                <i class="fas fa-clipboard-check mr-1"></i> Enregistrer l'inventaire
+            </button>
+        </div>
+        {% endif %}
+    </form>
+</div>
+{% endblock %}

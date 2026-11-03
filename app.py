@@ -1,10 +1,10 @@
-from flask import Flask, flash, redirect, request, url_for
+from flask import Flask, flash, redirect, request, send_from_directory, url_for
 from flask_login import LoginManager
 from sqlalchemy import inspect, text
 from werkzeug.exceptions import RequestEntityTooLarge
 from werkzeug.middleware.proxy_fix import ProxyFix
 
-from models import db, Boutique, Vendeur
+from models import db, Boutique, Vendeur, nouveau_code_lien
 
 app = Flask(__name__)
 app.config.from_object('config.Config')
@@ -44,14 +44,49 @@ def mettre_a_jour_schema():
     """Crée les tables manquantes (dont `photos`) et ajoute les colonnes
     récentes sur une base existante, sans toucher aux données."""
     db.create_all()
-    colonnes = {c['name'] for c in inspect(db.engine).get_columns('commandes')}
-    if 'statut' not in colonnes:
-        with db.engine.begin() as conn:
-            conn.execute(text("ALTER TABLE commandes ADD COLUMN statut VARCHAR(20) NOT NULL DEFAULT 'nouvelle'"))
+    inspecteur = inspect(db.engine)
+    with db.engine.begin() as conn:
+        colonnes_commandes = {c['name'] for c in inspecteur.get_columns('commandes')}
+        for nom, definition in [('statut', "VARCHAR(20) NOT NULL DEFAULT 'nouvelle'"),
+                                ('latitude', 'FLOAT'), ('longitude', 'FLOAT'),
+                                ('livreur_id', 'INTEGER REFERENCES livreurs(id)'),
+                                ('code_livraison', 'VARCHAR(32) UNIQUE'),
+                                ('date_livraison', 'TIMESTAMP'),
+                                ('source', "VARCHAR(30) NOT NULL DEFAULT 'catalogue'"),
+                                ('zone_id', 'INTEGER REFERENCES zones(id)'),
+                                ('stock_deduit', 'BOOLEAN NOT NULL DEFAULT FALSE'),
+                                ('frais_livraison', 'FLOAT NOT NULL DEFAULT 0')]:
+            if nom not in colonnes_commandes:
+                conn.execute(text(f"ALTER TABLE commandes ADD COLUMN {nom} {definition}"))
+        if 'frais' not in {c['name'] for c in inspecteur.get_columns('zones')}:
+            conn.execute(text("ALTER TABLE zones ADD COLUMN frais FLOAT NOT NULL DEFAULT 0"))
+        if 'stock' not in {c['name'] for c in inspecteur.get_columns('articles')}:
+            conn.execute(text("ALTER TABLE articles ADD COLUMN stock INTEGER"))
+        if 'lien_public' not in {c['name'] for c in inspecteur.get_columns('boutiques')}:
+            conn.execute(text("ALTER TABLE boutiques ADD COLUMN lien_public VARCHAR(32)"))
+            conn.execute(text("CREATE UNIQUE INDEX IF NOT EXISTS ix_boutiques_lien_public ON boutiques (lien_public)"))
+        # Chaque boutique reçoit son code de lien secret
+        for (boutique_id,) in conn.execute(text("SELECT id FROM boutiques WHERE lien_public IS NULL")).fetchall():
+            conn.execute(text("UPDATE boutiques SET lien_public = :c WHERE id = :i"),
+                         {'c': nouveau_code_lien(), 'i': boutique_id})
 
 
 with app.app_context():
     mettre_a_jour_schema()
+
+
+# ==================== APPLICATION INSTALLABLE (PWA) ====================
+
+@app.route('/app-manifest.json')
+def app_manifest():
+    return send_from_directory('static', 'app-manifest.json', mimetype='application/manifest+json')
+
+
+@app.route('/sw.js')
+def service_worker():
+    reponse = send_from_directory('static', 'sw.js', mimetype='application/javascript')
+    reponse.headers['Cache-Control'] = 'no-cache'
+    return reponse
 
 
 if __name__ == '__main__':

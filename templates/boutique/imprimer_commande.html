@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ 'Bon' if format_papier == '80' else 'Facture' }} n°{{ commande.numero }} - {{ boutique.nom_boutique }}</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        .qr img, .qr canvas { display: block; margin: 0 auto; }
+        .qr-legende { font-size: 10px; text-align: center; margin-top: 2px; }
+        body { font-family: Arial, Helvetica, sans-serif; color: #111; background: #e5e7eb; }
+        .barre { display: flex; gap: 8px; justify-content: center; padding: 12px; background: #0b1d35; }
+        .barre a, .barre button {
+            font: 600 14px Arial; padding: 8px 14px; border-radius: 8px; border: none; cursor: pointer;
+            text-decoration: none; color: #0b1d35; background: #e2eaf5;
+        }
+        .barre .actif { background: #2dd4bf; }
+        .feuille { background: #fff; margin: 16px auto; box-shadow: 0 2px 10px rgba(0,0,0,.15); }
+        table { width: 100%; border-collapse: collapse; }
+
+        /* ===== Ticket 80 mm (imprimante thermique) ===== */
+        .ticket { width: 80mm; padding: 4mm 3mm; font-size: 12px; }
+        .ticket .centre { text-align: center; }
+        .ticket h1 { font-size: 16px; }
+        .ticket .sep { border-top: 1px dashed #000; margin: 6px 0; }
+        .ticket td { padding: 2px 0; vertical-align: top; }
+        .ticket .total { font-size: 15px; font-weight: bold; }
+
+        /* ===== Facture A4 ===== */
+        .a4 { width: 210mm; min-height: 297mm; padding: 16mm 15mm; font-size: 13px; }
+        .a4 header { display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 3px solid #0b1d35; padding-bottom: 10px; }
+        .a4 header img { max-height: 60px; max-width: 120px; }
+        .a4 h1 { font-size: 22px; color: #0b1d35; }
+        .a4 .blocs { display: flex; gap: 16px; margin: 18px 0; }
+        .a4 .bloc { flex: 1; border: 1px solid #d1d5db; border-radius: 6px; padding: 10px; }
+        .a4 .bloc h3 { font-size: 11px; text-transform: uppercase; color: #6b7280; margin-bottom: 4px; }
+        .a4 th { background: #0b1d35; color: #fff; text-align: left; padding: 8px; font-size: 12px; }
+        .a4 td { padding: 8px; border-bottom: 1px solid #e5e7eb; }
+        .a4 .num { text-align: right; white-space: nowrap; }
+        .a4 .total td { font-size: 16px; font-weight: bold; border-top: 2px solid #0b1d35; border-bottom: none; }
+        .a4 .signatures { display: flex; gap: 24px; margin-top: 40px; }
+        .a4 .signatures div { flex: 1; border-top: 1px solid #9ca3af; padding-top: 6px; font-size: 11px; color: #6b7280; height: 60px; }
+        .a4 footer { margin-top: 30px; text-align: center; font-size: 11px; color: #6b7280; }
+
+        @media print {
+            body { background: #fff; }
+            .barre { display: none; }
+            .feuille { margin: 0; box-shadow: none; }
+            {% if format_papier == '80' %}@page { size: 80mm auto; margin: 0; }{% else %}@page { size: A4; margin: 0; }{% endif %}
+        }
+    </style>
+</head>
+<body>
+    <div class="barre">
+        <a href="?format=80" class="{{ 'actif' if format_papier == '80' }}">Ticket 80 mm</a>
+        <a href="?format=a4" class="{{ 'actif' if format_papier == 'a4' }}">Facture A4</a>
+        <button onclick="window.print()">🖨️ Imprimer</button>
+    </div>
+
+    {% if format_papier == '80' %}
+    <div class="feuille ticket">
+        <div class="centre">
+            <h1>{{ boutique.nom_boutique }}</h1>
+            {% if boutique.whatsapp %}<p>Tél : {{ boutique.whatsapp }}</p>{% endif %}
+            <div class="sep"></div>
+            <p><strong>BON DE LIVRAISON N°{{ commande.numero }}</strong></p>
+            <p>{{ commande.date_commande.strftime('%d/%m/%Y %H:%M') }}</p>
+        </div>
+        <div class="sep"></div>
+        <p><strong>{{ commande.client_nom }}</strong></p>
+        <p>Tél : {{ commande.client_telephone }}</p>
+        <div class="sep"></div>
+        <p><strong>LIEU DE LIVRAISON</strong></p>
+        {% if commande.zone %}<p>Zone : {{ commande.zone.nom }}</p>{% endif %}
+        <p>{{ commande.client_adresse }}</p>
+        {% if commande.latitude is not none %}<p>GPS : {{ '%.5f'|format(commande.latitude) }}, {{ '%.5f'|format(commande.longitude) }}</p>{% endif %}
+        {% if commande.instructions %}<p><em>Note : {{ commande.instructions }}</em></p>{% endif %}
+        <div class="qr" id="qr80" style="margin-top:4px"></div>
+        <p class="qr-legende">Scanner pour l'itinéraire</p>
+        <div class="sep"></div>
+        <table>
+            {% for a in commande.articles_json %}
+            <tr><td colspan="2">{{ a.nom }}</td></tr>
+            <tr><td>&nbsp;&nbsp;{{ a.quantite }} × {{ fcfa(a.prix) }}</td><td style="text-align:right">{{ fcfa(a.prix * a.quantite) }}</td></tr>
+            {% endfor %}
+        </table>
+        <div class="sep"></div>
+        <table>
+            <tr><td>Sous-total</td><td style="text-align:right">{{ fcfa(commande.sous_total) }}</td></tr>
+            <tr><td>Livraison</td><td style="text-align:right">{{ fcfa(commande.frais_livraison or 0) }}</td></tr>
+            <tr class="total"><td>TOTAL</td><td style="text-align:right">{{ fcfa(commande.total) }}</td></tr>
+        </table>
+        <p class="centre" style="margin-top:4px">Paiement à la livraison</p>
+        {% if commande.livreur %}<div class="sep"></div><p>Livreur : {{ commande.livreur.nom }} ({{ commande.livreur.telephone }})</p>{% endif %}
+        <div class="sep"></div>
+        <p class="centre">Merci pour votre confiance !</p>
+    </div>
+    {% else %}
+    <div class="feuille a4">
+        <header>
+            <div>
+                {% if boutique.logo_url %}<img src="{{ boutique.logo_url }}" alt="">{% endif %}
+                <h1>{{ boutique.nom_boutique }}</h1>
+                {% if boutique.whatsapp %}<p>Tél / WhatsApp : {{ boutique.whatsapp }}</p>{% endif %}
+                <p>{{ boutique.email }}</p>
+            </div>
+            <div style="text-align:right">
+                <h1>FACTURE</h1>
+                <p><strong>N° {{ commande.numero }}</strong></p>
+                <p>Date : {{ commande.date_commande.strftime('%d/%m/%Y') }}</p>
+                <p>Statut : {{ commande.statut_libelle }}</p>
+            </div>
+        </header>
+
+        <div class="blocs">
+            <div class="bloc">
+                <h3>Client</h3>
+                <p><strong>{{ commande.client_nom }}</strong></p>
+                <p>{{ commande.client_telephone }}</p>
+                <p>{{ commande.client_adresse }}</p>
+            </div>
+            <div class="bloc">
+                <h3>Lieu de livraison</h3>
+                {% if commande.zone %}<p><strong>Zone : {{ commande.zone.nom }}</strong></p>{% endif %}
+                <p>{{ commande.client_adresse }}</p>
+                {% if commande.latitude is not none %}<p>GPS : {{ '%.5f'|format(commande.latitude) }}, {{ '%.5f'|format(commande.longitude) }}</p>{% endif %}
+                {% if commande.instructions %}<p><em>Note : {{ commande.instructions }}</em></p>{% endif %}
+            </div>
+            <div class="bloc" style="flex:0 0 auto; text-align:center">
+                <h3>Itinéraire</h3>
+                <div class="qr" id="qrA4"></div>
+                <p class="qr-legende">Scanner avec le téléphone</p>
+            </div>
+        </div>
+        <div class="blocs" style="margin-top:0">
+            <div class="bloc">
+                <h3>Livreur</h3>
+                <p>{{ commande.livreur.nom if commande.livreur else '—' }}{% if commande.livreur %} · {{ commande.livreur.telephone }}{% endif %}</p>
+            </div>
+            <div class="bloc">
+                <h3>Paiement</h3>
+                <p>À la livraison : <strong>{{ fcfa(commande.total) }}</strong></p>
+            </div>
+        </div>
+
+        <table>
+            <thead><tr><th>Article</th><th class="num">Prix unitaire</th><th class="num">Qté</th><th class="num">Montant</th></tr></thead>
+            <tbody>
+                {% for a in commande.articles_json %}
+                <tr><td>{{ a.nom }}</td><td class="num">{{ fcfa(a.prix) }}</td><td class="num">{{ a.quantite }}</td><td class="num">{{ fcfa(a.prix * a.quantite) }}</td></tr>
+                {% endfor %}
+                <tr><td colspan="3" class="num">Sous-total articles</td><td class="num">{{ fcfa(commande.sous_total) }}</td></tr>
+                <tr><td colspan="3" class="num">Frais de livraison{% if commande.zone %} ({{ commande.zone.nom }}){% endif %}</td><td class="num">{{ fcfa(commande.frais_livraison or 0) }}</td></tr>
+                <tr class="total"><td colspan="3">TOTAL À PAYER</td><td class="num">{{ fcfa(commande.total) }}</td></tr>
+            </tbody>
+        </table>
+
+        <div class="signatures">
+            <div>Signature du livreur</div>
+            <div>Signature du client (reçu conforme)</div>
+        </div>
+        <footer>Merci pour votre confiance ! — {{ boutique.nom_boutique }}</footer>
+    </div>
+    {% endif %}
+    <script>
+        (function () {
+            var cible = document.getElementById('qr80') || document.getElementById('qrA4');
+            if (cible && window.QRCode) {
+                new QRCode(cible, { text: {{ commande.lien_carte|tojson }}, width: {{ 110 if format_papier == '80' else 96 }},
+                                    height: {{ 110 if format_papier == '80' else 96 }}, correctLevel: QRCode.CorrectLevel.M });
+            }
+        })();
+    </script>
+</body>
+</html>

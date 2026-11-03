@@ -4,825 +4,323 @@
 
 {% block extra_css %}
 <style>
-    /* Animations et styles modernes */
-    @keyframes fadeIn {
-        from { opacity: 0; transform: translateY(20px); }
-        to { opacity: 1; transform: translateY(0); }
+    /* ===== Carrousel : défilement natif au doigt (scroll-snap) ===== */
+    .galerie { position: relative; background: #f8fafc; }
+    .galerie-piste {
+        display: flex; overflow-x: auto; scroll-snap-type: x mandatory; scroll-behavior: smooth;
+        scrollbar-width: none; -webkit-overflow-scrolling: touch;
     }
-    
-    @keyframes pulse {
-        0%, 100% { transform: scale(1); }
-        50% { transform: scale(1.05); }
+    .galerie-piste::-webkit-scrollbar { display: none; }
+    .galerie-piste img {
+        flex: 0 0 100%; width: 100%; aspect-ratio: 1 / 1; object-fit: contain;
+        scroll-snap-align: center; cursor: zoom-in; user-select: none; -webkit-user-drag: none;
     }
-    
-    .article-card {
-        animation: fadeIn 0.6s ease-out;
-        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-        position: relative;
-        overflow: hidden;
+    .galerie-fleche {
+        position: absolute; top: 50%; transform: translateY(-50%); width: 36px; height: 36px; border-radius: 9999px;
+        background: rgba(255,255,255,.92); color: #111827; box-shadow: 0 2px 8px rgba(0,0,0,.15);
+        display: flex; align-items: center; justify-content: center; opacity: 0; transition: opacity .2s; z-index: 2;
     }
-    
-    .article-card:hover {
-        transform: translateY(-8px);
-        box-shadow: 0 20px 40px rgba(0,0,0,0.15);
-    }
-    
-    .modal {
-        display: none;
-        position: fixed;
-        z-index: 1000;
-        left: 0;
-        top: 0;
-        width: 100%;
-        height: 100%;
-        background-color: rgba(0,0,0,0.95);
-        cursor: pointer;
-        backdrop-filter: blur(10px);
-        animation: fadeIn 0.3s ease-out;
-    }
-    
-    .modal-content {
-        margin: auto;
-        display: block;
-        max-width: 90%;
-        max-height: 90%;
-        position: absolute;
-        top: 50%;
-        left: 50%;
-        transform: translate(-50%, -50%);
-        border-radius: 12px;
-    }
-    
-    .close-modal {
-        position: absolute;
-        top: 20px;
-        right: 35px;
-        color: #fff;
-        font-size: 40px;
-        font-weight: bold;
-        cursor: pointer;
-        transition: transform 0.3s;
-        z-index: 1001;
-    }
-    
-    .close-modal:hover {
-        transform: rotate(90deg);
-    }
-    
-    .carousel-btn {
-        position: absolute;
-        top: 50%;
-        transform: translateY(-50%);
-        background: rgba(0,0,0,0.6);
-        color: white;
-        border: none;
-        border-radius: 50%;
-        width: 45px;
-        height: 45px;
-        cursor: pointer;
-        z-index: 10;
-        transition: all 0.3s;
-    }
-    
-    .carousel-prev { left: 15px; }
-    .carousel-next { right: 15px; }
-    
-    .carousel-btn:hover {
-        background: rgba(0,0,0,0.9);
-        transform: translateY(-50%) scale(1.1);
-    }
-    
-    .photo-indicators {
-        position: absolute;
-        bottom: 15px;
-        left: 50%;
-        transform: translateX(-50%);
-        display: flex;
-        gap: 10px;
-        z-index: 10;
-    }
-    
-    .indicator {
-        width: 8px;
-        height: 8px;
-        border-radius: 50%;
-        background: rgba(255,255,255,0.5);
-        cursor: pointer;
-        transition: all 0.3s;
-    }
-    
-    .indicator.active {
-        background: white;
-        width: 20px;
-        border-radius: 4px;
-    }
-    
-    .gallery-img {
-        cursor: pointer;
-        transition: transform 0.3s;
-        width: 100%;
-        height: 100%;
-        object-fit: cover;
-    }
-    
-    .gallery-img:hover {
-        transform: scale(1.05);
-    }
-    
-    .carousel-container {
-        position: relative;
-        height: 280px;
-        overflow: hidden;
-        background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
-    }
-    
-    .price-badge {
-        position: absolute;
-        top: 12px;
-        right: 12px;
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-        color: white;
-        padding: 6px 12px;
-        border-radius: 20px;
-        font-size: 14px;
-        font-weight: bold;
-        z-index: 5;
-        box-shadow: 0 4px 10px rgba(0,0,0,0.2);
-    }
-    
-    .add-to-cart-btn {
-        transition: all 0.3s;
-    }
-    
-    .add-to-cart-btn:hover:not(:disabled) {
-        transform: translateY(-2px);
-        box-shadow: 0 10px 20px rgba(0,0,0,0.2);
-    }
-    
-    .add-to-cart-btn:disabled {
-        opacity: 0.7;
-        cursor: not-allowed;
-    }
-    
-    .quantity-input {
-        transition: all 0.3s;
-        border: 2px solid #e2e8f0;
-    }
-    
-    .quantity-input:focus {
-        border-color: #667eea;
-        box-shadow: 0 0 0 3px rgba(102,126,234,0.1);
-        outline: none;
-    }
-    
-    .search-bar {
-        transition: all 0.3s;
-        border: 2px solid #e2e8f0;
-    }
-    
-    .search-bar:focus {
-        border-color: #667eea;
-        box-shadow: 0 0 0 3px rgba(102,126,234,0.1);
-        outline: none;
-    }
-    
-    .floating-cart {
-        position: fixed;
-        bottom: 30px;
-        right: 30px;
-        z-index: 100;
-        animation: pulse 2s infinite;
-    }
-    
-    .toast-notification {
-        position: fixed;
-        bottom: 100px;
-        right: 30px;
-        background: linear-gradient(135deg, #10b981, #059669);
-        color: white;
-        padding: 12px 24px;
-        border-radius: 12px;
-        box-shadow: 0 10px 25px rgba(0,0,0,0.2);
-        z-index: 1000;
-        animation: slideInRight 0.3s ease-out;
-        font-weight: 500;
-        display: flex;
-        align-items: center;
-        gap: 10px;
-    }
-    
-    .toast-notification.error {
-        background: linear-gradient(135deg, #ef4444, #dc2626);
-    }
-    
-    @keyframes slideInRight {
-        from {
-            transform: translateX(100%);
-            opacity: 0;
-        }
-        to {
-            transform: translateX(0);
-            opacity: 1;
-        }
-    }
-    
-    @media (max-width: 768px) {
-        .floating-cart {
-            bottom: 20px;
-            right: 20px;
-        }
-        .toast-notification {
-            bottom: 80px;
-            right: 20px;
-            left: 20px;
-            text-align: center;
-            justify-content: center;
-        }
-    }
+    .galerie:hover .galerie-fleche { opacity: 1; }
+    @media (hover: none) { .galerie-fleche { display: none; } }
+    .galerie-fleche.gauche { left: 8px; } .galerie-fleche.droite { right: 8px; }
+    .galerie-points { position: absolute; bottom: 8px; left: 0; right: 0; display: flex; justify-content: center; gap: 6px; z-index: 2; }
+    .galerie-points button { width: 7px; height: 7px; border-radius: 9999px; background: rgba(17,24,39,.25); transition: all .2s; }
+    .galerie-points button.actif { width: 18px; background: #7c3aed; }
+    .galerie-compteur { position: absolute; top: 8px; right: 8px; background: rgba(17,24,39,.65); color: #fff; font-size: 11px; padding: 2px 8px; border-radius: 9999px; z-index: 2; }
+
+    /* ===== Description ===== */
+    .description { white-space: pre-line; overflow-wrap: anywhere; }
+    .description.repliee { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+
+    /* ===== Visionneuse plein écran ===== */
+    #visionneuse { position: fixed; inset: 0; background: rgba(0,0,0,.95); z-index: 60; display: none; flex-direction: column; }
+    #visionneuse.ouverte { display: flex; }
+    #visionneuse .galerie-piste { flex: 1; height: 100%; }
+    #visionneuse .galerie-piste img { aspect-ratio: auto; height: 100%; max-height: 100vh; cursor: default; }
+    #visionneuse .galerie-fleche { opacity: 1; background: rgba(255,255,255,.15); color: #fff; width: 44px; height: 44px; }
+    #visionneuse .galerie-points button { background: rgba(255,255,255,.35); }
+    #visionneuse .galerie-points button.actif { background: #fff; }
+
+    .toast { position: fixed; left: 50%; bottom: 90px; transform: translateX(-50%); z-index: 70;
+             background: #111827; color: #fff; padding: 10px 18px; border-radius: 9999px; font-size: 14px; box-shadow: 0 6px 20px rgba(0,0,0,.25); }
+    .toast.erreur { background: #dc2626; }
 </style>
 {% endblock %}
 
 {% block content %}
-<div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+<div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
     <!-- En-tête boutique -->
-    <div class="bg-gradient-to-r from-purple-600 to-blue-600 rounded-2xl shadow-xl p-8 mb-8 text-white">
-        <div class="flex flex-col md:flex-row items-center text-center md:text-left justify-between">
-            <div class="flex items-center mb-4 md:mb-0">
+    <div class="bg-gradient-to-r from-purple-600 to-blue-600 rounded-2xl shadow-xl p-5 md:p-8 mb-6 text-white">
+        <div class="flex items-center justify-between gap-4">
+            <div class="flex items-center gap-4 min-w-0">
                 {% if boutique.logo_url %}
-                    <img src="{{ boutique.logo_url }}" alt="{{ boutique.nom_boutique }}" class="h-24 w-24 object-contain rounded-full bg-white p-2 shadow-lg mr-6">
+                    <img src="{{ boutique.logo_url }}" alt="{{ boutique.nom_boutique }}" class="h-16 w-16 md:h-24 md:w-24 object-contain rounded-full bg-white p-2 shadow-lg flex-shrink-0">
                 {% else %}
-                    <div class="h-24 w-24 bg-white bg-opacity-20 rounded-full flex items-center justify-center mr-6">
-                        <i class="fas fa-store text-4xl text-white"></i>
+                    <div class="h-16 w-16 md:h-24 md:w-24 bg-white bg-opacity-20 rounded-full flex items-center justify-center flex-shrink-0">
+                        <i class="fas fa-store text-3xl"></i>
                     </div>
                 {% endif %}
-                <div class="text-left">
-                    <h1 class="text-3xl md:text-4xl font-bold mb-2">{{ boutique.nom_boutique }}</h1>
-                    <p class="text-blue-100 text-lg">✨ Découvrez notre collection exclusive</p>
+                <div class="min-w-0">
+                    <h1 class="text-2xl md:text-4xl font-bold truncate">{{ boutique.nom_boutique }}</h1>
+                    <p class="text-blue-100 text-sm md:text-lg">{{ articles|length }} article{{ 's' if articles|length > 1 }} · commande livrée chez vous</p>
                 </div>
             </div>
-            
-            <div class="hidden md:block">
-                <a href="{{ url_for('client.voir_panier') }}" class="relative inline-block">
-                    <div class="bg-white text-gray-800 px-6 py-3 rounded-full hover:shadow-lg transition-all hover:scale-105 flex items-center font-semibold">
-                        <i class="fas fa-shopping-cart mr-2 text-purple-600"></i>
-                        Mon panier
-                        <span id="panierCount" class="ml-2 bg-gradient-to-r from-purple-600 to-blue-600 text-white rounded-full w-6 h-6 flex items-center justify-center text-xs font-bold">
-                            {{ panier_quantite }}
-                        </span>
-                    </div>
-                </a>
-            </div>
-        </div>
-    </div>
-    
-    <!-- Panier flottant -->
-    <div class="floating-cart md:hidden">
-        <a href="{{ url_for('client.voir_panier') }}" class="relative inline-block">
-            <div class="bg-gradient-to-r from-purple-600 to-blue-600 text-white px-5 py-3 rounded-full shadow-lg hover:shadow-xl transition-all flex items-center">
-                <i class="fas fa-shopping-cart mr-2"></i>
-                <span id="panierCountFloating" class="bg-red-500 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs ml-1">
-                    {{ panier_quantite }}
-                </span>
-            </div>
-        </a>
-    </div>
-
-    <!-- Barre de recherche -->
-    <div class="bg-white rounded-2xl shadow-lg p-6 mb-8">
-        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div class="md:col-span-2">
-                <label class="block text-gray-700 text-sm font-bold mb-2 flex items-center">
-                    <i class="fas fa-search mr-2 text-purple-600"></i>
-                    Rechercher un article
-                </label>
-                <input type="text" id="searchInput" 
-                       placeholder="🔍 Que recherchez-vous ?" 
-                       class="search-bar w-full px-5 py-3 rounded-xl focus:outline-none">
-            </div>
-            
-            <div>
-                <label class="block text-gray-700 text-sm font-bold mb-2 flex items-center">
-                    <i class="fas fa-chart-line mr-2 text-purple-600"></i>
-                    Trier par prix
-                </label>
-                <select id="sortPrice" 
-                        class="w-full px-5 py-3 border-2 border-gray-200 rounded-xl focus:outline-none focus:border-purple-600 transition cursor-pointer">
-                    <option value="default">📊 Par défaut</option>
-                    <option value="asc">📈 Prix croissant</option>
-                    <option value="desc">📉 Prix décroissant</option>
-                </select>
-            </div>
-        </div>
-        
-        <div class="mt-4 text-right">
-            <button onclick="resetFilters()" 
-                    class="bg-gray-200 text-gray-700 px-5 py-2 rounded-xl hover:bg-gray-300 transition-all hover:scale-105">
-                <i class="fas fa-undo-alt mr-2"></i> Réinitialiser
-            </button>
+            <a href="{{ url_for('client.voir_panier') }}" class="hidden md:flex items-center bg-white text-gray-800 px-5 py-3 rounded-full font-semibold hover:shadow-lg transition">
+                <i class="fas fa-shopping-cart mr-2 text-purple-600"></i> Mon panier
+                <span class="compteur-panier ml-2 bg-purple-600 text-white rounded-full min-w-[24px] h-6 px-1.5 flex items-center justify-center text-xs font-bold">{{ panier_quantite }}</span>
+            </a>
         </div>
     </div>
 
-    <!-- Catalogue -->
-    <div id="articlesContainer" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+    <!-- Recherche / tri -->
+    <div class="bg-white rounded-2xl shadow p-4 mb-6 flex flex-col md:flex-row gap-3">
+        <div class="relative flex-1">
+            <i class="fas fa-search absolute left-4 top-1/2 -translate-y-1/2 text-gray-400"></i>
+            <input type="search" id="recherche" placeholder="Rechercher un article…"
+                   class="w-full pl-11 pr-4 py-3 border-2 border-gray-100 rounded-xl focus:outline-none focus:border-purple-500">
+        </div>
+        <select id="tri" class="md:w-56 px-4 py-3 border-2 border-gray-100 rounded-xl focus:outline-none focus:border-purple-500">
+            <option value="defaut">Les plus récents</option>
+            <option value="asc">Prix croissant</option>
+            <option value="desc">Prix décroissant</option>
+        </select>
+    </div>
+
+    <!-- Articles -->
+    <div id="articles" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
         {% for article in articles %}
-        <div class="article-card bg-white rounded-2xl shadow-lg overflow-hidden flex flex-col"
-             data-name="{{ article.nom|lower }}"
-             data-price="{{ article.prix }}"
-             data-id="{{ article.id }}">
-            
-            <!-- Galerie d'images -->
-            <div class="carousel-container relative" data-carousel-id="{{ article.id }}">
-                {% if article.photos_urls and article.photos_urls|length > 0 %}
-                    {% set first_photo = article.photos_urls[0] %}
-                    {% if first_photo and first_photo != '' %}
-                        <img src="{{ first_photo }}" 
-                             alt="{{ article.nom }}" 
-                             class="gallery-img w-full h-72 object-cover cursor-pointer"
-                             data-images='{{ article.photos_urls|tojson }}'
-                             data-index="0"
-                             onclick="openModal(this)">
-                        
-                        <div class="price-badge">
-                            {{ "%.0f"|format(article.prix) }} FCFA
-                        </div>
-                        
-                        {% if article.photos_urls|length > 1 %}
-                            <button class="carousel-btn carousel-prev" onclick="event.stopPropagation(); changeImage(this.parentElement, -1)">❮</button>
-                            <button class="carousel-btn carousel-next" onclick="event.stopPropagation(); changeImage(this.parentElement, 1)">❯</button>
-                            
-                            <div class="photo-indicators">
-                                {% for photo in article.photos_urls %}
-                                    {% if photo and photo != '' %}
-                                        <div class="indicator {% if loop.index0 == 0 %}active{% endif %}" 
-                                             onclick="event.stopPropagation(); goToImage(this.parentElement.parentElement, {{ loop.index0 }})"></div>
-                                    {% endif %}
-                                {% endfor %}
-                            </div>
-                        {% endif %}
-                    {% else %}
-                        <div class="w-full h-72 flex items-center justify-center text-gray-400 bg-gradient-to-br from-gray-100 to-gray-200">
-                            <i class="fas fa-image text-6xl"></i>
-                        </div>
-                    {% endif %}
-                {% else %}
-                    <div class="w-full h-72 flex items-center justify-center text-gray-400 bg-gradient-to-br from-gray-100 to-gray-200">
-                        <i class="fas fa-image text-6xl"></i>
-                    </div>
+        {% set photos = (article.photos_urls or [])|select|list %}
+        <article class="carte bg-white rounded-2xl shadow-md hover:shadow-xl transition overflow-hidden flex flex-col"
+                 data-nom="{{ (article.nom ~ ' ' ~ (article.description or ''))|lower }}" data-prix="{{ article.prix }}" data-ordre="{{ loop.index0 }}">
+
+            {% if photos %}
+            <div class="galerie" data-galerie>
+                <div class="galerie-piste">
+                    {% for url in photos %}
+                    <img src="{{ url }}" alt="{{ article.nom }} - photo {{ loop.index }}" loading="{{ 'eager' if loop.first and loop.index0 < 3 else 'lazy' }}"
+                         data-photos='{{ photos|tojson }}' data-index="{{ loop.index0 }}">
+                    {% endfor %}
+                </div>
+                {% if photos|length > 1 %}
+                <button type="button" class="galerie-fleche gauche" aria-label="Photo précédente"><i class="fas fa-chevron-left"></i></button>
+                <button type="button" class="galerie-fleche droite" aria-label="Photo suivante"><i class="fas fa-chevron-right"></i></button>
+                <div class="galerie-points">
+                    {% for url in photos %}<button type="button" aria-label="Photo {{ loop.index }}" class="{{ 'actif' if loop.first }}"></button>{% endfor %}
+                </div>
+                <span class="galerie-compteur">1/{{ photos|length }}</span>
                 {% endif %}
             </div>
-            
-            <!-- Contenu -->
-            <div class="p-5 flex-1 flex flex-col">
-                <h3 class="text-xl font-bold text-gray-800 mb-2 line-clamp-1">{{ article.nom }}</h3>
-                
-                <div class="mb-3">
-                    <p class="text-gray-600 text-sm leading-relaxed" id="desc-{{ article.id }}">
-                        {{ article.description[:120] }}{% if article.description|length > 120 %}...{% endif %}
-                    </p>
-                    {% if article.description|length > 120 %}
-                    <button onclick="toggleDescription({{ article.id }}, '{{ article.description|replace('\n', ' ')|replace("'", "\\'")|safe }}')" 
-                            class="text-purple-600 text-xs mt-2 hover:underline focus:outline-none font-medium">
-                        Lire plus <i class="fas fa-chevron-down ml-1"></i>
-                    </button>
-                    {% endif %}
-                </div>
-                
-                <div class="mt-auto">
-                    <div class="flex items-center justify-between mb-3">
-                        <div class="text-2xl font-bold bg-gradient-to-r from-purple-600 to-blue-600 bg-clip-text text-transparent">
-                            {{ "%.0f"|format(article.prix) }} FCFA
-                        </div>
-                        <div class="text-sm text-gray-500">
-                            <i class="fas fa-tag"></i> Prix unitaire
-                        </div>
-                    </div>
-                    
-                    <!-- Formulaire avec quantité correctement gérée -->
-                    <form method="POST" action="{{ url_for('client.ajouter_panier') }}" class="add-to-cart-form" onsubmit="handleAddToCart(event, this)">
-                        <input type="hidden" name="article_id" value="{{ article.id }}">
-                        <input type="hidden" name="boutique_id" value="{{ boutique.id }}">
-                        <div class="flex space-x-3">
-                            <input type="number" name="quantite" id="quantite-{{ article.id }}" value="1" min="1" max="99"
-                                   class="quantity-input w-20 px-3 py-2 border-2 border-gray-200 rounded-xl text-center focus:outline-none">
-                            <button type="submit" 
-                                    class="add-to-cart-btn flex-1 bg-gradient-to-r from-green-500 to-green-600 text-white py-2 rounded-xl hover:from-green-600 hover:to-green-700 transition-all font-semibold">
-                                <i class="fas fa-cart-plus mr-2"></i> Ajouter
-                            </button>
-                        </div>
-                    </form>
-                </div>
+            {% else %}
+            <div class="aspect-square flex items-center justify-center bg-gray-100 text-gray-300">
+                <i class="fas fa-image text-6xl"></i>
             </div>
-        </div>
+            {% endif %}
+
+            <div class="p-5 flex-1 flex flex-col">
+                <h3 class="text-lg font-bold text-gray-800">{{ article.nom }}</h3>
+                <p class="text-2xl font-bold text-purple-700 mt-1">{{ "{:,.0f}".format(article.prix).replace(',', ' ') }} FCFA</p>
+
+                {% if article.description %}
+                <div class="mt-3">
+                    <p class="description repliee text-gray-600 text-sm leading-relaxed">{{ article.description }}</p>
+                    <button type="button" class="lire-plus hidden text-purple-600 text-sm font-medium mt-1 hover:underline">
+                        Lire plus <i class="fas fa-chevron-down text-xs ml-1"></i>
+                    </button>
+                </div>
+                {% endif %}
+
+                {% if article.stock is not none and article.stock <= 0 %}
+                <p class="mt-auto pt-4"><span class="block text-center bg-gray-100 text-gray-500 py-2.5 rounded-xl font-semibold">Épuisé pour le moment</span></p>
+                {% else %}
+                <form method="POST" action="{{ url_for('client.ajouter_panier') }}" class="ajout-panier mt-auto pt-4 flex gap-2">
+                    <input type="hidden" name="article_id" value="{{ article.id }}">
+                    <div class="flex items-center border-2 border-gray-100 rounded-xl">
+                        <button type="button" class="moins px-3 py-2 text-gray-500 hover:text-purple-600" aria-label="Moins">−</button>
+                        <input type="number" name="quantite" value="1" min="1" max="99" class="w-10 text-center focus:outline-none" aria-label="Quantité">
+                        <button type="button" class="plus px-3 py-2 text-gray-500 hover:text-purple-600" aria-label="Plus">+</button>
+                    </div>
+                    <button type="submit" class="flex-1 bg-green-600 text-white rounded-xl font-semibold hover:bg-green-700 transition">
+                        <i class="fas fa-cart-plus mr-1"></i> Ajouter
+                    </button>
+                </form>
+                {% endif %}
+            </div>
+        </article>
         {% endfor %}
     </div>
 
-    <!-- Modal image -->
-    <div id="imageModal" class="modal" onclick="closeModal()">
-        <span class="close-modal">&times;</span>
-        <img class="modal-content" id="modalImage">
-        <button class="carousel-btn carousel-prev" style="background: rgba(0,0,0,0.8); left: 20px;" onclick="event.stopPropagation(); modalChangeImage(-1)">❮</button>
-        <button class="carousel-btn carousel-next" style="background: rgba(0,0,0,0.8); right: 20px;" onclick="event.stopPropagation(); modalChangeImage(1)">❯</button>
-        <div id="modalIndicators" class="photo-indicators" style="bottom: 20px;"></div>
+    <div id="aucunResultat" class="hidden text-center text-gray-500 py-16">
+        <i class="fas fa-search text-4xl text-gray-300 mb-3"></i>
+        <p>Aucun article ne correspond à votre recherche.</p>
     </div>
+    {% if not articles %}
+    <div class="text-center text-gray-500 py-16">
+        <i class="fas fa-box-open text-5xl text-gray-300 mb-3"></i>
+        <p>Le catalogue est vide pour le moment.</p>
+    </div>
+    {% endif %}
+</div>
+
+<!-- Panier flottant (téléphone) -->
+<a href="{{ url_for('client.voir_panier') }}" class="md:hidden fixed bottom-5 right-5 z-40 bg-purple-600 text-white pl-5 pr-4 py-3 rounded-full shadow-xl flex items-center gap-2 font-semibold">
+    <i class="fas fa-shopping-cart"></i> Panier
+    <span class="compteur-panier bg-white text-purple-700 rounded-full min-w-[22px] h-[22px] px-1 flex items-center justify-center text-xs font-bold">{{ panier_quantite }}</span>
+</a>
+
+<!-- Visionneuse plein écran -->
+<div id="visionneuse" class="galerie" role="dialog" aria-modal="true">
+    <button type="button" id="fermerVisionneuse" class="absolute top-4 right-4 z-10 text-white text-3xl w-11 h-11" aria-label="Fermer">&times;</button>
+    <div class="galerie-piste"></div>
+    <button type="button" class="galerie-fleche gauche" aria-label="Photo précédente"><i class="fas fa-chevron-left"></i></button>
+    <button type="button" class="galerie-fleche droite" aria-label="Photo suivante"><i class="fas fa-chevron-right"></i></button>
+    <div class="galerie-points"></div>
 </div>
 
 <script>
-// Stockage pour les images du modal
-let currentModalImages = [];
-let currentModalIndex = 0;
+(function () {
+    // ---------- Carrousel ----------
+    function activerGalerie(galerie, auto) {
+        const piste = galerie.querySelector('.galerie-piste');
+        const points = galerie.querySelectorAll('.galerie-points button');
+        const compteur = galerie.querySelector('.galerie-compteur');
+        const total = () => piste.children.length;
+        const indexCourant = () => Math.round(piste.scrollLeft / piste.clientWidth);
+        const aller = (i) => piste.scrollTo({ left: ((i + total()) % total()) * piste.clientWidth });
 
-// Intervalles pour le défilement automatique
-const autoIntervals = {};
+        galerie.querySelector('.gauche')?.addEventListener('click', (e) => { e.stopPropagation(); aller(indexCourant() - 1); });
+        galerie.querySelector('.droite')?.addEventListener('click', (e) => { e.stopPropagation(); aller(indexCourant() + 1); });
+        points.forEach((p, i) => p.addEventListener('click', (e) => { e.stopPropagation(); aller(i); }));
 
-// Fonction d'affichage de notification
-function showNotification(message, isError = false) {
-    const oldToast = document.querySelector('.toast-notification');
-    if (oldToast) oldToast.remove();
-    
-    const toast = document.createElement('div');
-    toast.className = 'toast-notification' + (isError ? ' error' : '');
-    toast.innerHTML = `
-        <i class="fas ${isError ? 'fa-exclamation-triangle' : 'fa-check-circle'}"></i>
-        <span>${message}</span>
-    `;
-    document.body.appendChild(toast);
-    
-    setTimeout(() => {
-        if (toast && toast.remove) toast.remove();
-    }, 3000);
-}
+        let attente;
+        piste.addEventListener('scroll', () => {
+            clearTimeout(attente);
+            attente = setTimeout(() => {
+                const i = indexCourant();
+                points.forEach((p, j) => p.classList.toggle('actif', i === j));
+                if (compteur) compteur.textContent = (i + 1) + '/' + total();
+            }, 60);
+        }, { passive: true });
 
-// Met à jour le compteur du panier
-function updateCartCountDisplay(count) {
-    const panierCount = document.getElementById('panierCount');
-    const panierCountFloating = document.getElementById('panierCountFloating');
-    if (panierCount) panierCount.textContent = count;
-    if (panierCountFloating) panierCountFloating.textContent = count;
-}
+        // Défilement automatique, mis en pause dès que le client touche ou survole
+        if (auto && total() > 1) {
+            let pause = false;
+            ['pointerenter', 'touchstart', 'focusin'].forEach((ev) => galerie.addEventListener(ev, () => { pause = true; }, { passive: true }));
+            galerie.addEventListener('pointerleave', () => { pause = false; });
+            const visible = new Set();
+            new IntersectionObserver((entrees) => entrees.forEach((e) => e.isIntersecting ? visible.add(galerie) : visible.delete(galerie)))
+                .observe(galerie);
+            setInterval(() => { if (!pause && visible.has(galerie) && !document.hidden) aller(indexCourant() + 1); }, 4000);
+        }
+        return { aller };
+    }
+    document.querySelectorAll('[data-galerie]').forEach((g) => activerGalerie(g, true));
 
-// Gestionnaire d'ajout au panier - CORRECTION POUR LA QUANTITÉ
-function handleAddToCart(event, form) {
-    event.preventDefault();
-    
-    // Récupérer la quantité correctement
-    const quantiteInput = form.querySelector('input[name="quantite"]');
-    const quantite = quantiteInput ? parseInt(quantiteInput.value) : 1;
-    
-    const button = form.querySelector('.add-to-cart-btn');
-    const originalHTML = button.innerHTML;
-    
-    // Récupérer les valeurs
-    const articleId = form.querySelector('input[name="article_id"]').value;
-    const boutiqueId = form.querySelector('input[name="boutique_id"]').value;
-    
-    // Créer les données à envoyer
-    const formData = new URLSearchParams();
-    formData.append('article_id', articleId);
-    formData.append('boutique_id', boutiqueId);
-    formData.append('quantite', quantite);
-    
-    // Désactiver le bouton et afficher le chargement
-    button.disabled = true;
-    button.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i> Ajout en cours...';
-    
-    // Envoyer la requête fetch
-    fetch(form.action, {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/x-www-form-urlencoded',
-            'Accept': 'application/json',
-        },
-        body: formData.toString()
-    })
-    .then(response => {
-        // Vérifier si la réponse est JSON ou redirection
-        const contentType = response.headers.get('content-type');
-        if (contentType && contentType.includes('application/json')) {
-            return response.json();
-        } else if (response.redirected) {
-            // Si redirection, suivre
-            window.location.href = response.url;
-            return null;
-        }
-        return response.text().then(text => {
-            // Si c'est du HTML, c'est probablement un succès
-            return { success: true, panier_count: null };
-        });
-    })
-    .then(data => {
-        if (data && data.success === false) {
-            throw new Error(data.message || 'Erreur lors de l\'ajout');
-        }
-        
-        // Mettre à jour le compteur
-        if (data && data.panier_count !== undefined && data.panier_count !== null) {
-            updateCartCountDisplay(data.panier_count);
-        } else {
-            // Incrémenter visuellement
-            const currentCount = parseInt(document.getElementById('panierCount')?.textContent || '0');
-            updateCartCountDisplay(currentCount + quantite);
-        }
-        
-        // Afficher la notification avec la quantité
-        showNotification(`✓ ${quantite} article(s) ajouté(s) au panier !`);
-        
-        // Animation de succès
-        button.innerHTML = '<i class="fas fa-check mr-2"></i> Ajouté !';
-        button.style.background = 'linear-gradient(135deg, #10b981, #059669)';
-        
-        // Animation sur la carte
-        const card = form.closest('.article-card');
-        if (card) {
-            card.style.transform = 'scale(1.02)';
-            setTimeout(() => {
-                card.style.transform = '';
-            }, 300);
-        }
-        
-        // Réinitialiser la quantité à 1 après l'ajout (optionnel)
-        // quantiteInput.value = 1;
-        
-        // Restaurer le bouton
-        setTimeout(() => {
-            if (button) {
-                button.innerHTML = originalHTML;
-                button.style.background = '';
-                button.disabled = false;
+    // ---------- Visionneuse plein écran ----------
+    const vis = document.getElementById('visionneuse');
+    const visPiste = vis.querySelector('.galerie-piste');
+    const visPoints = vis.querySelector('.galerie-points');
+    let visGalerie = null;
+    function ouvrir(photos, index) {
+        visPiste.innerHTML = '';
+        visPoints.innerHTML = '';
+        photos.forEach((url, i) => {
+            const img = document.createElement('img');
+            img.src = url; img.alt = 'Photo ' + (i + 1);
+            visPiste.appendChild(img);
+            if (photos.length > 1) {
+                const b = document.createElement('button'); b.type = 'button';
+                if (i === index) b.classList.add('actif');
+                visPoints.appendChild(b);
             }
-        }, 1500);
-    })
-    .catch(error => {
-        console.error('Erreur:', error);
-        showNotification('❌ ' + error.message, true);
-        
-        // Restaurer le bouton
-        button.innerHTML = originalHTML;
-        button.disabled = false;
+        });
+        vis.querySelectorAll('.galerie-fleche').forEach((f) => f.style.display = photos.length > 1 ? '' : 'none');
+        vis.classList.add('ouverte');
+        document.body.style.overflow = 'hidden';
+        // Recloner les flèches pour repartir sans anciens écouteurs
+        vis.querySelectorAll('.galerie-fleche').forEach((f) => f.replaceWith(f.cloneNode(true)));
+        visGalerie = activerGalerie(vis, false);
+        requestAnimationFrame(() => { visPiste.style.scrollBehavior = 'auto'; visGalerie.aller(index); visPiste.style.scrollBehavior = ''; });
+    }
+    function fermer() { vis.classList.remove('ouverte'); document.body.style.overflow = ''; }
+    document.getElementById('fermerVisionneuse').addEventListener('click', fermer);
+    vis.addEventListener('click', (e) => { if (e.target === vis || e.target === visPiste) fermer(); });
+    document.addEventListener('keydown', (e) => {
+        if (!vis.classList.contains('ouverte')) return;
+        if (e.key === 'Escape') fermer();
+        if (e.key === 'ArrowRight') vis.querySelector('.droite').click();
+        if (e.key === 'ArrowLeft') vis.querySelector('.gauche').click();
     });
-}
+    document.querySelectorAll('[data-galerie] img').forEach((img) => img.addEventListener('click', () => {
+        ouvrir(JSON.parse(img.dataset.photos), parseInt(img.dataset.index, 10));
+    }));
 
-// Initialiser les carrousels
-function startAutoSlide(container) {
-    const carouselId = container.getAttribute('data-carousel-id');
-    if (autoIntervals[carouselId]) clearInterval(autoIntervals[carouselId]);
-    
-    const img = container.querySelector('.gallery-img');
-    if (!img) return;
-    
-    const images = img.getAttribute('data-images');
-    if (!images) return;
-    
-    try {
-        const parsedImages = JSON.parse(images);
-        if (!parsedImages || parsedImages.length <= 1) return;
-        
-        autoIntervals[carouselId] = setInterval(() => {
-            if (!container.matches(':hover')) {
-                changeImage(container, 1);
-            }
-        }, 4000);
-    } catch(e) {
-        console.error('Erreur parsing images:', e);
+    // ---------- Descriptions : « Lire plus » seulement si le texte dépasse ----------
+    function verifierDescriptions() {
+        document.querySelectorAll('.description.repliee').forEach((d) => {
+            d.nextElementSibling.classList.toggle('hidden', d.scrollHeight <= d.clientHeight + 2);
+        });
     }
-}
-
-function stopAutoSlide(container) {
-    const carouselId = container.getAttribute('data-carousel-id');
-    if (autoIntervals[carouselId]) {
-        clearInterval(autoIntervals[carouselId]);
-        delete autoIntervals[carouselId];
-    }
-}
-
-function initCarousels() {
-    document.querySelectorAll('.carousel-container').forEach(container => {
-        startAutoSlide(container);
-        container.addEventListener('mouseenter', () => stopAutoSlide(container));
-        container.addEventListener('mouseleave', () => startAutoSlide(container));
+    // Mesure après chargement des polices, et à chaque changement de largeur
+    window.addEventListener('load', verifierDescriptions);
+    window.addEventListener('resize', verifierDescriptions);
+    document.fonts?.ready.then(verifierDescriptions);
+    document.querySelectorAll('.description').forEach((d) => {
+        const bouton = d.nextElementSibling;
+        bouton.addEventListener('click', () => {
+            const repliee = d.classList.toggle('repliee');
+            bouton.innerHTML = repliee ? 'Lire plus <i class="fas fa-chevron-down text-xs ml-1"></i>'
+                                       : 'Réduire <i class="fas fa-chevron-up text-xs ml-1"></i>';
+        });
     });
-}
 
-// Fonctions du carrousel
-function changeImage(container, direction) {
-    const img = container.querySelector('.gallery-img');
-    if (!img) return;
-    
-    const imagesAttr = img.getAttribute('data-images');
-    if (!imagesAttr) return;
-    
-    try {
-        let images = JSON.parse(imagesAttr);
-        let currentIndex = parseInt(img.getAttribute('data-index')) || 0;
-        
-        currentIndex += direction;
-        if (currentIndex < 0) currentIndex = images.length - 1;
-        if (currentIndex >= images.length) currentIndex = 0;
-        
-        img.src = images[currentIndex];
-        img.setAttribute('data-index', currentIndex);
-        
-        const indicators = container.querySelectorAll('.indicator');
-        indicators.forEach((ind, idx) => {
-            if (idx === currentIndex) {
-                ind.classList.add('active');
-            } else {
-                ind.classList.remove('active');
+    // ---------- Recherche et tri ----------
+    const conteneur = document.getElementById('articles');
+    const cartes = Array.from(conteneur.querySelectorAll('.carte'));
+    function filtrer() {
+        const q = document.getElementById('recherche').value.trim().toLowerCase();
+        const tri = document.getElementById('tri').value;
+        let visibles = 0;
+        cartes.forEach((c) => { const ok = !q || c.dataset.nom.includes(q); c.style.display = ok ? '' : 'none'; visibles += ok; });
+        const triees = cartes.slice().sort((a, b) =>
+            tri === 'asc' ? a.dataset.prix - b.dataset.prix :
+            tri === 'desc' ? b.dataset.prix - a.dataset.prix : a.dataset.ordre - b.dataset.ordre);
+        triees.forEach((c) => conteneur.appendChild(c));
+        document.getElementById('aucunResultat').classList.toggle('hidden', visibles > 0 || !cartes.length);
+    }
+    document.getElementById('recherche').addEventListener('input', filtrer);
+    document.getElementById('tri').addEventListener('change', filtrer);
+
+    // ---------- Panier ----------
+    function toast(texte, erreur) {
+        document.querySelector('.toast')?.remove();
+        const t = document.createElement('div');
+        t.className = 'toast' + (erreur ? ' erreur' : '');
+        t.textContent = texte;
+        document.body.appendChild(t);
+        setTimeout(() => t.remove(), 2500);
+    }
+    document.querySelectorAll('.ajout-panier').forEach((form) => {
+        const champ = form.querySelector('input[name="quantite"]');
+        form.querySelector('.moins').addEventListener('click', () => { champ.value = Math.max(1, (+champ.value || 1) - 1); });
+        form.querySelector('.plus').addEventListener('click', () => { champ.value = Math.min(99, (+champ.value || 0) + 1); });
+        form.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const bouton = form.querySelector('button[type="submit"]');
+            bouton.disabled = true;
+            try {
+                const r = await fetch(form.action, { method: 'POST', body: new FormData(form), headers: { 'Accept': 'application/json' } });
+                const d = await r.json();
+                if (!d.success) throw new Error(d.message || "Impossible d'ajouter cet article");
+                document.querySelectorAll('.compteur-panier').forEach((el) => el.textContent = d.panier_count);
+                toast('✓ Ajouté au panier');
+                champ.value = 1;
+            } catch (err) {
+                toast(err.message || 'Erreur, réessayez', true);
+            } finally {
+                bouton.disabled = false;
             }
         });
-    } catch(e) {
-        console.error('Erreur changement image:', e);
-    }
-}
-
-function goToImage(container, index) {
-    const img = container.querySelector('.gallery-img');
-    if (!img) return;
-    
-    const imagesAttr = img.getAttribute('data-images');
-    if (!imagesAttr) return;
-    
-    try {
-        let images = JSON.parse(imagesAttr);
-        img.src = images[index];
-        img.setAttribute('data-index', index);
-        
-        const indicators = container.querySelectorAll('.indicator');
-        indicators.forEach((ind, idx) => {
-            if (idx === index) {
-                ind.classList.add('active');
-            } else {
-                ind.classList.remove('active');
-            }
-        });
-    } catch(e) {
-        console.error('Erreur navigation image:', e);
-    }
-}
-
-// Modal
-function openModal(imgElement) {
-    const imagesAttr = imgElement.getAttribute('data-images');
-    
-    if (imagesAttr) {
-        try {
-            currentModalImages = JSON.parse(imagesAttr);
-            currentModalIndex = parseInt(imgElement.getAttribute('data-index')) || 0;
-            
-            const modal = document.getElementById('imageModal');
-            modal.style.display = "block";
-            document.body.style.overflow = "hidden";
-            updateModalImage();
-            updateModalIndicators();
-        } catch(e) {
-            console.error('Erreur ouverture modal:', e);
-        }
-    }
-}
-
-function updateModalImage() {
-    const modalImg = document.getElementById('modalImage');
-    if (currentModalImages[currentModalIndex]) {
-        modalImg.src = currentModalImages[currentModalIndex];
-    }
-}
-
-function updateModalIndicators() {
-    const container = document.getElementById('modalIndicators');
-    if (!container) return;
-    
-    container.innerHTML = '';
-    currentModalImages.forEach((_, idx) => {
-        const indicator = document.createElement('div');
-        indicator.className = 'indicator' + (idx === currentModalIndex ? ' active' : '');
-        indicator.onclick = (e) => {
-            e.stopPropagation();
-            currentModalIndex = idx;
-            updateModalImage();
-            updateModalIndicators();
-        };
-        container.appendChild(indicator);
     });
-}
-
-function modalChangeImage(direction) {
-    if (!currentModalImages.length) return;
-    currentModalIndex += direction;
-    if (currentModalIndex < 0) currentModalIndex = currentModalImages.length - 1;
-    if (currentModalIndex >= currentModalImages.length) currentModalIndex = 0;
-    updateModalImage();
-    updateModalIndicators();
-}
-
-function closeModal() {
-    document.getElementById('imageModal').style.display = "none";
-    document.body.style.overflow = "auto";
-}
-
-// Description
-function toggleDescription(articleId, fullDescription) {
-    const descElement = document.getElementById(`desc-${articleId}`);
-    const button = event.target;
-    
-    if (descElement.innerText.includes('...')) {
-        descElement.innerText = fullDescription;
-        button.innerHTML = 'Réduire <i class="fas fa-chevron-up ml-1"></i>';
-    } else {
-        let shortText = fullDescription.substring(0, 120);
-        descElement.innerText = shortText + '...';
-        button.innerHTML = 'Lire plus <i class="fas fa-chevron-down ml-1"></i>';
-    }
-}
-
-// Recherche et filtres
-const searchInput = document.getElementById('searchInput');
-const sortSelect = document.getElementById('sortPrice');
-const articlesContainer = document.getElementById('articlesContainer');
-
-function filterAndSortArticles() {
-    const searchTerm = searchInput ? searchInput.value.toLowerCase() : '';
-    const sortValue = sortSelect ? sortSelect.value : 'default';
-    
-    let articles = Array.from(document.querySelectorAll('.article-card'));
-    
-    if (searchTerm) {
-        articles = articles.filter(article => {
-            const name = article.getAttribute('data-name');
-            return name && name.includes(searchTerm);
-        });
-    }
-    
-    if (sortValue === 'asc') {
-        articles.sort((a, b) => {
-            const priceA = parseFloat(a.getAttribute('data-price')) || 0;
-            const priceB = parseFloat(b.getAttribute('data-price')) || 0;
-            return priceA - priceB;
-        });
-    } else if (sortValue === 'desc') {
-        articles.sort((a, b) => {
-            const priceA = parseFloat(a.getAttribute('data-price')) || 0;
-            const priceB = parseFloat(b.getAttribute('data-price')) || 0;
-            return priceB - priceA;
-        });
-    } else {
-        articles.sort((a, b) => {
-            const idA = parseInt(a.getAttribute('data-id')) || 0;
-            const idB = parseInt(b.getAttribute('data-id')) || 0;
-            return idA - idB;
-        });
-    }
-    
-    if (articlesContainer) {
-        articles.forEach(article => {
-            articlesContainer.appendChild(article);
-        });
-        
-        let noResultsMsg = document.getElementById('noResultsMsg');
-        if (articles.length === 0) {
-            if (!noResultsMsg) {
-                noResultsMsg = document.createElement('div');
-                noResultsMsg.id = 'noResultsMsg';
-                noResultsMsg.className = 'col-span-full text-center py-16';
-                noResultsMsg.innerHTML = `
-                    <div class="bg-white rounded-2xl p-12 shadow-lg">
-                        <i class="fas fa-search text-gray-300 text-7xl mb-6"></i>
-                        <p class="text-gray-500 text-lg mb-4">Aucun article trouvé</p>
-                        <button onclick="resetFilters()" class="bg-gradient-to-r from-purple-600 to-blue-600 text-white px-6 py-3 rounded-xl hover:shadow-lg transition-all">
-                            <i class="fas fa-undo-alt mr-2"></i> Réinitialiser
-                        </button>
-                    </div>
-                `;
-                articlesContainer.appendChild(noResultsMsg);
-            }
-        } else if (noResultsMsg) {
-            noResultsMsg.remove();
-        }
-    }
-}
-
-function resetFilters() {
-    if (searchInput) searchInput.value = '';
-    if (sortSelect) sortSelect.value = 'default';
-    filterAndSortArticles();
-}
-
-// Événements clavier
-document.addEventListener('keydown', function(e) {
-    if (e.key === 'Escape') {
-        closeModal();
-    } else if (e.key === 'ArrowLeft' && document.getElementById('imageModal').style.display === 'block') {
-        modalChangeImage(-1);
-    } else if (e.key === 'ArrowRight' && document.getElementById('imageModal').style.display === 'block') {
-        modalChangeImage(1);
-    }
-});
-
-// Initialisation
-document.addEventListener('DOMContentLoaded', function() {
-    initCarousels();
-    filterAndSortArticles();
-});
-
-if (searchInput) searchInput.addEventListener('input', filterAndSortArticles);
-if (sortSelect) sortSelect.addEventListener('change', filterAndSortArticles);
+})();
 </script>
 {% endblock %}

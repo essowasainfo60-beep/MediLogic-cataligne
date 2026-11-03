@@ -1,0 +1,17 @@
+{
+  "name": "CTL Catalogue",
+  "short_name": "CTL",
+  "description": "Catalogue et commandes de votre boutique",
+  "id": "/boutique/connexion",
+  "start_url": "/boutique/connexion",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#0b1d35",
+  "theme_color": "#0b1d35",
+  "orientation": "any",
+  "lang": "fr",
+  "icons": [
+    { "src": "/static/icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
+    { "src": "/static/icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ]
+}

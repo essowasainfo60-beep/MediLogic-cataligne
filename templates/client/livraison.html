@@ -1,0 +1,85 @@
+{% extends "base.html" %}
+
+{% block title %}Livraison n°{{ commande.numero }}{% endblock %}
+
+{% block content %}
+<div class="max-w-lg mx-auto px-4 py-6">
+    <div class="bg-white rounded-xl shadow-lg overflow-hidden">
+        <div class="bg-gradient-to-r from-purple-600 to-indigo-600 px-5 py-4 text-white">
+            <p class="text-sm opacity-80">{{ commande.boutique.nom_boutique }} · Livreur : {{ commande.livreur.nom }}</p>
+            <h1 class="text-2xl font-bold">🛵 Livraison n°{{ commande.numero }}</h1>
+            <span class="inline-block mt-2 px-3 py-1 rounded-full text-xs font-semibold {{ commande.statut_classe }}">{{ commande.statut_libelle }}</span>
+        </div>
+
+        <div class="p-5 space-y-4">
+            <!-- Client -->
+            <div>
+                <p class="text-sm text-gray-500">Client</p>
+                <p class="text-lg font-semibold">{{ commande.client_nom }}</p>
+                <div class="flex gap-2 mt-2">
+                    <a href="tel:{{ commande.client_telephone|replace(' ', '') }}"
+                       class="flex-1 text-center bg-blue-500 text-white py-2 rounded-lg"><i class="fas fa-phone mr-1"></i> Appeler</a>
+                    <a href="https://wa.me/{{ commande.client_telephone|select('in', '0123456789')|join }}" target="_blank"
+                       class="flex-1 text-center bg-green-500 text-white py-2 rounded-lg"><i class="fab fa-whatsapp mr-1"></i> WhatsApp</a>
+                </div>
+            </div>
+
+            <!-- Adresse + carte -->
+            <div>
+                <p class="text-sm text-gray-500">Adresse{% if commande.zone %} · zone {{ commande.zone.nom }}{% endif %}</p>
+                <p class="font-medium">{{ commande.client_adresse }}</p>
+                {% if commande.instructions %}
+                <p class="mt-2 text-sm bg-yellow-50 border border-yellow-200 rounded p-2">📝 {{ commande.instructions }}</p>
+                {% endif %}
+                {% if commande.carte_integree %}
+                <iframe src="{{ commande.carte_integree }}" class="w-full h-56 rounded-lg border mt-3" loading="lazy"></iframe>
+                {% endif %}
+                <a href="{{ commande.lien_carte }}" target="_blank"
+                   class="block mt-3 text-center bg-gray-900 text-white py-3 rounded-lg font-semibold">
+                    <i class="fas fa-route mr-2"></i> Itinéraire (Google Maps)
+                </a>
+                {% if not commande.carte_integree %}
+                <p class="text-xs text-gray-500 mt-1">Le client n'a pas partagé sa position : l'itinéraire cherche son adresse.</p>
+                {% endif %}
+            </div>
+
+            <!-- Articles -->
+            <div class="border-t pt-4">
+                {% for a in commande.articles_json %}
+                <div class="flex justify-between text-sm py-1">
+                    <span>{{ a.nom }} × {{ a.quantite }}</span>
+                    <span>{{ fcfa(a.prix * a.quantite) }}</span>
+                </div>
+                {% endfor %}
+                {% if commande.frais_livraison %}
+                <div class="flex justify-between text-sm py-1"><span>Livraison</span><span>{{ fcfa(commande.frais_livraison) }}</span></div>
+                {% endif %}
+                <div class="flex justify-between items-center mt-3 bg-green-50 border border-green-200 rounded-lg p-3">
+                    <span class="font-semibold">💵 À encaisser</span>
+                    <span class="text-2xl font-bold text-green-700">{{ fcfa(commande.total) }}</span>
+                </div>
+            </div>
+
+            <!-- Action -->
+            {% if commande.statut == 'en_livraison' %}
+            <form method="POST" onsubmit="return confirm('Confirmer que la commande est livrée et payée ?')">
+                <button type="submit" class="w-full bg-green-600 text-white py-4 rounded-xl text-lg font-bold hover:bg-green-700">
+                    ✅ Commande livrée
+                </button>
+            </form>
+            {% elif commande.statut == 'livree' %}
+            <div class="text-center bg-green-50 border border-green-200 rounded-xl p-4">
+                <p class="text-green-700 font-bold text-lg">🎉 Livrée{% if commande.date_livraison %} le {{ commande.date_livraison.strftime('%d/%m/%Y à %H:%M') }}{% endif %}</p>
+                {% if wa_merci %}
+                <a href="{{ wa_merci }}" target="_blank" class="inline-block mt-3 bg-green-500 text-white px-4 py-2 rounded-lg">
+                    <i class="fab fa-whatsapp mr-1"></i> Envoyer le message de remerciement
+                </a>
+                {% endif %}
+            </div>
+            {% else %}
+            <p class="text-center text-gray-500">Cette commande n'est plus en livraison.</p>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -22,3 +22,6 @@ class Config:
     # Admin global (identifiants à définir dans l'environnement)
     ADMIN_EMAIL = os.environ.get('ADMIN_EMAIL') or 'admin@medilogic.com'
     ADMIN_PASSWORD = os.environ.get('ADMIN_PASSWORD') or 'Admin@2025MediLogic!'
+
+    # Boutique MB (GBoutik-MediLogic) : encaissement des ventes, complémentaire des commandes livrées
+    GBOUTIK_URL = os.environ.get('GBOUTIK_URL') or 'https://gbutik-medilogic.onrender.com/login_page'
