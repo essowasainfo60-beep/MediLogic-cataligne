@@ -7,6 +7,6 @@ Werkzeug==2.3.7
 python-dotenv==1.0.0
 gunicorn==21.2.0
 requests==2.31.0
-psycopg2-binary==2.9.9
-Pillow==10.0.0
+psycopg2-binary==2.9.10
+Pillow==10.4.0
 webauthn==3.0.0
