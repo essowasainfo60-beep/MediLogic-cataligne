@@ -60,8 +60,22 @@ def mettre_a_jour_schema():
                 conn.execute(text(f"ALTER TABLE commandes ADD COLUMN {nom} {definition}"))
         if 'frais' not in {c['name'] for c in inspecteur.get_columns('zones')}:
             conn.execute(text("ALTER TABLE zones ADD COLUMN frais FLOAT NOT NULL DEFAULT 0"))
-        if 'stock' not in {c['name'] for c in inspecteur.get_columns('articles')}:
+        colonnes_articles = {c['name'] for c in inspecteur.get_columns('articles')}
+        if 'stock' not in colonnes_articles:
             conn.execute(text("ALTER TABLE articles ADD COLUMN stock INTEGER"))
+        if 'numero' not in colonnes_articles:
+            conn.execute(text("ALTER TABLE articles ADD COLUMN numero INTEGER"))
+        # Numérotation propre à chaque boutique (articles et commandes) : 1, 2, 3…
+        for table, ordre in [('articles', 'created_at, id'), ('commandes', 'date_commande, id')]:
+            champ = 'numero' if table == 'articles' else 'numero_commande'
+            for (boutique_id,) in conn.execute(text(f"SELECT DISTINCT boutique_id FROM {table} WHERE {champ} IS NULL")).fetchall():
+                dernier = conn.execute(text(f"SELECT COALESCE(MAX({champ}), 0) FROM {table} WHERE boutique_id = :b"),
+                                       {'b': boutique_id}).scalar()
+                ids = conn.execute(text(f"SELECT id FROM {table} WHERE boutique_id = :b AND {champ} IS NULL ORDER BY {ordre}"),
+                                   {'b': boutique_id}).fetchall()
+                for i, (ligne_id,) in enumerate(ids, start=dernier + 1):
+                    conn.execute(text(f"UPDATE {table} SET {champ} = :n WHERE id = :i"), {'n': i, 'i': ligne_id})
+            conn.execute(text(f"CREATE UNIQUE INDEX IF NOT EXISTS ux_{table}_boutique_{champ} ON {table} (boutique_id, {champ})"))
         colonnes_boutiques = {c['name'] for c in inspecteur.get_columns('boutiques')}
         for nom, definition in [('description', 'TEXT'), ('adresse', 'VARCHAR(255)')]:
             if nom not in colonnes_boutiques:

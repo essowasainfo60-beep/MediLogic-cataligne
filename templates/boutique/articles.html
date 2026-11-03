@@ -51,7 +51,7 @@
 
                     <!-- Contenu -->
                     <div class="p-4">
-                        <h3 class="text-lg font-semibold text-gray-800 mb-1">{{ article.nom }}</h3>
+                        <h3 class="text-lg font-semibold text-gray-800 mb-1"><span class="text-purple-600">n°{{ article.numero }}</span> · {{ article.nom }}</h3>
                         {% set desc = article.description or '' %}
                         <p class="text-gray-600 text-sm mb-2 line-clamp-2">{{ desc[:100] }}{% if desc|length > 100 %}...{% endif %}</p>
                         <p class="text-primary font-bold text-xl mb-1">{{ "{:,.0f}".format(article.prix).replace(',', ' ') }} FCFA</p>

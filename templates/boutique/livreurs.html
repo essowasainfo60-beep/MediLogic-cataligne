@@ -59,7 +59,12 @@
     <h2 id="zones" class="text-xl md:text-2xl font-bold text-gray-800 mt-10 mb-2">
         <i class="fas fa-map-location-dot text-purple-500 mr-2"></i> Zones de livraison
     </h2>
-    <p class="text-sm text-gray-500 mb-4">Chaque zone regroupe des quartiers et a son livreur attitré : il est proposé d'office pour les commandes de cette zone. Le client choisit sa zone en commandant.</p>
+    <p class="text-sm text-gray-500 mb-4">Chaque zone regroupe des quartiers, a son prix de livraison et son livreur attitré. Le client choisit sa zone en commandant et voit aussitôt le prix de la livraison.</p>
+    <a href="{{ url_for('boutique.zones_modele') }}"
+       class="flex items-center justify-between bg-teal-50 border-2 border-dashed border-teal-300 rounded-xl p-4 mb-4 hover:bg-teal-100 transition">
+        <span class="text-teal-900"><i class="fas fa-wand-magic-sparkles mr-2"></i><strong>Démarrage rapide :</strong> utiliser les zones types de Lomé (quartiers et prix déjà proposés)</span>
+        <i class="fas fa-arrow-right text-teal-700"></i>
+    </a>
 
     <form method="POST" action="{{ url_for('boutique.ajouter_zone') }}" class="bg-white rounded-xl shadow-md p-5 mb-6 grid grid-cols-1 md:grid-cols-4 gap-3 items-end">
         <div>

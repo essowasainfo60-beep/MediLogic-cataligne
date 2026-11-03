@@ -70,6 +70,22 @@
                 <span class="compteur-panier ml-2 bg-purple-600 text-white rounded-full min-w-[24px] h-6 px-1.5 flex items-center justify-center text-xs font-bold">{{ panier_quantite }}</span>
             </a>
         </div>
+        {% set zones_livraison = boutique.zones|selectattr('active')|sort(attribute='frais')|list %}
+        {% if zones_livraison %}
+        <details class="mt-4 bg-white/10 rounded-xl px-4 py-2 text-sm">
+            <summary class="cursor-pointer font-semibold">
+                🛵 Livraison {% if zones_livraison[0].frais %}à partir de {{ '{:,.0f}'.format(zones_livraison[0].frais).replace(',', ' ') }} FCFA{% else %}· retrait gratuit possible{% endif %} — voir les tarifs par zone
+            </summary>
+            <ul class="mt-2 space-y-1">
+                {% for z in zones_livraison %}
+                <li class="flex justify-between gap-3 border-t border-white/10 pt-1">
+                    <span><strong>{{ z.nom }}</strong>{% if z.quartiers %} <span class="text-blue-100">· {{ z.quartiers }}</span>{% endif %}</span>
+                    <span class="whitespace-nowrap font-semibold">{{ 'Gratuit' if not z.frais else '{:,.0f}'.format(z.frais).replace(',', ' ') ~ ' FCFA' }}</span>
+                </li>
+                {% endfor %}
+            </ul>
+        </details>
+        {% endif %}
         {% if boutique.description or boutique.adresse %}
         <div class="mt-4 pt-4 border-t border-white/20 text-sm md:text-base text-blue-50 space-y-1">
             {% if boutique.description %}<p class="whitespace-pre-line">{{ boutique.description }}</p>{% endif %}
@@ -86,7 +102,7 @@
     <div class="bg-white rounded-2xl shadow p-4 mb-6 flex flex-col md:flex-row gap-3">
         <div class="relative flex-1">
             <i class="fas fa-search absolute left-4 top-1/2 -translate-y-1/2 text-gray-400"></i>
-            <input type="search" id="recherche" placeholder="Rechercher un article…"
+            <input type="search" id="recherche" placeholder="Rechercher un article ou un n°…"
                    class="w-full pl-11 pr-4 py-3 border-2 border-gray-100 rounded-xl focus:outline-none focus:border-purple-500">
         </div>
         <select id="tri" class="md:w-56 px-4 py-3 border-2 border-gray-100 rounded-xl focus:outline-none focus:border-purple-500">
@@ -101,7 +117,7 @@
         {% for article in articles %}
         {% set photos = (article.photos_urls or [])|select|list %}
         <article class="carte bg-white rounded-2xl shadow-md hover:shadow-xl transition overflow-hidden flex flex-col"
-                 data-nom="{{ (article.nom ~ ' ' ~ (article.description or ''))|lower }}" data-prix="{{ article.prix }}" data-ordre="{{ loop.index0 }}">
+                 data-nom="{{ ('n°' ~ article.numero ~ ' ' ~ article.numero ~ ' ' ~ article.nom ~ ' ' ~ (article.description or ''))|lower }}" data-prix="{{ article.prix }}" data-ordre="{{ loop.index0 }}">
 
             {% if photos %}
             <div class="galerie" data-galerie>
@@ -127,7 +143,7 @@
             {% endif %}
 
             <div class="p-5 flex-1 flex flex-col">
-                <h3 class="text-lg font-bold text-gray-800">{{ article.nom }}</h3>
+                <h3 class="text-lg font-bold text-gray-800">{% if article.numero %}<span class="text-sm font-semibold text-purple-600 bg-purple-50 rounded px-1.5 py-0.5 mr-1 align-middle">n°{{ article.numero }}</span>{% endif %}{{ article.nom }}</h3>
                 <p class="text-2xl font-bold text-purple-700 mt-1">{{ "{:,.0f}".format(article.prix).replace(',', ' ') }} FCFA</p>
 
                 {% if article.description %}

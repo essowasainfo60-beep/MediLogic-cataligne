@@ -82,7 +82,7 @@
         <div class="sep"></div>
         <table>
             {% for a in commande.articles_json %}
-            <tr><td colspan="2">{{ a.nom }}</td></tr>
+            <tr><td colspan="2">{% if a.numero %}n°{{ a.numero }} {% endif %}{{ a.nom }}</td></tr>
             <tr><td>&nbsp;&nbsp;{{ a.quantite }} × {{ fcfa(a.prix) }}</td><td style="text-align:right">{{ fcfa(a.prix * a.quantite) }}</td></tr>
             {% endfor %}
         </table>
@@ -150,7 +150,7 @@
             <thead><tr><th>Article</th><th class="num">Prix unitaire</th><th class="num">Qté</th><th class="num">Montant</th></tr></thead>
             <tbody>
                 {% for a in commande.articles_json %}
-                <tr><td>{{ a.nom }}</td><td class="num">{{ fcfa(a.prix) }}</td><td class="num">{{ a.quantite }}</td><td class="num">{{ fcfa(a.prix * a.quantite) }}</td></tr>
+                <tr><td>{% if a.numero %}n°{{ a.numero }} · {% endif %}{{ a.nom }}</td><td class="num">{{ fcfa(a.prix) }}</td><td class="num">{{ a.quantite }}</td><td class="num">{{ fcfa(a.prix * a.quantite) }}</td></tr>
                 {% endfor %}
                 <tr><td colspan="3" class="num">Sous-total articles</td><td class="num">{{ fcfa(commande.sous_total) }}</td></tr>
                 <tr><td colspan="3" class="num">Frais de livraison{% if commande.zone %} ({{ commande.zone.nom }}){% endif %}</td><td class="num">{{ fcfa(commande.frais_livraison or 0) }}</td></tr>

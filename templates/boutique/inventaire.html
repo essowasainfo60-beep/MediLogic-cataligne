@@ -27,7 +27,7 @@
         <div class="md:col-span-3">
             <label class="block text-sm font-bold text-gray-700 mb-1"><i class="fas fa-truck-ramp-box mr-1"></i> Réception de marchandise</label>
             <select name="article_id" class="w-full border border-gray-300 rounded-lg px-3 py-2">
-                {% for a in articles if not a.archive %}<option value="{{ a.id }}">{{ a.nom }}{% if a.stock is not none %} (stock : {{ a.stock }}){% endif %}</option>{% endfor %}
+                {% for a in articles if not a.archive %}<option value="{{ a.id }}">n°{{ a.numero }} · {{ a.nom }}{% if a.stock is not none %} (stock : {{ a.stock }}){% endif %}</option>{% endfor %}
             </select>
         </div>
         <div><label class="block text-sm text-gray-600 mb-1">Quantité reçue</label>
@@ -53,7 +53,7 @@
                 {% for a in articles %}
                 <tr class="{{ 'opacity-60' if a.archive }}">
                     <td class="px-3 py-2">
-                        <a href="{{ url_for('boutique.mouvements_stock', article=a.id) }}" class="font-medium hover:underline">{{ a.nom }}</a>
+                        <a href="{{ url_for('boutique.mouvements_stock', article=a.id) }}" class="font-medium hover:underline"><span class="text-purple-600">n°{{ a.numero }}</span> · {{ a.nom }}</a>
                         {% if a.archive %}<span class="text-xs text-gray-400 ml-1">(archivé)</span>{% endif %}
                     </td>
                     <td class="px-3 py-2 text-right whitespace-nowrap">{{ fcfa(a.prix) }}</td>

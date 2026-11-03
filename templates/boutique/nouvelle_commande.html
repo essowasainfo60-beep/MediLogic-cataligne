@@ -98,7 +98,7 @@
     <div class="ligne flex gap-2 items-center">
         <select name="article_id" class="flex-1 min-w-0 border border-gray-300 rounded-lg px-2 py-2 text-sm">
             {% for a in catalogue %}
-            <option value="{{ a.id }}" data-prix="{{ a.prix }}">{{ a.nom }} — {{ "{:,.0f}".format(a.prix).replace(',', ' ') }} FCFA</option>
+            <option value="{{ a.id }}" data-prix="{{ a.prix }}">n°{{ a.numero }} · {{ a.nom }} — {{ "{:,.0f}".format(a.prix).replace(',', ' ') }} FCFA</option>
             {% endfor %}
         </select>
         <input type="number" name="quantite" value="1" min="1" class="w-16 border border-gray-300 rounded-lg px-2 py-2 text-sm text-center">

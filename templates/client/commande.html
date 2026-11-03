@@ -66,7 +66,7 @@
                         <select name="zone_id" id="zoneClient" required onchange="majFrais()" class="mt-2 w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500">
                             <option value="">Votre zone de livraison… *</option>
                             {% for z in zones %}
-                            <option value="{{ z.id }}" data-frais="{{ z.frais or 0 }}">{{ z.nom }}{% if z.quartiers %} ({{ z.quartiers }}){% endif %} · livraison {{ '{:,.0f}'.format(z.frais or 0).replace(',', ' ') }} FCFA</option>
+                            <option value="{{ z.id }}" data-frais="{{ z.frais or 0 }}">{{ z.nom }}{% if z.quartiers %} ({{ z.quartiers }}){% endif %} · {{ 'gratuit' if not z.frais else 'livraison ' ~ '{:,.0f}'.format(z.frais).replace(',', ' ') ~ ' FCFA' }}</option>
                             {% endfor %}
                         </select>
                         {% endif %}

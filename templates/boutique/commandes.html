@@ -37,7 +37,7 @@
                         <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-4">
                             <div>
                                 <p class="text-sm text-gray-500">
-                                    Commande n°{{ commande.numero_commande or commande.id }}
+                                    Commande n°{{ commande.numero }}
                                     <span class="ml-2 px-2 py-0.5 rounded-full text-xs font-semibold {{ commande.statut_classe }}">{{ commande.statut_libelle }}</span>
                                     {% if commande.source != 'catalogue' %}<span class="ml-1 px-2 py-0.5 rounded-full text-xs bg-gray-100 text-gray-700">{{ commande.source_libelle }}</span>{% endif %}
                                 </p>

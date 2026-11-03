@@ -6,7 +6,7 @@ from flask import (Blueprint, Response, abort, flash, jsonify, redirect,
 
 import messages_whatsapp as msg
 import stock
-from models import db, Boutique, Article, Commande, Photo, Zone
+from models import db, Boutique, Article, Commande, Photo, Zone, enregistrer_avec_numero
 
 client_bp = Blueprint('client', __name__)
 
@@ -112,6 +112,7 @@ def ajouter_panier():
             'quantite': quantite,
             'boutique_id': article.boutique_id,
             'article_id': article.id,
+            'numero': article.numero,
             'photo': (article.photos_urls or [None])[0],
         }
 
@@ -198,7 +199,6 @@ def valider_commande():
         return render_template('client/commande.html', panier=panier, total=total, boutique=boutique,
                                zones=[z for z in boutique.zones if z.active])
 
-    numero_commande = Commande.prochain_numero(boutique.id)
 
     zone = Zone.query.filter_by(id=request.form.get('zone_id', type=int), boutique_id=boutique.id, active=True).first()
     frais = zone.frais if zone else 0
@@ -210,7 +210,6 @@ def valider_commande():
         instructions=instructions or None,
         articles_json=list(panier.values()),
         total=total + frais,
-        numero_commande=numero_commande,
         statut='nouvelle',
         zone=zone,
         frais_livraison=frais,
@@ -219,8 +218,8 @@ def valider_commande():
     )
     if commande.latitude is None or commande.longitude is None:
         commande.latitude = commande.longitude = None
-    db.session.add(commande)
-    db.session.commit()
+    enregistrer_avec_numero(commande, 'numero_commande', Commande.prochain_numero)
+    numero_commande = commande.numero
 
     # ==================== MESSAGE WHATSAPP POUR LA BOUTIQUE ====================
     message = f"🆕 *NOUVELLE COMMANDE N°{numero_commande}*\n"
@@ -238,7 +237,7 @@ def valider_commande():
     message += "📦 *ARTICLES COMMANDÉS:*\n\n"
 
     for item in panier.values():
-        message += f"🔹 *{item['nom']}*\n"
+        message += f"🔹 *{('n°' + str(item['numero']) + ' · ') if item.get('numero') else ''}{item['nom']}*\n"
         message += f"   Quantité: {item['quantite']}\n"
         message += f"   Prix unitaire: {item['prix']:,.0f} FCFA\n"
         message += f"   Sous-total: {item['prix'] * item['quantite']:,.0f} FCFA\n"

@@ -12,8 +12,9 @@ import messages_whatsapp as msg
 import stock
 import webauthn_service
 from models import (db, Boutique, Vendeur, Article, Commande, CleBiometrique, Livreur, Zone,
-                    MouvementStock, Retour, nouveau_code_lien)
+                    MouvementStock, Retour, nouveau_code_lien, enregistrer_avec_numero)
 from utils import enregistrer_photo, enregistrer_photos, supprimer_photo_stockee, TAILLE_LOGO_PX
+from zones_modele import ZONES_LOME
 
 boutique_bp = Blueprint('boutique', __name__)
 
@@ -281,15 +282,14 @@ def ajouter_article():
             prix=prix,
             photos_urls=urls,
         )
-        db.session.add(article)
+        enregistrer_avec_numero(article, 'numero', Article.prochain_numero)
         stock_initial = request.form.get('stock', type=int)
         if stock_initial is not None and stock_initial >= 0:
             article.stock = 0
-            db.session.flush()
             stock.mouvement(article, stock_initial, 'entree', note='Stock initial')
-        db.session.commit()
+            db.session.commit()
 
-        flash('Article ajouté avec succès !', 'success')
+        flash(f'Article n°{article.numero} ajouté avec succès !', 'success')
         if echecs:
             flash(f'{echecs} fichier(s) ignoré(s) : ce ne sont pas des images valides', 'warning')
         return redirect(url_for('boutique.articles'))
@@ -508,7 +508,7 @@ def changer_zone_commande(commande_id):
 def nouvelle_commande():
     """Commande saisie par la boutique : client d'un live TikTok, d'un appel, de Facebook…"""
     catalogue = (Article.query.filter_by(boutique_id=current_user.id, archive=False)
-                 .order_by(Article.nom).all())
+                 .order_by(Article.numero).all())
 
     if request.method == 'POST':
         f = request.form
@@ -519,6 +519,7 @@ def nouvelle_commande():
             quantite = int(qte) if qte.isdigit() else 0
             if article and quantite > 0:
                 lignes.append({'nom': article.nom, 'prix': article.prix, 'quantite': quantite, 'article_id': article.id,
+                               'numero': article.numero,
                                'boutique_id': current_user.id, 'photo': (article.photos_urls or [None])[0]})
         # Articles hors catalogue (montrés en live mais pas encore en ligne)
         for nom, prix, qte in zip(f.getlist('libre_nom'), f.getlist('libre_prix'), f.getlist('libre_quantite')):
@@ -549,14 +550,12 @@ def nouvelle_commande():
             articles_json=lignes,
             total=sum(l['prix'] * l['quantite'] for l in lignes) + frais,
             frais_livraison=frais,
-            numero_commande=Commande.prochain_numero(current_user.id),
             statut='confirmee',  # la boutique l'a prise elle-même : déjà confirmée
             source=f.get('source') if f.get('source') in Commande.SOURCES else 'autre',
             zone=zone,
             lu=True,
         )
-        db.session.add(commande)
-        db.session.commit()
+        enregistrer_avec_numero(commande, 'numero_commande', Commande.prochain_numero)
         flash(f'Commande n°{commande.numero} enregistrée. Attribuez-la à un livreur et imprimez la facture.', 'success')
         return redirect(url_for('boutique.commande_details', commande_id=commande.id) + '#livraison')
 
@@ -638,7 +637,7 @@ def changer_statut_commande(commande_id):
         stock.changer_statut(commande, statut)
         commande.lu = True
         db.session.commit()
-        flash(f'Commande n°{commande.numero_commande or commande.id} : {commande.statut_libelle}', 'success')
+        flash(f'Commande n°{commande.numero} : {commande.statut_libelle}', 'success')
     return redirect(request.referrer or url_for('boutique.commandes'))
 
 @boutique_bp.route('/envoyer_confirmation_client/<int:commande_id>')
@@ -824,7 +823,7 @@ def retour_commande(commande_id):
 @login_required
 def inventaire():
     articles_list = (Article.query.filter_by(boutique_id=current_user.id)
-                     .order_by(Article.archive, Article.nom).all())
+                     .order_by(Article.archive, Article.numero).all())
     if request.method == 'POST':
         changements = 0
         for article in articles_list:
@@ -882,3 +881,29 @@ def mouvements_stock():
                            articles=Article.query.filter_by(boutique_id=current_user.id).order_by(Article.nom).all(),
                            article_id=article_id)
 
+
+@boutique_bp.route('/zones/modele', methods=['GET', 'POST'])
+@login_required
+def zones_modele():
+    """Démarrage rapide : zones types de Lomé, à ajuster avant création."""
+    existantes = {z.nom.strip().lower() for z in current_user.zones}
+    if request.method == 'POST':
+        creees = 0
+        for i in request.form.getlist('choisie'):
+            nom = (request.form.get(f'nom_{i}') or '').strip()
+            if not nom or nom.lower() in existantes:
+                continue
+            livreur = Livreur.query.filter_by(id=request.form.get(f'livreur_{i}', type=int),
+                                              boutique_id=current_user.id).first()
+            db.session.add(Zone(boutique_id=current_user.id, nom=nom[:100],
+                                quartiers=(request.form.get(f'quartiers_{i}') or '').strip() or None,
+                                frais=lire_prix(request.form.get(f'frais_{i}')) or 0, livreur=livreur))
+            existantes.add(nom.lower())
+            creees += 1
+        db.session.commit()
+        flash(f'{creees} zone(s) créée(s). Vos clients verront le prix de livraison en choisissant leur zone.', 'success')
+        return redirect(url_for('boutique.livreurs') + '#zones')
+
+    livreurs_actifs = Livreur.query.filter_by(boutique_id=current_user.id, actif=True).order_by(Livreur.nom).all()
+    return render_template('boutique/zones_modele.html', modele=ZONES_LOME, existantes=existantes,
+                           livreurs=livreurs_actifs)

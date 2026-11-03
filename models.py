@@ -85,6 +85,12 @@ class Article(db.Model):
     prix = db.Column(db.Float, nullable=False)
     photos_urls = db.Column(db.JSON, default=list)
     stock = db.Column(db.Integer, nullable=True)  # None = stock non suivi pour cet article
+    numero = db.Column(db.Integer, nullable=True)  # n° propre à la boutique : 1, 2, 3…
+
+    @staticmethod
+    def prochain_numero(boutique_id):
+        dernier = db.session.query(db.func.max(Article.numero)).filter(Article.boutique_id == boutique_id).scalar()
+        return (dernier or 0) + 1
     archive = db.Column(db.Boolean, default=False)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     
@@ -163,7 +169,7 @@ class Commande(db.Model):
 
     @property
     def numero(self):
-        return self.numero_commande or self.id
+        return self.numero_commande
 
     @property
     def lien_carte(self):
@@ -190,6 +196,23 @@ class Commande(db.Model):
     @property
     def statut_classe(self):
         return self.STATUTS.get(self.statut, ('', 'bg-gray-100 text-gray-800'))[1]
+
+
+def enregistrer_avec_numero(objet, champ, prochain, essais=5):
+    """Ajoute `objet` avec le prochain numéro de sa boutique. Si deux enregistrements
+    simultanés prennent le même numéro, l'index unique refuse le second : on réessaie."""
+    from sqlalchemy.exc import IntegrityError
+    for essai in range(essais):
+        with db.session.no_autoflush:
+            setattr(objet, champ, prochain(objet.boutique_id))
+        db.session.add(objet)
+        try:
+            db.session.commit()
+            return objet
+        except IntegrityError:
+            db.session.rollback()
+            if essai == essais - 1:
+                raise
 
 
 class Photo(db.Model):

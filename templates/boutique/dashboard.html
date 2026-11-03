@@ -74,6 +74,17 @@
         </a>
     </div>
 
+    {% if not current_user.zones %}
+    <a href="{{ url_for('boutique.zones_modele') }}"
+       class="flex items-center justify-between bg-teal-50 border-2 border-teal-300 rounded-xl p-4 mb-6 hover:bg-teal-100 transition">
+        <span class="text-teal-900">
+            <i class="fas fa-map-location-dot mr-2"></i>
+            <strong>Paramétrez vos zones et prix de livraison</strong> : vos clients verront le prix dès qu'ils choisissent leur quartier.
+        </span>
+        <i class="fas fa-arrow-right text-teal-700"></i>
+    </a>
+    {% endif %}
+
     {% if en_livraison_count %}
     <!-- Livraisons à clôturer -->
     <a href="{{ url_for('boutique.commandes', statut='en_livraison') }}"

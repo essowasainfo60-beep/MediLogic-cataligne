@@ -1,0 +1,62 @@
+{% extends "base.html" %}
+
+{% block title %}Zones de Lomé - modèle{% endblock %}
+
+{% block content %}
+<div class="max-w-5xl mx-auto px-4 py-6">
+    <h1 class="text-2xl md:text-3xl font-bold text-gray-800 mb-1">
+        <i class="fas fa-map-location-dot text-purple-500 mr-2"></i> Zones de livraison de Lomé
+    </h1>
+    <p class="text-gray-500 mb-2">Cochez les zones que vous livrez et ajustez les prix selon l'emplacement de votre boutique{% if current_user.adresse %} ({{ current_user.adresse }}){% endif %} : plus la zone est loin, plus la livraison coûte cher.</p>
+    <p class="text-sm text-gray-500 mb-6">Les prix proposés supposent une boutique au centre-ville. Tout reste modifiable ensuite dans « Livreurs et zones ».</p>
+
+    <!-- Ajuster tous les prix d'un coup -->
+    <div class="bg-white rounded-xl shadow-md p-4 mb-4 flex flex-wrap items-center gap-2 text-sm">
+        <span class="text-gray-700 font-semibold">Ajuster tous les prix :</span>
+        <button type="button" onclick="ajusterTous(-500)" class="px-3 py-1.5 rounded-lg bg-gray-100 hover:bg-gray-200">− 500</button>
+        <button type="button" onclick="ajusterTous(500)" class="px-3 py-1.5 rounded-lg bg-gray-100 hover:bg-gray-200">+ 500</button>
+        <span class="text-gray-400">(ex. boutique à Agoè : les zones du nord coûtent moins, celles du sud plus)</span>
+    </div>
+
+    <form method="POST" class="bg-white rounded-xl shadow-md overflow-hidden">
+        <div class="divide-y">
+            {% for z in modele %}
+            {% set deja = z.nom.lower() in existantes %}
+            <div class="p-4 grid grid-cols-1 md:grid-cols-12 gap-2 items-center {{ 'opacity-50' if deja }}">
+                <label class="md:col-span-3 flex items-center gap-2 font-semibold">
+                    <input type="checkbox" name="choisie" value="{{ loop.index0 }}" {{ 'disabled' if deja else 'checked' }} class="h-4 w-4">
+                    <input type="text" name="nom_{{ loop.index0 }}" value="{{ z.nom }}" class="flex-1 min-w-0 border border-gray-200 rounded-lg px-2 py-1.5">
+                </label>
+                <input type="text" name="quartiers_{{ loop.index0 }}" value="{{ z.quartiers }}"
+                       class="md:col-span-5 border border-gray-200 rounded-lg px-2 py-1.5 text-sm">
+                <div class="md:col-span-2 relative">
+                    <input type="number" name="frais_{{ loop.index0 }}" value="{{ z.frais }}" min="0" step="50"
+                           class="prix w-full border border-gray-200 rounded-lg px-2 py-1.5 pr-12 text-right">
+                    <span class="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-gray-400">FCFA</span>
+                </div>
+                <select name="livreur_{{ loop.index0 }}" class="md:col-span-2 border border-gray-200 rounded-lg px-2 py-1.5 text-sm">
+                    <option value="">Livreur…</option>
+                    {% for l in livreurs %}<option value="{{ l.id }}">{{ l.nom }}</option>{% endfor %}
+                </select>
+                {% if deja %}<p class="md:col-span-12 text-xs text-gray-500">Déjà créée.</p>{% endif %}
+            </div>
+            {% endfor %}
+        </div>
+        <div class="p-4 border-t flex flex-col sm:flex-row gap-3">
+            <button type="submit" class="flex-1 bg-purple-600 text-white py-3 rounded-xl font-semibold hover:bg-purple-700">
+                <i class="fas fa-check mr-1"></i> Créer les zones cochées
+            </button>
+            <a href="{{ url_for('boutique.livreurs') }}#zones" class="flex-1 text-center bg-gray-200 py-3 rounded-xl">Annuler</a>
+        </div>
+    </form>
+</div>
+
+<script>
+function ajusterTous(delta) {
+    document.querySelectorAll('.prix').forEach((champ) => {
+        if (+champ.value === 0) return;  // le retrait en boutique reste gratuit
+        champ.value = Math.max(0, (+champ.value || 0) + delta);
+    });
+}
+</script>
+{% endblock %}

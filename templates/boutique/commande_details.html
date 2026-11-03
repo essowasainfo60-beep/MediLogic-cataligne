@@ -2,10 +2,10 @@
 
 {% macro fcfa(v) %}{{ "{:,.0f}".format(v).replace(',', ' ') }} FCFA{% endmacro %}
 
-{% block title %}Commande n°{{ commande.numero_commande or commande.id }}{% endblock %}
+{% block title %}Commande n°{{ commande.numero }}{% endblock %}
 
 {% block content %}
-{% set numero = commande.numero_commande or commande.id %}
+{% set numero = commande.numero %}
 <div class="max-w-3xl mx-auto px-4 py-8">
     <div class="bg-white rounded-xl shadow-lg overflow-hidden">
         <!-- En-tête -->
@@ -79,7 +79,7 @@
                                 <img src="{{ article.photo }}" alt="" class="w-12 h-12 object-cover rounded">
                                 {% endif %}
                                 <div>
-                                    <p class="font-medium">{{ article.nom }}</p>
+                                    <p class="font-medium">{% if article.numero %}<span class="text-purple-600">n°{{ article.numero }}</span> · {% endif %}{{ article.nom }}</p>
                                     <p class="text-sm text-gray-500">{{ fcfa(article.prix) }} × {{ article.quantite }}</p>
                                 </div>
                             </div>
