@@ -62,7 +62,11 @@ def mettre_a_jour_schema():
             conn.execute(text("ALTER TABLE zones ADD COLUMN frais FLOAT NOT NULL DEFAULT 0"))
         if 'stock' not in {c['name'] for c in inspecteur.get_columns('articles')}:
             conn.execute(text("ALTER TABLE articles ADD COLUMN stock INTEGER"))
-        if 'lien_public' not in {c['name'] for c in inspecteur.get_columns('boutiques')}:
+        colonnes_boutiques = {c['name'] for c in inspecteur.get_columns('boutiques')}
+        for nom, definition in [('description', 'TEXT'), ('adresse', 'VARCHAR(255)')]:
+            if nom not in colonnes_boutiques:
+                conn.execute(text(f"ALTER TABLE boutiques ADD COLUMN {nom} {definition}"))
+        if 'lien_public' not in colonnes_boutiques:
             conn.execute(text("ALTER TABLE boutiques ADD COLUMN lien_public VARCHAR(32)"))
             conn.execute(text("CREATE UNIQUE INDEX IF NOT EXISTS ix_boutiques_lien_public ON boutiques (lien_public)"))
         # Chaque boutique reçoit son code de lien secret

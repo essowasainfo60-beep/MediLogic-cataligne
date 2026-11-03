@@ -1,0 +1,86 @@
+{% extends "base.html" %}
+
+{% block title %}Ma boutique - {{ current_user.nom_boutique }}{% endblock %}
+
+{% block content %}
+<div class="max-w-2xl mx-auto px-4 py-6">
+    <h1 class="text-2xl md:text-3xl font-bold text-gray-800 mb-1">
+        <i class="fas fa-store text-purple-500 mr-2"></i> Ma boutique
+    </h1>
+    <p class="text-gray-500 mb-6">Ce que vos clients voient en haut de votre catalogue, et sur vos factures.</p>
+
+    <form method="POST" enctype="multipart/form-data" class="space-y-5">
+        <!-- Logo -->
+        <div class="bg-white rounded-xl shadow-md p-5 flex items-center gap-5">
+            <div id="apercuLogo" class="h-24 w-24 rounded-full bg-gray-50 border flex items-center justify-center overflow-hidden flex-shrink-0">
+                {% if current_user.logo_url %}
+                <img src="{{ current_user.logo_url }}" alt="Logo" class="h-full w-full object-contain">
+                {% else %}
+                <span class="text-3xl font-bold text-gray-300">{{ current_user.nom_boutique[:1]|upper }}</span>
+                {% endif %}
+            </div>
+            <div class="flex-1">
+                <label class="block text-sm font-bold text-gray-700 mb-1">Logo</label>
+                <input type="file" name="logo" accept="image/*" id="champLogo" class="w-full text-sm">
+                <p class="text-xs text-gray-500 mt-1">Carré de préférence. PNG transparent accepté.</p>
+                {% if current_user.logo_url %}
+                <label class="inline-flex items-center gap-1 text-xs text-red-600 mt-2 cursor-pointer">
+                    <input type="checkbox" name="retirer_logo" value="1"> Retirer le logo
+                </label>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- Identité -->
+        <div class="bg-white rounded-xl shadow-md p-5 space-y-4">
+            <div>
+                <label class="block text-sm font-bold text-gray-700 mb-1">Nom de la boutique *</label>
+                <input type="text" name="nom_boutique" required maxlength="100" value="{{ current_user.nom_boutique }}"
+                       class="w-full px-3 py-2 border border-gray-300 rounded-lg">
+            </div>
+            <div>
+                <label class="block text-sm font-bold text-gray-700 mb-1">Description</label>
+                <textarea name="description" rows="4" maxlength="1000"
+                          placeholder="Ex : Vêtements et accessoires femme, nouveautés chaque semaine. Livraison partout à Lomé."
+                          class="w-full px-3 py-2 border border-gray-300 rounded-lg">{{ current_user.description or '' }}</textarea>
+            </div>
+            <div>
+                <label class="block text-sm font-bold text-gray-700 mb-1">Où se trouve la boutique</label>
+                <input type="text" name="adresse" maxlength="255" value="{{ current_user.adresse or '' }}"
+                       placeholder="Ex : Grand marché de Lomé, allée des tissus, stand 12"
+                       class="w-full px-3 py-2 border border-gray-300 rounded-lg">
+                {% if current_user.lien_carte %}
+                <a href="{{ current_user.lien_carte }}" target="_blank" class="text-xs text-primary hover:underline mt-1 inline-block">
+                    <i class="fas fa-map-location-dot mr-1"></i> Vérifier sur la carte
+                </a>
+                {% endif %}
+            </div>
+            <div>
+                <label class="block text-sm font-bold text-gray-700 mb-1">Numéro WhatsApp (reçoit les commandes)</label>
+                <input type="tel" name="whatsapp" value="{{ current_user.whatsapp or '' }}" placeholder="+228 90 00 00 00"
+                       class="w-full px-3 py-2 border border-gray-300 rounded-lg">
+            </div>
+        </div>
+
+        <button type="submit" class="w-full bg-purple-600 text-white py-3 rounded-xl font-semibold hover:bg-purple-700">
+            <i class="fas fa-check mr-1"></i> Enregistrer
+        </button>
+        <a href="{{ url_for('client.catalogue', code=current_user.lien_public) }}" target="_blank"
+           class="block text-center text-sm text-gray-600 hover:text-primary">
+            <i class="fas fa-eye mr-1"></i> Voir mon catalogue comme un client
+        </a>
+    </form>
+</div>
+
+<script>
+document.getElementById('champLogo').addEventListener('change', function (e) {
+    const fichier = e.target.files[0];
+    if (!fichier) return;
+    const lecteur = new FileReader();
+    lecteur.onload = (ev) => {
+        document.getElementById('apercuLogo').innerHTML = '<img src="' + ev.target.result + '" class="h-full w-full object-contain">';
+    };
+    lecteur.readAsDataURL(fichier);
+});
+</script>
+{% endblock %}

@@ -1,6 +1,6 @@
 // static/sw.js
 // ============================================================
-// Service worker de "CTL Catalogue" : condition technique pour que
+// Service worker de "LivraPlus" : condition technique pour que
 // Chrome/Edge/Android proposent d'installer l'application (icône sur
 // l'écran d'accueil / bouton "Installer"). Même stratégie prudente que
 // GBoutik : seuls le manifeste et les icônes sont mis en cache ; les pages
@@ -8,7 +8,7 @@
 // ne sert qu'en dernier recours hors-ligne.
 // ============================================================
 
-const CACHE_NAME = 'ctl-catalogue-v1';
+const CACHE_NAME = 'livraplus-v1';
 const ASSETS_STATIQUES = [
     '/app-manifest.json',
     '/static/icons/icon-192.png',

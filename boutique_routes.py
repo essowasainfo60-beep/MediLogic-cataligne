@@ -209,22 +209,44 @@ def dashboard():
 
 # ==================== GESTION DU LOGO ====================
 
-@boutique_bp.route('/logo', methods=['GET', 'POST'])
+@boutique_bp.route('/logo')
 @login_required
 def gerer_logo():
-    if request.method == 'POST':
-        url = enregistrer_photo(request.files.get('logo'), current_user.id, taille_max=TAILLE_LOGO_PX)
-        if url:
-            ancien = current_user.logo_url
-            current_user.logo_url = url
-            supprimer_photo_stockee(ancien, current_user.id)
-            db.session.commit()
-            flash('Logo mis à jour avec succès !', 'success')
-        else:
-            flash('Ce fichier n\'est pas une image valide', 'danger')
-        return redirect(url_for('boutique.gerer_logo'))
+    return redirect(url_for('boutique.profil'))
 
-    return render_template('boutique/logo.html')
+@boutique_bp.route('/profil', methods=['GET', 'POST'])
+@login_required
+def profil():
+    """Identité de la boutique : nom, logo, description, adresse, WhatsApp."""
+    if request.method == 'POST':
+        nom = (request.form.get('nom_boutique') or '').strip()
+        if not nom:
+            flash('Le nom de la boutique est obligatoire', 'danger')
+            return redirect(url_for('boutique.profil'))
+        current_user.nom_boutique = nom[:100]
+        current_user.description = (request.form.get('description') or '').strip() or None
+        current_user.adresse = (request.form.get('adresse') or '').strip()[:255] or None
+        whatsapp = (request.form.get('whatsapp') or '').strip()
+        if whatsapp:
+            current_user.whatsapp = whatsapp
+
+        logo = request.files.get('logo')
+        if logo and logo.filename:
+            url = enregistrer_photo(logo, current_user.id, taille_max=TAILLE_LOGO_PX)
+            if url:
+                ancien = current_user.logo_url
+                current_user.logo_url = url
+                supprimer_photo_stockee(ancien, current_user.id)
+            else:
+                flash('Le logo n\'est pas une image valide : il n\'a pas été changé', 'warning')
+        if request.form.get('retirer_logo') and not (logo and logo.filename):
+            supprimer_photo_stockee(current_user.logo_url, current_user.id)
+            current_user.logo_url = None
+        db.session.commit()
+        flash('Votre boutique est à jour !', 'success')
+        return redirect(url_for('boutique.profil'))
+
+    return render_template('boutique/profil.html')
 
 # ==================== GESTION DES ARTICLES ====================
 

@@ -1,7 +1,7 @@
 {
-  "name": "CTL Catalogue",
-  "short_name": "CTL",
-  "description": "Catalogue et commandes de votre boutique",
+  "name": "LivraPlus",
+  "short_name": "LivraPlus",
+  "description": "Commandes, livraisons et stock de votre boutique",
   "id": "/boutique/connexion",
   "start_url": "/boutique/connexion",
   "scope": "/",

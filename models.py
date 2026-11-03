@@ -26,6 +26,8 @@ class Boutique(UserMixin, db.Model):
     active = db.Column(db.Boolean, default=False)
     logo_url = db.Column(db.String(500), nullable=True)
     whatsapp = db.Column(db.String(50), nullable=True)  # Numéro WhatsApp de la boutique
+    description = db.Column(db.Text, nullable=True)       # présentation affichée aux clients
+    adresse = db.Column(db.String(255), nullable=True)    # où se trouve la boutique
     date_inscription = db.Column(db.DateTime, default=datetime.utcnow)
     # Code secret du lien envoyé aux clients (/c/<code>) : impossible à deviner,
     # contrairement à /boutique/1, /boutique/2… Régénérable pour couper l'ancien lien.
@@ -43,6 +45,10 @@ class Boutique(UserMixin, db.Model):
     def verifier_reponse_secrete(self, reponse):
         return check_password_hash(self.reponse_secrete_hash, reponse.lower().strip())
     
+    @property
+    def lien_carte(self):
+        return f'https://www.google.com/maps/search/?api=1&query={quote(self.adresse)}' if self.adresse else None
+
     def get_id(self):
         return str(self.id)
 

@@ -62,6 +62,7 @@
     <div class="feuille ticket">
         <div class="centre">
             <h1>{{ boutique.nom_boutique }}</h1>
+            {% if boutique.adresse %}<p>{{ boutique.adresse }}</p>{% endif %}
             {% if boutique.whatsapp %}<p>Tél : {{ boutique.whatsapp }}</p>{% endif %}
             <div class="sep"></div>
             <p><strong>BON DE LIVRAISON N°{{ commande.numero }}</strong></p>
@@ -103,6 +104,7 @@
                 {% if boutique.logo_url %}<img src="{{ boutique.logo_url }}" alt="">{% endif %}
                 <h1>{{ boutique.nom_boutique }}</h1>
                 {% if boutique.whatsapp %}<p>Tél / WhatsApp : {{ boutique.whatsapp }}</p>{% endif %}
+                {% if boutique.adresse %}<p>{{ boutique.adresse }}</p>{% endif %}
                 <p>{{ boutique.email }}</p>
             </div>
             <div style="text-align:right">

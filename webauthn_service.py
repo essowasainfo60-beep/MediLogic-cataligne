@@ -28,7 +28,7 @@ from webauthn.helpers.structs import (
 
 from models import db, CleBiometrique
 
-RP_NAME = "CTL Catalogue"
+RP_NAME = "LivraPlus"
 
 
 def _rp_id_et_origin(request):

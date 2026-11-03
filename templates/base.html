@@ -3,15 +3,15 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <!-- Application installable "CTL" (téléphone / tablette / PC) -->
+    <!-- Application installable "LivraPlus" (téléphone / tablette / PC) -->
     <link rel="manifest" href="{{ url_for('app_manifest') }}">
     <meta name="theme-color" content="#0b1d35">
     <link rel="icon" type="image/png" sizes="192x192" href="{{ url_for('static', filename='icons/icon-192.png') }}">
     <link rel="apple-touch-icon" href="{{ url_for('static', filename='icons/icon-192.png') }}">
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-title" content="CTL">
-    <title>{% block title %}MediLogic - Catalogue pour vous{% endblock %}</title>
+    <meta name="apple-mobile-web-app-title" content="LivraPlus">
+    <title>{% block title %}LivraPlus{% endblock %}</title>
     <!-- TailwindCSS CDN -->
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- Font Awesome -->
@@ -60,15 +60,31 @@
     <!-- Navigation -->
     <nav class="bg-white shadow-lg sticky top-0 z-50">
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <div class="flex justify-between h-16">
-                <div class="flex items-center">
-                    <a href="/" class="flex items-center space-x-2">
-                        <i class="fas fa-heartbeat text-primary text-2xl"></i>
-                        <span class="font-bold text-xl text-gray-800">MediLogic</span>
-                        <span class="text-xs text-gray-500">catalogue pour vous</span>
+            {% set espace_boutique = current_user.is_authenticated and current_user.nom_boutique is defined and request.blueprint == 'boutique' %}
+            {% set vitrine = current_user if espace_boutique else (boutique if boutique is defined and boutique else none) %}
+            <div class="flex justify-between items-center h-16 gap-3">
+                <div class="flex items-center min-w-0">
+                    {% if vitrine %}
+                    <!-- Identité de la boutique (connectée, ou visitée par le client) -->
+                    <a href="{{ url_for('boutique.dashboard') if espace_boutique else url_for('client.catalogue', code=vitrine.lien_public) }}" class="flex items-center gap-2 min-w-0">
+                        {% if vitrine.logo_url %}
+                        <img src="{{ vitrine.logo_url }}" alt="" class="h-10 w-10 rounded-full object-contain bg-gray-50 border flex-shrink-0">
+                        {% else %}
+                        <span class="h-10 w-10 rounded-full bg-[#0b1d35] text-teal-300 flex items-center justify-center font-bold flex-shrink-0">{{ vitrine.nom_boutique[:1]|upper }}</span>
+                        {% endif %}
+                        <span class="min-w-0">
+                            <span class="block font-bold text-gray-800 truncate">{{ vitrine.nom_boutique }}</span>
+                            <span class="block text-[11px] text-gray-400 leading-none">avec LivraPlus</span>
+                        </span>
                     </a>
+                    {% else %}
+                    <a href="/" class="flex items-center gap-2">
+                        <span class="h-9 w-9 rounded-lg bg-[#0b1d35] text-teal-300 flex items-center justify-center font-bold text-sm">L+</span>
+                        <span class="font-bold text-xl text-gray-800">Livra<span class="text-teal-500">Plus</span></span>
+                    </a>
+                    {% endif %}
                 </div>
-                <div class="flex items-center space-x-4">
+                <div class="flex items-center gap-1 sm:gap-3 text-sm">
                     {% if session.get('is_admin') %}
                         <a href="{{ url_for('admin.admin_dashboard') }}" class="text-gray-600 hover:text-primary transition">
                             <i class="fas fa-tachometer-alt"></i> Admin
@@ -76,15 +92,22 @@
                         <a href="{{ url_for('admin.admin_logout') }}" class="text-red-500 hover:text-red-700 transition">
                             <i class="fas fa-sign-out-alt"></i> Déconnexion
                         </a>
-                    {% elif current_user.is_authenticated %}
-                        <a href="{{ url_for('boutique.dashboard') }}" class="text-gray-600 hover:text-primary transition">
-                            <i class="fas fa-store"></i> Tableau de bord
+                    {% elif espace_boutique %}
+                        {% for endpoint, icone, libelle in [
+                            ('boutique.dashboard', 'fa-house', 'Accueil'),
+                            ('boutique.commandes', 'fa-receipt', 'Commandes'),
+                            ('boutique.livreurs', 'fa-motorcycle', 'Livreurs'),
+                            ('boutique.inventaire', 'fa-warehouse', 'Stock'),
+                            ('boutique.historique', 'fa-clock-rotate-left', 'Historique'),
+                            ('boutique.profil', 'fa-store', 'Ma boutique')] %}
+                        <a href="{{ url_for(endpoint) }}" title="{{ libelle }}"
+                           class="px-2 py-1.5 rounded-lg transition {{ 'bg-purple-50 text-purple-700' if request.endpoint == endpoint else 'text-gray-600 hover:text-primary' }}">
+                            <i class="fas {{ icone }}"></i><span class="hidden lg:inline ml-1">{{ libelle }}</span>
                         </a>
-                        <a href="{{ url_for('boutique.logout') }}" class="text-red-500 hover:text-red-700 transition">
-                            <i class="fas fa-sign-out-alt"></i> Déconnexion
+                        {% endfor %}
+                        <a href="{{ url_for('boutique.logout') }}" title="Déconnexion" class="px-2 py-1.5 text-red-500 hover:text-red-700 transition">
+                            <i class="fas fa-sign-out-alt"></i><span class="hidden lg:inline ml-1">Déconnexion</span>
                         </a>
-                    {% else %}
-                        <!-- Client non connecté : rien -->
                     {% endif %}
                 </div>
             </div>
@@ -115,8 +138,8 @@
     <!-- Footer -->
     <footer class="bg-gray-800 text-white mt-12 py-8">
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
-            <p>&copy; 2026 MediLogic - Catalogue pour vous. Tous droits réservés.</p>
-            <p class="text-gray-400 text-sm mt-2">Solution de gestion de catalogue d'articles en lignes</p>
+            <p>&copy; 2026 LivraPlus · MediLogic</p>
+            <p class="text-gray-400 text-sm mt-2">Commandes, livraisons et stock, simplement.</p>
         </div>
     </footer>
 
