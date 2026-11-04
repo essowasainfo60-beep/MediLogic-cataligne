@@ -8,6 +8,7 @@ from urllib.parse import quote
 from flask import Blueprint, Response, render_template, redirect, url_for, flash, request, session, jsonify, current_app
 from flask_login import login_user, logout_user, login_required, current_user
 
+import abonnement
 import caisse
 import promos
 import securite
@@ -30,7 +31,8 @@ GERANT_SEUL = {
     'regenerer_lien', 'modifier_whatsapp', 'biometrie_inscription_options', 'biometrie_inscription_verifier',
     'biometrie_retirer',
 }
-CAISSE = {'page_caisse', 'caisse_versement', 'caisse_paiement_livreur', 'caisse_mouvement', 'caisse_supprimer'}
+CAISSE = {'page_caisse', 'caisse_versement', 'caisse_paiement_livreur', 'caisse_mouvement', 'caisse_supprimer',
+          'abonnement_payer'}
 GESTION = {
     'inventaire', 'entree_stock', 'mouvements_stock', 'ajouter_article', 'modifier_article', 'supprimer_photo',
     'photo_principale', 'archiver_article', 'restaurer_article', 'articles_archives', 'livreurs', 'basculer_livreur',
@@ -56,6 +58,39 @@ def qui():
     return getattr(current_user, 'nom_utilisateur', None)
 
 
+# Abonnement non payé après le 8 : seules ces pages restent ouvertes
+OUVERT_SI_BLOQUE = {'dashboard', 'logout', 'abonnement_page', 'abonnement_payer', 'changer_mot_de_passe', 'api_nouvelles'}
+
+
+def boutique_connectee():
+    """La boutique de l'utilisateur connecté (gérant ou membre de l'équipe)."""
+    if not current_user.is_authenticated or not hasattr(current_user, 'nom_boutique'):
+        return None
+    return current_user.vendeur.boutique if getattr(current_user, 'est_vendeur', False) else current_user
+
+
+@boutique_bp.before_request
+def verifier_abonnement_et_activite():
+    boutique = boutique_connectee()
+    if not boutique or not request.endpoint:
+        return None
+    # Dernière activité (pour l'administrateur), au plus une écriture toutes les 10 minutes
+    maintenant = datetime.utcnow()
+    qui = current_user.vendeur if getattr(current_user, 'est_vendeur', False) else boutique
+    if not qui.derniere_activite or (maintenant - qui.derniere_activite).total_seconds() > 600:
+        qui.derniere_activite = maintenant
+        if qui is not boutique:
+            boutique.derniere_activite = maintenant
+        db.session.commit()
+    if request.endpoint.split('.')[-1] in OUVERT_SI_BLOQUE or not abonnement.etat(boutique)['bloque']:
+        return None
+    if request.accept_mimetypes.best == 'application/json' or request.is_json:
+        return jsonify(success=False, message="Abonnement LivraPlus non payé : espace suspendu"), 402
+    flash("Abonnement LivraPlus non payé : l'espace boutique est suspendu (seul le tableau de bord reste ouvert). "
+          "Le catalogue des clients et l'espace des livreurs continuent de fonctionner.", 'danger')
+    return redirect(url_for('boutique.dashboard'))
+
+
 @boutique_bp.before_request
 def verifier_droits():
     if current_user.is_authenticated and request.endpoint and not peut(request.endpoint):
@@ -68,7 +103,8 @@ def verifier_droits():
 
 @boutique_bp.app_context_processor
 def injecter_droits():
-    return {'peut': peut}
+    boutique = boutique_connectee() if request.blueprint == 'boutique' else None
+    return {'peut': peut, 'etat_abonnement': abonnement.etat(boutique) if boutique else None}
 
 MDP_FORT = re.compile(r'^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$')
 MSG_MDP_FAIBLE = 'Le mot de passe doit contenir au moins 8 caractères, une majuscule, une minuscule, un chiffre et un symbole'
@@ -1212,7 +1248,7 @@ def page_caisse():
     for c in _frais_a_payer():
         frais_dus.setdefault(c.livreur, []).append(c)
 
-    return render_template('boutique/caisse.html', solde=solde, journal=journal, entrees=entrees, sorties=sorties,
+    return render_template('boutique/caisse.html', modes_abonnement=abonnement.MODES, solde=solde, journal=journal, entrees=entrees, sorties=sorties,
                            charges_par_categorie=sorted(charges_par_categorie.items(), key=lambda x: -x[1]),
                            a_recuperer=a_recuperer, frais_dus=frais_dus, a_remettre=caisse.a_remettre,
                            du=du.strftime('%Y-%m-%d'), au=au.strftime('%Y-%m-%d'),
@@ -1257,6 +1293,9 @@ def caisse_mouvement():
         flash('Indiquez un montant valide', 'danger')
         return redirect(url_for('boutique.page_caisse'))
     categorie = request.form.get('categorie') if type_mouvement == 'charge' else None
+    if categorie == abonnement.CATEGORIE:
+        flash("L'abonnement logiciel s'enregistre avec le moyen de paiement et la référence du dépôt.", 'warning')
+        return redirect(url_for('boutique.abonnement_page'))
     if categorie and categorie not in MouvementCaisse.CATEGORIES:
         categorie = 'Divers'
     libelle = (request.form.get('libelle') or '').strip() or (categorie or MouvementCaisse.TYPES[type_mouvement][0])
@@ -1276,11 +1315,40 @@ def caisse_mouvement():
 def caisse_supprimer(mouvement_id):
     """Corriger une erreur de saisie (charges, apports, retraits uniquement)."""
     m = MouvementCaisse.query.filter_by(id=mouvement_id, boutique_id=current_user.id).first_or_404()
-    if m.type in ('charge', 'apport', 'retrait'):
+    if m.categorie == abonnement.CATEGORIE:
+        flash("Un paiement d'abonnement ne peut pas être supprimé ici. Contactez LivraPlus en cas d'erreur.", 'warning')
+    elif m.type in ('charge', 'apport', 'retrait'):
         db.session.delete(m)
         db.session.commit()
         flash('Mouvement supprimé', 'warning')
     return redirect(url_for('boutique.page_caisse'))
+
+# ==================== ABONNEMENT LIVRAPLUS ====================
+
+@boutique_bp.route('/abonnement')
+@login_required
+def abonnement_page():
+    boutique = boutique_connectee()
+    return render_template('boutique/abonnement.html', boutique=boutique, situation=abonnement.etat(boutique),
+                           modes=abonnement.MODES, paiements=boutique.paiements_abonnement, fcfa=msg.fcfa,
+                           aujourdhui=datetime.utcnow().strftime('%Y-%m-%d'))
+
+
+@boutique_bp.route('/abonnement/payer', methods=['POST'])
+@login_required
+def abonnement_payer():
+    boutique = boutique_connectee()
+    date_depot = _lire_date(request.form.get('date_paiement'))
+    paiement, erreur = abonnement.enregistrer(boutique, request.form.get('mode'), request.form.get('reference'),
+                                              date_depot.date() if date_depot else None,
+                                              par=getattr(current_user, 'nom_utilisateur', None))
+    if erreur:
+        flash(erreur, 'danger')
+    else:
+        flash(f"Merci ! Abonnement de {paiement.mois_libelle} enregistré ({msg.fcfa(paiement.montant)}, "
+              f"{paiement.mode_libelle}). Il apparaît dans les charges de la caisse.", 'success')
+    return redirect(url_for('boutique.page_caisse') if request.form.get('retour') == 'caisse'
+                    else url_for('boutique.abonnement_page'))
 
 # ==================== ALERTES : NOUVELLES COMMANDES ====================
 

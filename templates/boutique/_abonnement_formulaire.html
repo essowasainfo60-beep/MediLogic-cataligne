@@ -1,0 +1,41 @@
+{# Formulaire de paiement de l'abonnement (page Abonnement et caisse). Variables : situation, modes, retour #}
+<form method="POST" action="{{ url_for('boutique.abonnement_payer') }}" class="form-abonnement bg-white rounded-2xl shadow-md p-5 space-y-3">
+    <input type="hidden" name="retour" value="{{ retour or '' }}">
+    <h2 class="font-bold text-gray-900"><i class="fas fa-file-signature text-purple-500 mr-1"></i> Enregistrer le paiement de {{ situation.libelle_mois_a_payer }}</h2>
+    <label class="block text-sm text-gray-500">Montant (fixé par LivraPlus)
+        <input type="text" value="{{ fcfa(situation.prix) }}" readonly class="mt-1 w-full border border-gray-200 bg-gray-50 px-3 py-2 font-bold text-gray-900 cursor-not-allowed">
+    </label>
+    <div class="grid grid-cols-2 gap-2">
+        {% for code, libelle in modes.items() %}
+        <label class="cursor-pointer">
+            <input type="radio" name="mode" value="{{ code }}" required class="peer hidden">
+            <span class="block text-center text-sm border-2 border-gray-200 rounded-xl px-2 py-2.5 peer-checked:border-purple-600 peer-checked:bg-purple-50 peer-checked:text-purple-800 font-semibold">{{ libelle }}</span>
+        </label>
+        {% endfor %}
+    </div>
+    <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+        <label class="block text-sm text-gray-500">Date du dépôt
+            <input type="date" name="date_paiement" required value="{{ aujourdhui }}" max="{{ aujourdhui }}" class="mt-1 w-full border border-gray-300 px-3 py-2">
+        </label>
+        <label class="champ-reference block text-sm text-gray-500">Référence du dépôt
+            <input type="text" name="reference" maxlength="80" placeholder="Ex : ID de transaction" class="mt-1 w-full border border-gray-300 px-3 py-2 uppercase">
+        </label>
+    </div>
+    <p class="aide-reference text-xs text-gray-500">La référence figure dans le SMS de confirmation (Mixx, Moov) ou sur le bordereau de la banque.</p>
+    <button type="submit" class="w-full bg-purple-600 text-white py-3 rounded-xl font-semibold hover:bg-purple-700">
+        Enregistrer le paiement · {{ fcfa(situation.prix) }}
+    </button>
+</form>
+<script>
+document.querySelectorAll('.form-abonnement').forEach(function (form) {
+    function maj() {
+        var mode = (form.querySelector('input[name="mode"]:checked') || {}).value;
+        var especes = mode === 'especes';
+        form.querySelector('.champ-reference').classList.toggle('hidden', especes);
+        form.querySelector('.aide-reference').classList.toggle('hidden', especes);
+        form.querySelector('input[name="reference"]').required = !!mode && !especes;
+    }
+    form.querySelectorAll('input[name="mode"]').forEach(function (r) { r.addEventListener('change', maj); });
+    maj();
+});
+</script>

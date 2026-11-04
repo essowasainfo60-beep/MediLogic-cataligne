@@ -142,11 +142,12 @@
 
         <!-- Colonne droite : saisir une charge, un apport, un retrait -->
         <div class="space-y-6">
-            <form method="POST" action="{{ url_for('boutique.caisse_mouvement') }}" class="bg-white rounded-2xl shadow-md p-5 space-y-3">
+            <form id="formCharge" method="POST" action="{{ url_for('boutique.caisse_mouvement') }}" class="bg-white rounded-2xl shadow-md p-5 space-y-3">
                 <input type="hidden" name="type" value="charge">
                 <h2 class="font-bold text-gray-900"><i class="fas fa-file-invoice-dollar text-red-500 mr-1"></i> Nouvelle charge</h2>
-                <select name="categorie" class="w-full border border-gray-300 px-3 py-2">
+                <select name="categorie" id="categorieCharge" class="w-full border border-gray-300 px-3 py-2">
                     {% for c in categories %}<option>{{ c }}</option>{% endfor %}
+                    {% if etat_abonnement and etat_abonnement.exige and peut('boutique.abonnement_payer') %}<option value="Abonnement logiciel">Abonnement logiciel ({{ fcfa(etat_abonnement.prix) }})</option>{% endif %}
                 </select>
                 <input type="text" name="libelle" placeholder="Détail (ex : loyer de novembre, carton d'emballage…)" class="w-full border border-gray-300 px-3 py-2">
                 <div class="grid grid-cols-2 gap-2">
@@ -155,6 +156,26 @@
                 </div>
                 <button type="submit" class="w-full bg-red-500 text-white py-2.5 rounded-xl font-semibold hover:bg-red-600">Enregistrer la charge</button>
             </form>
+
+            {% if etat_abonnement and etat_abonnement.exige and peut('boutique.abonnement_payer') %}
+            <div id="blocAbonnementCaisse" class="hidden space-y-2">
+                {% with situation=etat_abonnement, modes=modes_abonnement, retour='caisse' %}{% include 'boutique/_abonnement_formulaire.html' %}{% endwith %}
+                <button type="button" id="autreCharge" class="w-full text-sm text-gray-600 hover:underline">← Saisir une autre charge</button>
+            </div>
+            <script>
+            (function () {
+                var select = document.getElementById('categorieCharge'), charge = document.getElementById('formCharge'),
+                    bloc = document.getElementById('blocAbonnementCaisse');
+                select.addEventListener('change', function () {
+                    if (select.value !== 'Abonnement logiciel') return;
+                    charge.classList.add('hidden'); bloc.classList.remove('hidden');
+                });
+                document.getElementById('autreCharge').addEventListener('click', function () {
+                    select.selectedIndex = 0; bloc.classList.add('hidden'); charge.classList.remove('hidden');
+                });
+            })();
+            </script>
+            {% endif %}
 
             <form method="POST" action="{{ url_for('boutique.caisse_mouvement') }}" class="bg-white rounded-2xl shadow-md p-5 space-y-3">
                 <h2 class="font-bold text-gray-900"><i class="fas fa-right-left text-blue-500 mr-1"></i> Apport ou retrait</h2>

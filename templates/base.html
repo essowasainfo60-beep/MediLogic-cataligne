@@ -160,6 +160,7 @@
                             {% if peut('boutique.codes_promo') %}
                             <a href="{{ url_for('boutique.codes_promo') }}" class="flex items-center gap-3 px-4 py-2 text-gray-700 hover:bg-gray-50"><i class="fas fa-ticket w-4 text-center"></i> Codes promo</a>
                             {% endif %}
+                            <a href="{{ url_for('boutique.abonnement_page') }}" class="flex items-center gap-3 px-4 py-2 text-gray-700 hover:bg-gray-50"><i class="fas fa-file-signature w-4 text-center"></i> Abonnement LivraPlus</a>
                             {% if peut('boutique.historique') %}
                             <a href="{{ url_for('boutique.historique') }}" class="flex items-center gap-3 px-4 py-2 text-gray-700 hover:bg-gray-50"><i class="fas fa-clock-rotate-left w-4 text-center"></i> Historique et export</a>
                             {% endif %}
@@ -227,7 +228,8 @@
             {% endfor %}
             <div class="border-t border-gray-100 my-2 mx-4"></div>
             {% for endpoint, icone, libelle in [('boutique.codes_promo', 'fa-ticket', 'Codes promo'), ('boutique.historique', 'fa-clock-rotate-left', 'Historique et export'),
-                                               ('boutique.profil', 'fa-store', 'Ma boutique'), ('boutique.vendeurs', 'fa-users', 'Équipe et accès')] if peut(endpoint) %}
+                                               ('boutique.profil', 'fa-store', 'Ma boutique'), ('boutique.vendeurs', 'fa-users', 'Équipe et accès'),
+                                               ('boutique.abonnement_page', 'fa-file-signature', 'Abonnement LivraPlus')] if peut(endpoint) %}
             <a href="{{ url_for(endpoint) }}"
                class="flex items-center gap-3 mx-2 px-3 py-2.5 rounded-xl text-sm {{ 'bg-purple-50 text-purple-700 font-semibold' if request.endpoint == endpoint else 'text-gray-600 hover:bg-gray-50' }}">
                 <i class="fas {{ icone }} w-5 text-center"></i> {{ libelle }}
@@ -279,6 +281,27 @@
 
     <!-- Messages -->
     <div class="max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 mt-4">
+        {% if espace_boutique and etat_abonnement and etat_abonnement.niveau in ['jaune', 'orange', 'rouge', 'bloque'] and request.endpoint != 'boutique.abonnement_page' %}
+        {% set ab = etat_abonnement %}
+        {% set styles = {'jaune': 'bg-yellow-50 border-yellow-300 text-yellow-900', 'orange': 'bg-orange-50 border-orange-400 text-orange-900',
+                         'rouge': 'bg-red-50 border-red-500 text-red-800', 'bloque': 'bg-red-600 border-red-700 text-white'} %}
+        <div class="bandeau-abonnement mb-3 px-4 py-3 rounded-xl border-2 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-sm {{ styles[ab.niveau] }}">
+            <span>
+                <i class="fas {{ 'fa-lock' if ab.niveau == 'bloque' else 'fa-bell' }} mr-1"></i>
+                {% if ab.niveau == 'bloque' %}
+                <strong>Espace suspendu : abonnement de {{ ab.libelle_mois_a_payer }} non payé.</strong>
+                Seul le tableau de bord reste ouvert. Tout revient dès le paiement enregistré.
+                {% else %}
+                <strong>Abonnement LivraPlus de {{ ab.libelle_mois_a_payer }} : {{ '{:,.0f}'.format(ab.prix).replace(',', ' ') }} FCFA</strong>
+                {% if ab.jours_restants == 0 %}— dernier jour aujourd'hui ! L'espace sera suspendu demain.
+                {% else %}— à payer avant le 8 (encore {{ ab.jours_restants + 1 }} jour{{ 's' if ab.jours_restants > 0 }}).{% endif %}
+                {% endif %}
+            </span>
+            <a href="{{ url_for('boutique.abonnement_page') }}" class="text-center whitespace-nowrap font-semibold px-4 py-2 rounded-lg {{ 'bg-white text-red-700' if ab.niveau == 'bloque' else 'bg-gray-900 text-white' }}">
+                {{ 'Payer maintenant' if peut('boutique.abonnement_payer') else 'Voir' }}
+            </a>
+        </div>
+        {% endif %}
         {% with messages = get_flashed_messages(with_categories=true) %}
             {% for category, message in messages %}
                 <div class="mb-3 px-4 py-3 rounded-xl text-sm flex justify-between items-center gap-3 border

@@ -133,6 +133,8 @@ def mettre_a_jour_schema():
             conn.execute(text("ALTER TABLE codes_promo ADD COLUMN min_articles INTEGER"))
         if 'role' not in {c['name'] for c in inspecteur.get_columns('vendeurs')}:
             conn.execute(text("ALTER TABLE vendeurs ADD COLUMN role VARCHAR(20) NOT NULL DEFAULT 'vendeur'"))
+        if 'derniere_activite' not in {c['name'] for c in inspecteur.get_columns('vendeurs')}:
+            conn.execute(text("ALTER TABLE vendeurs ADD COLUMN derniere_activite TIMESTAMP"))
         if 'par' not in {c['name'] for c in inspecteur.get_columns('mouvements_caisse')}:
             conn.execute(text("ALTER TABLE mouvements_caisse ADD COLUMN par VARCHAR(120)"))
         if 'code_acces' not in {c['name'] for c in inspecteur.get_columns('livreurs')}:
@@ -145,7 +147,9 @@ def mettre_a_jour_schema():
             conn.execute(text("UPDATE commandes SET code_suivi = :c WHERE id = :i"), {'c': nouveau_code_lien(), 'i': commande_id})
         colonnes_boutiques = {c['name'] for c in inspecteur.get_columns('boutiques')}
         for nom, definition in [('description', 'TEXT'), ('adresse', 'VARCHAR(255)'),
-                                ('mode_frais', "VARCHAR(20) NOT NULL DEFAULT 'livreur_garde'")]:
+                                ('mode_frais', "VARCHAR(20) NOT NULL DEFAULT 'livreur_garde'"),
+                                ('abonnement_prix', 'FLOAT'), ('abonnement_debut', 'VARCHAR(7)'),
+                                ('derniere_activite', 'TIMESTAMP')]:
             if nom not in colonnes_boutiques:
                 conn.execute(text(f"ALTER TABLE boutiques ADD COLUMN {nom} {definition}"))
         if 'lien_public' not in colonnes_boutiques:

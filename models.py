@@ -32,6 +32,10 @@ class Boutique(UserMixin, db.Model):
     # ou 'boutique_collecte' (il remet tout, la boutique le paie ensuite). Voir caisse.py.
     mode_frais = db.Column(db.String(20), nullable=False, default='livreur_garde', server_default='livreur_garde')
     date_inscription = db.Column(db.DateTime, default=datetime.utcnow)
+    # Abonnement mensuel (fixé par l'administrateur, voir abonnement.py)
+    abonnement_prix = db.Column(db.Float, nullable=True)          # FCFA par mois ; vide ou 0 = gratuit
+    abonnement_debut = db.Column(db.String(7), nullable=True)     # premier mois facturé, 'AAAA-MM'
+    derniere_activite = db.Column(db.DateTime, nullable=True)     # dernière utilisation de l'espace boutique
     # Code secret du lien envoyé aux clients (/c/<code>) : impossible à deviner,
     # contrairement à /boutique/1, /boutique/2… Régénérable pour couper l'ancien lien.
     lien_public = db.Column(db.String(32), unique=True, index=True, default=lambda: nouveau_code_lien())
@@ -75,6 +79,7 @@ class Vendeur(UserMixin, db.Model):
     actif = db.Column(db.Boolean, default=True)
     date_creation = db.Column(db.DateTime, default=datetime.utcnow)
     role = db.Column(db.String(20), nullable=False, default='vendeur', server_default='vendeur')
+    derniere_activite = db.Column(db.DateTime, nullable=True)
 
     boutique = db.relationship('Boutique', backref=db.backref('vendeurs', cascade='all, delete-orphan'))
 
@@ -558,3 +563,35 @@ class Parametre(db.Model):
 
     cle = db.Column(db.String(50), primary_key=True)
     valeur = db.Column(db.Text, nullable=False)
+
+
+class PaiementAbonnement(db.Model):
+    """Paiement d'un mois d'abonnement LivraPlus par une boutique."""
+    __tablename__ = 'paiements_abonnement'
+
+    MODES = {'mixx': 'Mixx by Yas', 'moov': 'Moov Money (Flooz)', 'banque': 'Dépôt / virement bancaire', 'especes': 'Espèces'}
+
+    id = db.Column(db.Integer, primary_key=True)
+    boutique_id = db.Column(db.Integer, db.ForeignKey('boutiques.id'), nullable=False, index=True)
+    mois = db.Column(db.String(7), nullable=False)                 # mois payé, 'AAAA-MM'
+    montant = db.Column(db.Float, nullable=False)
+    mode = db.Column(db.String(20), nullable=False)
+    reference = db.Column(db.String(80), nullable=True)            # référence du dépôt (sauf espèces)
+    date_paiement = db.Column(db.Date, nullable=False)             # date du dépôt
+    par = db.Column(db.String(120), nullable=True)
+    statut = db.Column(db.String(10), nullable=False, default='valide')   # 'valide' ou 'annule' (par l'admin)
+    mouvement_id = db.Column(db.Integer, nullable=True)            # charge correspondante dans la caisse
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    boutique = db.relationship('Boutique', backref=db.backref('paiements_abonnement', cascade='all, delete-orphan',
+                                                              order_by='PaiementAbonnement.mois.desc()'))
+
+    @property
+    def mode_libelle(self):
+        return self.MODES.get(self.mode, self.mode)
+
+    @property
+    def mois_libelle(self):
+        annee, mois = map(int, self.mois.split('-'))
+        return ['janvier', 'février', 'mars', 'avril', 'mai', 'juin', 'juillet', 'août',
+                'septembre', 'octobre', 'novembre', 'décembre'][mois - 1] + f' {annee}'
