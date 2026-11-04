@@ -1,0 +1,187 @@
+{% extends "base.html" %}
+{% from "_macros.html" import recherche %}
+
+{% block title %}Caisse - {{ current_user.nom_boutique }}{% endblock %}
+
+{% block content %}
+<div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-6">
+    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <h1 class="text-2xl md:text-3xl font-extrabold text-gray-900"><i class="fas fa-cash-register text-purple-500 mr-2"></i> Caisse</h1>
+        <p class="text-sm text-gray-500">
+            Frais de livraison :
+            <strong>{{ 'le livreur garde ses frais' if current_user.mode_frais != 'boutique_collecte' else 'le livreur remet tout, la boutique le paie' }}</strong>
+            · <a href="{{ url_for('boutique.profil') }}#frais" class="text-purple-600 hover:underline">changer</a>
+        </p>
+    </div>
+
+    <!-- Chiffres -->
+    {% set chez_livreurs = namespace(total=0) %}
+    {% for livreur, cmds in a_recuperer.items() %}{% for c in cmds %}{% set chez_livreurs.total = chez_livreurs.total + a_remettre(c) %}{% endfor %}{% endfor %}
+    {% set dus = namespace(total=0) %}
+    {% for livreur, cmds in frais_dus.items() %}{% for c in cmds %}{% set dus.total = dus.total + (c.frais_livraison or 0) %}{% endfor %}{% endfor %}
+    <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <div class="rounded-2xl p-5 text-white bg-gradient-to-br from-[#0b1d35] to-[#1c3358]">
+            <p class="text-sm text-white/70">Disponible en caisse</p>
+            <p class="text-3xl font-extrabold mt-1 {{ 'text-red-300' if solde < 0 }}">{{ fcfa(solde) }}</p>
+            <p class="text-xs text-white/60 mt-1">Entrées − sorties, depuis le début</p>
+        </div>
+        <div class="bg-white rounded-2xl shadow-md p-5">
+            <p class="text-sm text-gray-500"><i class="fas fa-motorcycle text-purple-500 mr-1"></i> Encore chez les livreurs</p>
+            <p class="text-3xl font-extrabold text-gray-900 mt-1">{{ fcfa(chez_livreurs.total) }}</p>
+            <p class="text-xs text-gray-500 mt-1">Commandes livrées, argent pas encore remis</p>
+        </div>
+        <div class="bg-white rounded-2xl shadow-md p-5">
+            <p class="text-sm text-gray-500"><i class="fas fa-calendar text-purple-500 mr-1"></i> Sur la période</p>
+            <p class="mt-1 text-sm"><span class="text-green-600 font-bold text-lg">+ {{ fcfa(entrees) }}</span></p>
+            <p class="text-sm"><span class="text-red-600 font-bold text-lg">− {{ fcfa(sorties) }}</span></p>
+            {% if dus.total %}<p class="text-xs text-purple-700 mt-1">Frais dus aux livreurs : {{ fcfa(dus.total) }}</p>{% endif %}
+        </div>
+    </div>
+
+    <div class="grid grid-cols-1 xl:grid-cols-3 gap-6">
+        <div class="xl:col-span-2 space-y-6">
+            <!-- Argent à récupérer auprès des livreurs -->
+            <div class="bg-white rounded-2xl shadow-md">
+                <div class="px-5 py-4 border-b border-gray-100">
+                    <h2 class="font-bold text-gray-900">À récupérer auprès des livreurs</h2>
+                    <p class="text-xs text-gray-500">
+                        {% if current_user.mode_frais != 'boutique_collecte' %}Montant des articles seulement : le livreur garde ses frais de livraison.
+                        {% else %}Montant total (articles + frais) : vous payez ensuite ses frais au livreur.{% endif %}
+                    </p>
+                </div>
+                {% for livreur, cmds in a_recuperer.items() %}
+                <form method="POST" action="{{ url_for('boutique.caisse_versement', livreur_id=livreur.id) }}" class="px-5 py-4 border-b border-gray-100"
+                      data-question="Enregistrer le versement de {{ livreur.nom }} pour les commandes cochées ?"
+                      onsubmit="return confirm(this.dataset.question)">
+                    <div class="flex flex-wrap items-center justify-between gap-2">
+                        <p class="font-semibold text-gray-800">🛵 {{ livreur.nom }} <span class="text-xs text-gray-500 font-normal">· {{ cmds|length }} commande(s)</span></p>
+                        <button type="submit" class="bg-green-600 text-white px-4 py-2 rounded-xl text-sm font-semibold hover:bg-green-700">
+                            <i class="fas fa-hand-holding-dollar mr-1"></i> Enregistrer le versement
+                        </button>
+                    </div>
+                    <ul class="mt-3 divide-y divide-gray-100 text-sm">
+                        {% for c in cmds %}
+                        <li class="flex items-center gap-3 py-1.5">
+                            <input type="checkbox" name="commande_id" value="{{ c.id }}" checked class="h-4 w-4">
+                            <a href="{{ url_for('boutique.commande_details', commande_id=c.id) }}" class="flex-1 min-w-0 truncate hover:underline">
+                                n°{{ c.numero }} · {{ c.client_nom }} <span class="text-gray-400">· livrée le {{ c.date_livraison.strftime('%d/%m %H:%M') if c.date_livraison else '—' }}</span>
+                            </a>
+                            <span class="text-right whitespace-nowrap">
+                                <strong>{{ fcfa(a_remettre(c)) }}</strong>
+                                {% if current_user.mode_frais != 'boutique_collecte' and c.frais_livraison %}<span class="block text-[11px] text-gray-400">+ {{ fcfa(c.frais_livraison) }} gardés par le livreur</span>{% endif %}
+                            </span>
+                        </li>
+                        {% endfor %}
+                    </ul>
+                </form>
+                {% else %}
+                <p class="px-5 py-8 text-center text-gray-500 text-sm"><i class="fas fa-circle-check text-green-500 mr-1"></i> Tous les livreurs ont remis leur argent.</p>
+                {% endfor %}
+            </div>
+
+            {% if frais_dus %}
+            <!-- Frais à payer aux livreurs (mode « la boutique collecte tout ») -->
+            <div class="bg-white rounded-2xl shadow-md">
+                <div class="px-5 py-4 border-b border-gray-100">
+                    <h2 class="font-bold text-gray-900">Frais de livraison à payer aux livreurs</h2>
+                </div>
+                {% for livreur, cmds in frais_dus.items() %}
+                {% set total_frais = cmds|sum(attribute='frais_livraison') %}
+                <form method="POST" action="{{ url_for('boutique.caisse_paiement_livreur', livreur_id=livreur.id) }}"
+                      class="px-5 py-3 flex flex-wrap items-center justify-between gap-2 border-b border-gray-100"
+                      data-question="Payer {{ fcfa(total_frais) }} de frais de livraison à {{ livreur.nom }} ?"
+                      onsubmit="return confirm(this.dataset.question)">
+                    <p class="text-sm"><strong>{{ livreur.nom }}</strong> · {{ cmds|length }} course(s) : <strong>{{ fcfa(total_frais) }}</strong></p>
+                    <button type="submit" class="bg-purple-600 text-white px-4 py-2 rounded-xl text-sm font-semibold hover:bg-purple-700">Payer le livreur</button>
+                </form>
+                {% endfor %}
+            </div>
+            {% endif %}
+
+            <!-- Journal -->
+            <div class="bg-white rounded-2xl shadow-md">
+                <form method="GET" class="px-5 py-4 border-b border-gray-100 flex flex-wrap items-end gap-2 text-sm">
+                    <h2 class="font-bold text-gray-900 mr-auto">Journal de caisse</h2>
+                    <label class="text-gray-500">Du <input type="date" name="du" value="{{ du }}" class="ml-1 border border-gray-300 px-2 py-1"></label>
+                    <label class="text-gray-500">au <input type="date" name="au" value="{{ au }}" class="ml-1 border border-gray-300 px-2 py-1"></label>
+                    <button type="submit" class="bg-gray-800 text-white px-3 py-1.5 rounded-lg">Afficher</button>
+                </form>
+                {% if journal %}
+                <div class="px-5 pt-3">{{ recherche('#lignesCaisse', 'Rechercher dans le journal…', None, 'mb-2') }}</div>
+                <div class="overflow-x-auto">
+                    <table class="w-full text-sm">
+                        <thead class="bg-gray-50 text-gray-600 text-left">
+                            <tr><th class="px-4 py-2">Date</th><th class="px-4 py-2">Type</th><th class="px-4 py-2">Libellé</th><th class="px-4 py-2 text-right">Montant</th><th></th></tr>
+                        </thead>
+                        <tbody id="lignesCaisse" class="divide-y divide-gray-100">
+                            {% for m in journal %}
+                            <tr data-item="{{ m.type_libelle }} {{ m.categorie or '' }} {{ m.libelle }} {{ m.date.strftime('%d/%m/%Y') }}">
+                                <td class="px-4 py-2 whitespace-nowrap text-gray-500">{{ m.date.strftime('%d/%m %H:%M') }}</td>
+                                <td class="px-4 py-2"><span class="px-2 py-0.5 rounded-full text-xs font-semibold {{ m.type_classe }}">{{ m.type_libelle }}</span></td>
+                                <td class="px-4 py-2">{% if m.categorie %}<span class="text-gray-500">{{ m.categorie }} · </span>{% endif %}{{ m.libelle }}</td>
+                                <td class="px-4 py-2 text-right font-bold whitespace-nowrap {{ 'text-green-600' if m.montant > 0 else 'text-red-600' }}">{{ '+' if m.montant > 0 }}{{ fcfa(m.montant) }}</td>
+                                <td class="px-2 py-2 text-right">
+                                    {% if m.type in ['charge', 'apport', 'retrait'] %}
+                                    <form method="POST" action="{{ url_for('boutique.caisse_supprimer', mouvement_id=m.id) }}"
+                                          data-question="Supprimer ce mouvement ({{ m.libelle }}) ?" onsubmit="return confirm(this.dataset.question)">
+                                        <button type="submit" class="text-gray-400 hover:text-red-600" title="Supprimer (erreur de saisie)"><i class="fas fa-trash"></i></button>
+                                    </form>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <p class="px-5 py-8 text-center text-gray-500 text-sm">Aucun mouvement sur cette période.</p>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- Colonne droite : saisir une charge, un apport, un retrait -->
+        <div class="space-y-6">
+            <form method="POST" action="{{ url_for('boutique.caisse_mouvement') }}" class="bg-white rounded-2xl shadow-md p-5 space-y-3">
+                <input type="hidden" name="type" value="charge">
+                <h2 class="font-bold text-gray-900"><i class="fas fa-file-invoice-dollar text-red-500 mr-1"></i> Nouvelle charge</h2>
+                <select name="categorie" class="w-full border border-gray-300 px-3 py-2">
+                    {% for c in categories %}<option>{{ c }}</option>{% endfor %}
+                </select>
+                <input type="text" name="libelle" placeholder="Détail (ex : loyer de novembre, carton d'emballage…)" class="w-full border border-gray-300 px-3 py-2">
+                <div class="grid grid-cols-2 gap-2">
+                    <input type="number" name="montant" min="1" step="1" required placeholder="Montant FCFA" class="border border-gray-300 px-3 py-2">
+                    <input type="date" name="date" value="{{ aujourdhui }}" class="border border-gray-300 px-3 py-2">
+                </div>
+                <button type="submit" class="w-full bg-red-500 text-white py-2.5 rounded-xl font-semibold hover:bg-red-600">Enregistrer la charge</button>
+            </form>
+
+            <form method="POST" action="{{ url_for('boutique.caisse_mouvement') }}" class="bg-white rounded-2xl shadow-md p-5 space-y-3">
+                <h2 class="font-bold text-gray-900"><i class="fas fa-right-left text-blue-500 mr-1"></i> Apport ou retrait</h2>
+                <div class="grid grid-cols-2 gap-2 text-sm">
+                    <label class="cursor-pointer"><input type="radio" name="type" value="apport" class="peer hidden" checked>
+                        <span class="block text-center py-2 rounded-lg border border-gray-300 peer-checked:bg-blue-600 peer-checked:text-white">+ Apport</span></label>
+                    <label class="cursor-pointer"><input type="radio" name="type" value="retrait" class="peer hidden">
+                        <span class="block text-center py-2 rounded-lg border border-gray-300 peer-checked:bg-gray-800 peer-checked:text-white">− Retrait</span></label>
+                </div>
+                <input type="text" name="libelle" placeholder="Motif (ex : fonds de caisse, retrait du gérant…)" class="w-full border border-gray-300 px-3 py-2">
+                <div class="grid grid-cols-2 gap-2">
+                    <input type="number" name="montant" min="1" step="1" required placeholder="Montant FCFA" class="border border-gray-300 px-3 py-2">
+                    <input type="date" name="date" value="{{ aujourdhui }}" class="border border-gray-300 px-3 py-2">
+                </div>
+                <button type="submit" class="w-full bg-blue-600 text-white py-2.5 rounded-xl font-semibold hover:bg-blue-700">Enregistrer</button>
+            </form>
+
+            {% if charges_par_categorie %}
+            <div class="bg-white rounded-2xl shadow-md p-5">
+                <h2 class="font-bold text-gray-900 mb-2">Charges de la période</h2>
+                <ul class="text-sm divide-y divide-gray-100">
+                    {% for cat, montant in charges_par_categorie %}
+                    <li class="flex justify-between py-1.5"><span>{{ cat }}</span><strong>{{ fcfa(montant) }}</strong></li>
+                    {% endfor %}
+                </ul>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}

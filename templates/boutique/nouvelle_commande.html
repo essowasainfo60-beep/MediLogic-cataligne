@@ -41,7 +41,7 @@
             </div>
             <div class="md:col-span-2">
                 <label class="block text-sm font-bold text-gray-700 mb-1">Adresse de livraison *</label>
-                <textarea name="client_adresse" required rows="2" placeholder="Quartier, rue, repère…"
+                <textarea name="client_adresse" id="adresseSaisie" oninput="detecterZoneSaisie()" required rows="2" placeholder="Quartier, rue, repère…"
                           class="w-full px-3 py-2 border border-gray-300 rounded-lg">{{ form.get('client_adresse', '') }}</textarea>
             </div>
             {% if zones %}
@@ -211,6 +211,15 @@ function calculer() {
     document.getElementById('aucuneLigne').classList.toggle('hidden', lignes.children.length > 0);
     total += +(document.getElementById('fraisLivraison').value || 0);
     document.getElementById('total').textContent = Math.round(total).toLocaleString('fr-FR') + ' FCFA';
+}
+const QUARTIERS = {{ (index_quartiers or [])|tojson }};
+function detecterZoneSaisie() {
+    const select = document.getElementById('zoneSaisie');
+    if (!select) return;
+    const texte = ' ' + document.getElementById('adresseSaisie').value.normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+                         .toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim() + ' ';
+    const t = QUARTIERS.find((l) => texte.includes(' ' + l.q + ' '));
+    if (t && select.value !== String(t.zone)) { select.value = String(t.zone); appliquerFraisZone(); }
 }
 function appliquerFraisZone() {
     const choix = document.getElementById('zoneSaisie').selectedOptions[0];

@@ -38,7 +38,7 @@
             (url_for('boutique.commandes', statut='nouvelle'), 'fa-bell', 'blue', nouvelles_count, 'À traiter', du_jour ~ " reçue(s) aujourd'hui"),
             (url_for('boutique.commandes', statut='confirmee'), 'fa-box-open', 'amber', confirmees_count, 'À préparer / livrer', 'confirmées, sans livreur'),
             (url_for('boutique.commandes', statut='en_livraison'), 'fa-motorcycle', 'purple', en_livraison_count, 'En livraison', 'à clôturer une fois remises'),
-            (url_for('boutique.historique'), 'fa-circle-check', 'green', livrees_jour, "Livrées aujourd'hui", fcfa(encaisse_jour) ~ ' encaissés'),
+            (url_for('boutique.historique'), 'fa-circle-check', 'green', livrees_jour, "Livrées aujourd'hui", fcfa(encaisse_jour) ~ " d'articles"),
         ] %}
         <a href="{{ lien }}" class="bg-white rounded-2xl shadow-md p-4 md:p-5 hover:-translate-y-0.5 transition">
             <div class="flex items-center justify-between">
@@ -50,6 +50,18 @@
         </a>
         {% endfor %}
     </div>
+
+    <!-- Caisse -->
+    <a href="{{ url_for('boutique.page_caisse') }}" class="grid grid-cols-1 sm:grid-cols-2 gap-4 bg-white rounded-2xl shadow-md p-5 hover:-translate-y-0.5 transition">
+        <div class="flex items-center gap-3">
+            <span class="h-11 w-11 rounded-xl bg-green-50 text-green-600 flex items-center justify-center"><i class="fas fa-cash-register"></i></span>
+            <div><p class="text-sm text-gray-500">Disponible en caisse</p><p class="text-2xl font-extrabold {{ 'text-red-600' if solde_caisse < 0 else 'text-gray-900' }}">{{ fcfa(solde_caisse) }}</p></div>
+        </div>
+        <div class="flex items-center gap-3">
+            <span class="h-11 w-11 rounded-xl bg-purple-50 text-purple-600 flex items-center justify-center"><i class="fas fa-motorcycle"></i></span>
+            <div><p class="text-sm text-gray-500">Encore chez les livreurs</p><p class="text-2xl font-extrabold text-gray-900">{{ fcfa(chez_livreurs) }}</p></div>
+        </div>
+    </a>
 
     <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <!-- Dernières commandes -->

@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from "_macros.html" import recherche %}
+{% from "_macros.html" import recherche, alerte_zone %}
 
 {% block title %}Commandes reçues{% endblock %}
 
@@ -18,16 +18,22 @@
 
     <!-- Filtres par statut -->
     <div class="flex flex-wrap gap-2 mb-6">
-        <a href="{{ url_for('boutique.commandes') }}"
-           class="px-3 py-1.5 rounded-full text-sm {{ 'bg-purple-600 text-white' if not statut_actif else 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50' }}">
-            Toutes <span class="opacity-75">({{ compteurs.values()|sum }})</span>
+        {% for code, (libelle, classe) in statuts.items() if code == 'nouvelle' %}
+        <a href="{{ url_for('boutique.commandes', statut=code) }}"
+           class="px-3 py-1.5 rounded-full text-sm font-semibold {{ 'bg-purple-600 text-white' if statut_actif == code else 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50' }}">
+            {{ libelle }}s <span class="opacity-75">({{ compteurs.get(code, 0) }})</span>
         </a>
-        {% for code, (libelle, classe) in statuts.items() %}
+        {% endfor %}
+        {% for code, (libelle, classe) in statuts.items() if code != 'nouvelle' %}
         <a href="{{ url_for('boutique.commandes', statut=code) }}"
            class="px-3 py-1.5 rounded-full text-sm {{ 'bg-purple-600 text-white' if statut_actif == code else 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50' }}">
             {{ libelle }} <span class="opacity-75">({{ compteurs.get(code, 0) }})</span>
         </a>
         {% endfor %}
+        <a href="{{ url_for('boutique.commandes', statut='toutes') }}"
+           class="px-3 py-1.5 rounded-full text-sm {{ 'bg-purple-600 text-white' if not statut_actif else 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50' }}">
+            Toutes <span class="opacity-75">({{ compteurs.values()|sum }})</span>
+        </a>
     </div>
 
     {% if commandes %}
@@ -67,6 +73,7 @@
                                 <strong>Instructions :</strong> {{ commande.instructions }}
                             </p>
                             {% endif %}
+                            {% if commande.statut not in ['livree', 'retournee', 'annulee'] %}{{ alerte_zone(commande) }}{% endif %}
                         </div>
 
                         <div class="mb-3">
@@ -148,8 +155,16 @@
     {% else %}
         <div class="bg-white rounded-xl shadow-md p-12 text-center">
             <i class="fas fa-inbox text-gray-300 text-6xl mb-4"></i>
+            {% if statut_actif == 'nouvelle' %}
+            <h3 class="text-xl font-semibold text-gray-600 mb-2">Aucune nouvelle commande</h3>
+            <p class="text-gray-500">Tout est traité 👍 Les commandes qui arrivent s'afficheront ici en premier.</p>
+            <a href="{{ url_for('boutique.commandes', statut='toutes') }}" class="inline-block mt-4 text-purple-600 hover:underline">Voir toutes les commandes</a>
+            {% elif statut_actif %}
+            <h3 class="text-xl font-semibold text-gray-600 mb-2">Aucune commande « {{ statuts[statut_actif][0] }} »</h3>
+            {% else %}
             <h3 class="text-xl font-semibold text-gray-600 mb-2">Aucune commande</h3>
             <p class="text-gray-500">Les commandes des clients apparaîtront ici</p>
+            {% endif %}
         </div>
     {% endif %}
 </div>

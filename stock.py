@@ -3,6 +3,7 @@
 remis si cette livraison est annulée, et augmente lors d'un retour client."""
 from datetime import datetime
 
+import caisse
 from models import db, Article, MouvementStock
 
 
@@ -45,15 +46,21 @@ def changer_statut(commande, statut):
     livraison + stock gérés ici). Ne valide pas la transaction."""
     if statut == commande.statut:
         return
+    etait_livree = commande.statut == 'livree'
     if statut == 'livree':
         commande.date_livraison = commande.date_livraison or datetime.utcnow()
         if not commande.stock_deduit:
             _sortir_stock(commande)
-    elif statut != 'retournee':
+        commande.statut = statut
+        caisse.commande_livree(commande)
+        return
+    if statut != 'retournee':
         # Retour en arrière (en livraison, annulée…) : la vente n'a pas eu lieu
         commande.date_livraison = None
         if commande.stock_deduit and not commande.retours:
             _remettre_stock(commande)
+        if etait_livree:
+            caisse.commande_plus_livree(commande)
     commande.statut = statut
 
 

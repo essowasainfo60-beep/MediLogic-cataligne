@@ -8,13 +8,15 @@ from urllib.parse import quote
 from flask import Blueprint, Response, render_template, redirect, url_for, flash, request, session, jsonify, current_app
 from flask_login import login_user, logout_user, login_required, current_user
 
+import caisse
 import messages_whatsapp as msg
 import stock
 import webauthn_service
 from models import (db, Boutique, Vendeur, Article, Commande, CleBiometrique, Livreur, Zone,
-                    MouvementStock, Retour, nouveau_code_lien, enregistrer_avec_numero)
+                    MouvementStock, MouvementCaisse, Retour, nouveau_code_lien, enregistrer_avec_numero)
 from utils import enregistrer_photo, enregistrer_photos, supprimer_photo_stockee, TAILLE_LOGO_PX
 from zones_modele import ZONES_LOME
+from zones_detection import zone_pour_adresse, index_quartiers
 
 boutique_bp = Blueprint('boutique', __name__)
 
@@ -229,13 +231,17 @@ def dashboard():
                                     Article.stock.isnot(None), Article.stock <= 0).count()
     dernieres = (Commande.query.filter_by(boutique_id=current_user.id)
                  .order_by(Commande.date_commande.desc()).limit(6).all())
+    solde_caisse = db.session.query(db.func.coalesce(db.func.sum(MouvementCaisse.montant), 0)).filter(
+        MouvementCaisse.boutique_id == current_user.id).scalar()
+    chez_livreurs = sum(caisse.a_remettre(c) for c in _livrees_non_reglees())
 
     return render_template('boutique/dashboard.html',
                            en_livraison_count=en_livraison_count,
                            confirmees_count=confirmees_count,
                            du_jour=du_jour,
                            livrees_jour=len(livrees_jour),
-                           encaisse_jour=sum(c.total for c in livrees_jour),
+                           encaisse_jour=sum(c.sous_total for c in livrees_jour),
+                           solde_caisse=solde_caisse, chez_livreurs=chez_livreurs,
                            ruptures=ruptures,
                            dernieres=dernieres,
                            fcfa=msg.fcfa,
@@ -266,6 +272,8 @@ def profil():
         whatsapp = (request.form.get('whatsapp') or '').strip()
         if whatsapp:
             current_user.whatsapp = whatsapp
+        if request.form.get('mode_frais') in ('livreur_garde', 'boutique_collecte'):
+            current_user.mode_frais = request.form['mode_frais']
 
         logo = request.files.get('logo')
         if logo and logo.filename:
@@ -473,9 +481,10 @@ def desactiver_vendeur(vendeur_id):
 @boutique_bp.route('/commandes')
 @login_required
 def commandes():
-    statut = request.args.get('statut')
+    # Par défaut : les nouvelles commandes, pour traiter tout de suite celles qui arrivent
+    statut = request.args.get('statut', 'nouvelle')
     if statut not in Commande.STATUTS:
-        statut = None
+        statut = None  # « toutes »
 
     requete = Commande.query.filter_by(boutique_id=current_user.id)
     if statut:
@@ -572,9 +581,12 @@ def nouvelle_commande():
             flash('Client (nom, téléphone, adresse) et au moins un article sont obligatoires', 'danger')
             return render_template('boutique/nouvelle_commande.html', catalogue=catalogue,
                                    sources=Commande.SOURCES, zones=zones_actives(), form=f,
+                                   index_quartiers=index_quartiers(zones_actives()),
                                    livreurs=Livreur.query.filter_by(boutique_id=current_user.id, actif=True).order_by(Livreur.nom).all())
 
         zone = Zone.query.filter_by(id=f.get('zone_id', type=int), boutique_id=current_user.id).first()
+        if not zone:
+            zone, _ = zone_pour_adresse(client_adresse, zones_actives())
         frais = lire_prix(f.get('frais_livraison'))
         if frais is None:
             frais = zone.frais if zone else 0
@@ -605,6 +617,7 @@ def nouvelle_commande():
 
     return render_template('boutique/nouvelle_commande.html', catalogue=catalogue,
                            sources=Commande.SOURCES, zones=zones_actives(), form=request.args,
+                           index_quartiers=index_quartiers(zones_actives()),
                            livreurs=Livreur.query.filter_by(boutique_id=current_user.id, actif=True).order_by(Livreur.nom).all())
 
 @boutique_bp.route('/commande/<int:commande_id>/attribuer', methods=['POST'])
@@ -849,8 +862,12 @@ def retour_commande(commande_id):
         for l in lignes:  # les articles rapportés reviennent en stock
             stock.mouvement(stock.article_de_ligne(l, commande.boutique_id), l['quantite'], 'retour', commande,
                             f"{retour.type_libelle} - commande n°{commande.numero}" + (f" : {motif}" if motif else ''))
-        if type_retour == 'retour' and not any(stock.quantites_retournables(commande).values()):
-            commande.statut = 'retournee'
+        if type_retour == 'retour':
+            caisse.ajouter(commande.boutique_id, 'remboursement', -retour.montant,
+                           f'Remboursement retour commande n°{commande.numero} ({commande.client_nom})',
+                           commande_id=commande.id)
+            if not any(stock.quantites_retournables(commande).values()):
+                commande.statut = 'retournee'
         db.session.commit()
 
         if type_retour == 'echange':
@@ -1005,4 +1022,119 @@ def nouveau_lien_livreur(livreur_id):
     db.session.commit()
     flash(f"Nouveau lien créé pour {livreur.nom} : l'ancien ne marche plus. Renvoyez-lui son espace.", 'success')
     return redirect(url_for('boutique.livreurs'))
+
+# ==================== CAISSE ====================
+
+def _livrees_non_reglees():
+    return (Commande.query.filter(Commande.boutique_id == current_user.id, Commande.statut.in_(['livree', 'retournee']),
+                                  Commande.livreur_id.isnot(None), Commande.reglee.is_(False))
+            .order_by(Commande.date_livraison).all())
+
+
+def _frais_a_payer():
+    if current_user.mode_frais != 'boutique_collecte':
+        return []
+    return (Commande.query.filter(Commande.boutique_id == current_user.id, Commande.statut.in_(['livree', 'retournee']),
+                                  Commande.livreur_id.isnot(None), Commande.frais_payes.is_(False),
+                                  Commande.frais_livraison > 0)
+            .order_by(Commande.date_livraison).all())
+
+
+@boutique_bp.route('/caisse')
+@login_required
+def page_caisse():
+    tous = MouvementCaisse.query.filter_by(boutique_id=current_user.id)
+    solde = db.session.query(db.func.coalesce(db.func.sum(MouvementCaisse.montant), 0)).filter(
+        MouvementCaisse.boutique_id == current_user.id).scalar()
+
+    # Période du journal (par défaut : le mois en cours)
+    aujourd_hui = datetime.utcnow()
+    du = _lire_date(request.args.get('du')) or aujourd_hui.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+    au = _lire_date(request.args.get('au')) or aujourd_hui
+    journal = (tous.filter(MouvementCaisse.date >= du, MouvementCaisse.date < au.replace(hour=0, minute=0, second=0) + timedelta(days=1))
+               .order_by(MouvementCaisse.date.desc()).all())
+    entrees = sum(m.montant for m in journal if m.montant > 0)
+    sorties = -sum(m.montant for m in journal if m.montant < 0)
+    charges_par_categorie = {}
+    for m in journal:
+        if m.type == 'charge':
+            charges_par_categorie[m.categorie or 'Divers'] = charges_par_categorie.get(m.categorie or 'Divers', 0) - m.montant
+
+    # Argent encore chez les livreurs, et frais à leur payer
+    a_recuperer = {}
+    for c in _livrees_non_reglees():
+        a_recuperer.setdefault(c.livreur, []).append(c)
+    frais_dus = {}
+    for c in _frais_a_payer():
+        frais_dus.setdefault(c.livreur, []).append(c)
+
+    return render_template('boutique/caisse.html', solde=solde, journal=journal, entrees=entrees, sorties=sorties,
+                           charges_par_categorie=sorted(charges_par_categorie.items(), key=lambda x: -x[1]),
+                           a_recuperer=a_recuperer, frais_dus=frais_dus, a_remettre=caisse.a_remettre,
+                           du=du.strftime('%Y-%m-%d'), au=au.strftime('%Y-%m-%d'),
+                           categories=MouvementCaisse.CATEGORIES, types=MouvementCaisse.TYPES,
+                           aujourdhui=aujourd_hui.strftime('%Y-%m-%d'), fcfa=msg.fcfa)
+
+
+@boutique_bp.route('/caisse/versement/<int:livreur_id>', methods=['POST'])
+@login_required
+def caisse_versement(livreur_id):
+    livreur = Livreur.query.filter_by(id=livreur_id, boutique_id=current_user.id).first_or_404()
+    ids = {int(i) for i in request.form.getlist('commande_id') if i.isdigit()}
+    commandes_sel = [c for c in _livrees_non_reglees() if c.livreur_id == livreur.id and c.id in ids]
+    montant = caisse.enregistrer_versement(livreur, commandes_sel)
+    db.session.commit()
+    if montant:
+        flash(f'Versement de {livreur.nom} enregistré : {msg.fcfa(montant)} entrés en caisse.', 'success')
+    else:
+        flash('Cochez au moins une commande', 'warning')
+    return redirect(url_for('boutique.page_caisse'))
+
+
+@boutique_bp.route('/caisse/paiement_livreur/<int:livreur_id>', methods=['POST'])
+@login_required
+def caisse_paiement_livreur(livreur_id):
+    livreur = Livreur.query.filter_by(id=livreur_id, boutique_id=current_user.id).first_or_404()
+    commandes_sel = [c for c in _frais_a_payer() if c.livreur_id == livreur.id]
+    montant = caisse.payer_livreur(livreur, commandes_sel)
+    db.session.commit()
+    if montant:
+        flash(f'{msg.fcfa(montant)} de frais de livraison payés à {livreur.nom}.', 'success')
+    return redirect(url_for('boutique.page_caisse'))
+
+
+@boutique_bp.route('/caisse/mouvement', methods=['POST'])
+@login_required
+def caisse_mouvement():
+    """Charge, apport ou retrait saisi à la main."""
+    type_mouvement = request.form.get('type')
+    montant = lire_prix(request.form.get('montant'))
+    if type_mouvement not in ('charge', 'apport', 'retrait') or not montant:
+        flash('Indiquez un montant valide', 'danger')
+        return redirect(url_for('boutique.page_caisse'))
+    categorie = request.form.get('categorie') if type_mouvement == 'charge' else None
+    if categorie and categorie not in MouvementCaisse.CATEGORIES:
+        categorie = 'Divers'
+    libelle = (request.form.get('libelle') or '').strip() or (categorie or MouvementCaisse.TYPES[type_mouvement][0])
+    date = _lire_date(request.form.get('date'))
+    if date:  # garde l'heure actuelle pour la date choisie
+        maintenant = datetime.utcnow()
+        date = date.replace(hour=maintenant.hour, minute=maintenant.minute)
+    caisse.ajouter(current_user.id, type_mouvement, montant if type_mouvement == 'apport' else -montant,
+                   libelle, categorie=categorie, date=date)
+    db.session.commit()
+    flash(f'{MouvementCaisse.TYPES[type_mouvement][0]} enregistré(e) : {msg.fcfa(montant)}', 'success')
+    return redirect(url_for('boutique.page_caisse'))
+
+
+@boutique_bp.route('/caisse/mouvement/<int:mouvement_id>/supprimer', methods=['POST'])
+@login_required
+def caisse_supprimer(mouvement_id):
+    """Corriger une erreur de saisie (charges, apports, retraits uniquement)."""
+    m = MouvementCaisse.query.filter_by(id=mouvement_id, boutique_id=current_user.id).first_or_404()
+    if m.type in ('charge', 'apport', 'retrait'):
+        db.session.delete(m)
+        db.session.commit()
+        flash('Mouvement supprimé', 'warning')
+    return redirect(url_for('boutique.page_caisse'))
 

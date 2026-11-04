@@ -59,17 +59,19 @@
 
                     <div>
                         <label class="block text-gray-700 text-sm font-bold mb-2">Adresse de livraison *</label>
-                        <textarea name="client_adresse" rows="2" required 
+                        <textarea name="client_adresse" id="adresseClient" rows="2" required oninput="detecterZone()" 
                                   class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 transition"
-                                  placeholder="Quartier, rue, repère (ex : près de la pharmacie...)"></textarea>
+                                  placeholder="Quartier d'abord, puis rue et repère (ex : Agoè Télessou, près de la pharmacie)"></textarea>
                         {% if zones %}
-                        <select name="zone_id" id="zoneClient" required onchange="majFrais()" class="mt-2 w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500">
+                        <select name="zone_id" id="zoneClient" required onchange="majFrais(); verifierZone()" class="mt-2 w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500">
                             <option value="">Votre zone de livraison… *</option>
                             {% for z in zones %}
                             <option value="{{ z.id }}" data-frais="{{ z.frais or 0 }}">{{ z.nom }}{% if z.quartiers %} ({{ z.quartiers }}){% endif %} · {{ 'gratuit' if not z.frais else 'livraison ' ~ '{:,.0f}'.format(z.frais).replace(',', ' ') ~ ' FCFA' }}</option>
                             {% endfor %}
                         </select>
+                        <p id="zoneInfo" class="text-xs mt-1 hidden"></p>
                         {% endif %}
+                        <input type="hidden" name="precision" id="precision">
                         <input type="hidden" name="latitude" id="latitude">
                         <input type="hidden" name="longitude" id="longitude">
                         <button type="button" id="btnPosition" onclick="partagerPosition()"
@@ -102,6 +104,46 @@
 </div>
 
 <script>
+// ---------- Zone déduite du quartier écrit dans l'adresse (même règle que le serveur) ----------
+const QUARTIERS = {{ (index_quartiers or [])|tojson }};
+const normaliser = (t) => ' ' + (t || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
+                                        .replace(/[^a-z0-9]+/g, ' ').trim() + ' ';
+function zoneDeLAdresse() {
+    const texte = normaliser(document.getElementById('adresseClient').value);
+    let trouve = null;
+    for (const l of QUARTIERS) {            // du quartier le plus précis au moins précis
+        if (texte.includes(' ' + l.q + ' ')) {
+            if (trouve && trouve.q.length === l.q.length && trouve.zone !== l.zone) return null;  // ambigu
+            if (!trouve) trouve = l;
+        }
+    }
+    return trouve;
+}
+function detecterZone() {
+    const select = document.getElementById('zoneClient');
+    if (!select) return;
+    const t = zoneDeLAdresse();
+    if (t) { select.value = String(t.zone); majFrais(); }
+    verifierZone();
+}
+function verifierZone() {
+    const select = document.getElementById('zoneClient');
+    const info = document.getElementById('zoneInfo');
+    if (!select || !info) return;
+    const t = zoneDeLAdresse();
+    if (!t) { info.classList.add('hidden'); return; }
+    const zone = select.querySelector(`option[value="${t.zone}"]`);
+    const nomZone = zone ? zone.textContent.split(' (')[0].split(' ·')[0] : '';
+    info.classList.remove('hidden');
+    if (String(t.zone) === select.value) {
+        info.className = 'text-xs mt-1 text-green-700';
+        info.textContent = '✓ Quartier reconnu : zone ' + nomZone;
+    } else {
+        info.className = 'text-xs mt-1 text-orange-700 font-semibold';
+        info.textContent = '⚠ Votre adresse est dans la zone ' + nomZone + ' : c\'est elle qui sera appliquée.';
+    }
+}
+
 function majFrais() {
     const choix = document.getElementById('zoneClient').selectedOptions[0];
     const frais = choix && choix.dataset.frais ? +choix.dataset.frais : 0;
@@ -125,6 +167,16 @@ function partagerPosition() {
     navigator.geolocation.getCurrentPosition(function (pos) {
         document.getElementById('latitude').value = pos.coords.latitude.toFixed(6);
         document.getElementById('longitude').value = pos.coords.longitude.toFixed(6);
+        document.getElementById('precision').value = Math.round(pos.coords.accuracy);
+        if (pos.coords.accuracy > 500) {
+            // Localisation par le réseau (ordinateur, GPS coupé) : trop imprécise pour le livreur
+            bouton.disabled = false;
+            bouton.textContent = '📍 Réessayer (activez le GPS du téléphone)';
+            info.className = 'text-xs mt-1 text-orange-700';
+            info.textContent = 'Position trop imprécise (à ' + (pos.coords.accuracy / 1000).toFixed(1).replace('.', ',') +
+                               ' km près) : elle ne sera pas utilisée. Votre adresse suffit.';
+            return;
+        }
         bouton.textContent = '✅ Position enregistrée';
         bouton.className = 'mt-2 w-full border-2 border-green-500 bg-green-50 text-green-700 py-2 rounded-lg text-sm font-semibold';
         info.className = 'text-xs mt-1 text-green-700';

@@ -4,7 +4,9 @@ from urllib.parse import quote
 from flask import (Blueprint, Response, abort, flash, jsonify, redirect,
                    render_template, request, session, url_for)
 
+import caisse
 import messages_whatsapp as msg
+from zones_detection import zone_pour_adresse, index_quartiers
 import stock
 from models import db, Boutique, Article, Commande, Photo, Zone, Livreur, enregistrer_avec_numero
 
@@ -187,7 +189,8 @@ def valider_commande():
 
     if request.method == 'GET':
         return render_template('client/commande.html', panier=panier, total=total, boutique=boutique,
-                               zones=[z for z in boutique.zones if z.active])
+                               zones=[z for z in boutique.zones if z.active],
+                               index_quartiers=index_quartiers([z for z in boutique.zones if z.active]))
 
     client_nom = (request.form.get('client_nom') or '').strip()
     client_telephone = (request.form.get('client_telephone') or '').strip()
@@ -197,11 +200,22 @@ def valider_commande():
     if not client_nom or not client_telephone or not client_adresse:
         flash('Nom, téléphone et adresse sont obligatoires', 'danger')
         return render_template('client/commande.html', panier=panier, total=total, boutique=boutique,
-                               zones=[z for z in boutique.zones if z.active])
+                               zones=[z for z in boutique.zones if z.active],
+                               index_quartiers=index_quartiers([z for z in boutique.zones if z.active]))
 
 
+    zones_actives = [z for z in boutique.zones if z.active]
     zone = Zone.query.filter_by(id=request.form.get('zone_id', type=int), boutique_id=boutique.id, active=True).first()
+    # Le quartier écrit dans l'adresse fait foi : « Agoè Télessou » est livré en zone Agoè,
+    # même si une autre zone (moins chère) a été choisie dans la liste.
+    zone_adresse, _ = zone_pour_adresse(client_adresse, zones_actives)
+    if zone_adresse:
+        zone = zone_adresse
     frais = zone.frais if zone else 0
+    # Position GPS gardée seulement si elle est précise (téléphone avec GPS) : une
+    # localisation par réseau peut se tromper de plusieurs kilomètres.
+    precision = request.form.get('precision', type=float)
+    gps_fiable = precision is not None and precision <= 500
     commande = Commande(
         boutique_id=boutique.id,
         client_nom=client_nom,
@@ -216,7 +230,7 @@ def valider_commande():
         latitude=lire_coordonnee(request.form.get('latitude'), 90),
         longitude=lire_coordonnee(request.form.get('longitude'), 180),
     )
-    if commande.latitude is None or commande.longitude is None:
+    if commande.latitude is None or commande.longitude is None or not gps_fiable:
         commande.latitude = commande.longitude = None
     enregistrer_avec_numero(commande, 'numero_commande', Commande.prochain_numero)
     numero_commande = commande.numero
@@ -297,8 +311,14 @@ def espace_livreur(code):
     livrees = (Commande.query.filter(Commande.livreur_id == livreur.id, Commande.statut == 'livree')
                .order_by(Commande.date_livraison.desc()).limit(50).all())
     du_jour = [c for c in livrees if c.date_livraison and c.date_livraison >= debut_jour]
+    non_reglees = (Commande.query.filter(Commande.livreur_id == livreur.id, Commande.statut.in_(['livree', 'retournee']),
+                                         Commande.reglee.is_(False)).all())
+    a_remettre = sum(caisse.a_remettre(c) for c in non_reglees)
+    mes_frais = sum(c.frais_livraison or 0 for c in non_reglees)
     return render_template('client/espace_livreur.html', livreur=livreur, a_livrer=a_livrer, livrees=livrees,
                            livrees_jour=len(du_jour), encaisse_jour=sum(c.total for c in du_jour),
+                           a_remettre=a_remettre, mes_frais=mes_frais,
+                           garde_frais=livreur.boutique.mode_frais != 'boutique_collecte',
                            onglet=request.args.get('onglet', 'a_livrer'), fcfa=msg.fcfa)
 
 @client_bp.route('/l/<code>/livree/<int:commande_id>', methods=['POST'])

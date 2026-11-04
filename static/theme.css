@@ -18,11 +18,16 @@ input:focus, select:focus, textarea:focus { outline: none; border-color: #8b5cf6
 ::placeholder { color: #9ca3af; }
 table thead th { font-weight: 600; font-size: .78rem; text-transform: uppercase; letter-spacing: .03em; }
 
-/* ---- Largeur : le contenu occupe l'écran (ordinateur, tablette, téléphone) ----
-   Les pages de travail (listes, fiches, tableaux) s'élargissent jusqu'à 1600 px ;
-   les petits formulaires (mot de passe, connexion…) restent centrés et lisibles. */
-@media (min-width: 1024px) {
-    .max-w-3xl, .max-w-4xl, .max-w-5xl, .max-w-6xl, .max-w-7xl { max-width: min(1600px, 100%) !important; }
+/* ---- Largeur : le contenu occupe tout l'écran (ordinateur, tablette, téléphone) ----
+   Toutes les pages de travail prennent la largeur disponible, avec une marge intérieure ;
+   seuls les tout petits formulaires (max-w-md / lg : connexion, mot de passe) restent centrés. */
+@media (min-width: 768px) {
+    .max-w-2xl, .max-w-3xl, .max-w-4xl, .max-w-5xl, .max-w-6xl, .max-w-7xl, .max-w-\[1100px\] {
+        max-width: 100% !important;
+    }
+    .max-w-2xl, .max-w-3xl, .max-w-4xl, .max-w-5xl, .max-w-6xl, .max-w-7xl, .max-w-\[1100px\] {
+        padding-left: clamp(1rem, 2.5vw, 2.5rem) !important; padding-right: clamp(1rem, 2.5vw, 2.5rem) !important;
+    }
 }
 @media (min-width: 1280px) {
     /* plus de colonnes sur grand écran */
@@ -30,6 +35,14 @@ table thead th { font-weight: 600; font-size: .78rem; text-transform: uppercase;
 }
 @media (min-width: 1600px) {
     #listeArticles, #articles { grid-template-columns: repeat(5, minmax(0, 1fr)) !important; }
+}
+@media (min-width: 2000px) {
+    #listeArticles, #articles { grid-template-columns: repeat(6, minmax(0, 1fr)) !important; }
+    #listeCommandes { grid-template-columns: repeat(3, minmax(0, 1fr)) !important; }
+}
+/* Fiche commande : deux colonnes sur grand écran (infos à gauche, livraison et actions à droite) */
+@media (min-width: 1280px) {
+    .fiche-2col { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr); gap: 2rem; align-items: start; }
 }
 @media (min-width: 1280px) {
     /* liste des commandes en 2 colonnes sur grand écran */

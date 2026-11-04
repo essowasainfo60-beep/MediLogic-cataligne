@@ -28,6 +28,9 @@ class Boutique(UserMixin, db.Model):
     whatsapp = db.Column(db.String(50), nullable=True)  # Numéro WhatsApp de la boutique
     description = db.Column(db.Text, nullable=True)       # présentation affichée aux clients
     adresse = db.Column(db.String(255), nullable=True)    # où se trouve la boutique
+    # Frais de livraison : 'livreur_garde' (il garde ses frais et ne remet que les articles)
+    # ou 'boutique_collecte' (il remet tout, la boutique le paie ensuite). Voir caisse.py.
+    mode_frais = db.Column(db.String(20), nullable=False, default='livreur_garde', server_default='livreur_garde')
     date_inscription = db.Column(db.DateTime, default=datetime.utcnow)
     # Code secret du lien envoyé aux clients (/c/<code>) : impossible à deviner,
     # contrairement à /boutique/1, /boutique/2… Régénérable pour couper l'ancien lien.
@@ -124,6 +127,10 @@ class Commande(db.Model):
     stock_deduit = db.Column(db.Boolean, nullable=False, default=False, server_default='0')
     # total = sous-total des articles + frais de livraison (montant à encaisser)
     frais_livraison = db.Column(db.Float, nullable=False, default=0, server_default='0')
+    # Caisse : l'argent de la commande a-t-il été remis à la boutique ? Les frais payés au livreur ?
+    reglee = db.Column(db.Boolean, nullable=False, default=False, server_default='0')
+    date_reglement = db.Column(db.DateTime, nullable=True)
+    frais_payes = db.Column(db.Boolean, nullable=False, default=False, server_default='0')
 
     boutique = db.relationship('Boutique', backref=db.backref('commandes', cascade='all, delete-orphan'))
     livreur = db.relationship('Livreur', backref='commandes')
@@ -159,6 +166,14 @@ class Commande(db.Model):
         dernier = db.session.query(db.func.max(Commande.numero_commande)).filter(
             Commande.boutique_id == boutique_id).scalar()
         return (dernier or 0) + 1
+
+    @property
+    def zone_suggeree(self):
+        """Zone que l'adresse désigne, si elle diffère de la zone enregistrée (sinon None)."""
+        from zones_detection import zone_pour_adresse
+        zones = [z for z in self.boutique.zones if z.active]
+        trouvee, _ = zone_pour_adresse(self.client_adresse, zones)
+        return trouvee if trouvee and trouvee.id != self.zone_id else None
 
     @property
     def sous_total(self):
@@ -332,4 +347,44 @@ class Retour(db.Model):
     @property
     def type_libelle(self):
         return 'Échange' if self.type == 'echange' else 'Retour définitif'
+
+
+class MouvementCaisse(db.Model):
+    """Entrée (+) ou sortie (−) d'argent de la caisse de la boutique. Le solde est la somme."""
+    __tablename__ = 'mouvements_caisse'
+
+    TYPES = {
+        'versement': ('Versement livreur', 'bg-green-100 text-green-800'),
+        'vente_directe': ('Vente en boutique', 'bg-green-100 text-green-800'),
+        'apport': ('Apport', 'bg-blue-100 text-blue-800'),
+        'charge': ('Charge', 'bg-red-100 text-red-800'),
+        'paiement_livreur': ('Paiement livreur', 'bg-purple-100 text-purple-800'),
+        'remboursement': ('Remboursement client', 'bg-orange-100 text-orange-800'),
+        'retrait': ('Retrait', 'bg-gray-100 text-gray-800'),
+        'correction': ('Correction', 'bg-gray-100 text-gray-800'),
+    }
+    CATEGORIES = ['Achat de marchandises', 'Loyer', 'Électricité / eau', 'Internet / téléphone', 'Transport',
+                  'Salaires', 'Publicité', 'Emballage', 'Impôts / taxes', 'Divers']
+
+    id = db.Column(db.Integer, primary_key=True)
+    boutique_id = db.Column(db.Integer, db.ForeignKey('boutiques.id'), nullable=False, index=True)
+    date = db.Column(db.DateTime, default=datetime.utcnow, index=True)
+    type = db.Column(db.String(20), nullable=False)
+    categorie = db.Column(db.String(50))
+    libelle = db.Column(db.String(200))
+    montant = db.Column(db.Float, nullable=False)
+    livreur_id = db.Column(db.Integer, db.ForeignKey('livreurs.id'), nullable=True)
+    commande_id = db.Column(db.Integer, db.ForeignKey('commandes.id'), nullable=True)
+
+    boutique = db.relationship('Boutique', backref=db.backref('mouvements_caisse', cascade='all, delete-orphan', lazy='dynamic'))
+    livreur = db.relationship('Livreur')
+    commande = db.relationship('Commande')
+
+    @property
+    def type_libelle(self):
+        return self.TYPES.get(self.type, (self.type, ''))[0]
+
+    @property
+    def type_classe(self):
+        return self.TYPES.get(self.type, ('', 'bg-gray-100 text-gray-800'))[1]
 

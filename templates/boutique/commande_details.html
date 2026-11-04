@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from "_macros.html" import alerte_zone %}
 
 {% macro fcfa(v) %}{{ "{:,.0f}".format(v).replace(',', ' ') }} FCFA{% endmacro %}
 
@@ -39,6 +40,8 @@
             </ol>
             {% endif %}
 
+            <div class="fiche-2col">
+            <div>
             <!-- Client -->
             <div class="border-b border-gray-200 pb-4 mb-4">
                 <h2 class="text-lg font-semibold text-gray-800 mb-3">
@@ -117,11 +120,14 @@
                 </div>
             </div>
 
+            </div>
+            <div>
             <!-- Livraison -->
             <div id="livraison" class="bg-purple-50 border border-purple-200 rounded-xl p-4 mb-6">
                 <h2 class="text-lg font-semibold text-gray-800 mb-3">
                     <i class="fas fa-motorcycle text-purple-500 mr-2"></i> Livraison
                 </h2>
+                {{ alerte_zone(commande) }}
                 {% if commande.statut not in ['livree', 'annulee'] %}
                     {% if zones %}
                     <form method="POST" action="{{ url_for('boutique.changer_zone_commande', commande_id=commande.id) }}" class="flex items-center gap-2 mb-2">
@@ -231,6 +237,8 @@
                 </button>
             </form>
             {% endif %}
+            </div>
+            </div>
         </div>
     </div>
 </div>

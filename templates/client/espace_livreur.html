@@ -17,6 +17,17 @@
                 <i class="fas fa-rotate"></i>
             </a>
         </div>
+        {% if a_remettre %}
+        <div class="mt-4 bg-white/10 rounded-xl p-3 text-sm flex justify-between items-center gap-2">
+            <span><i class="fas fa-hand-holding-dollar mr-1 text-teal-300"></i> À remettre à la boutique</span>
+            <strong class="text-lg">{{ fcfa(a_remettre) }}</strong>
+        </div>
+        {% if mes_frais %}
+        <p class="text-xs text-white/70 mt-1 text-right">
+            {{ ('Vos frais de livraison (à garder) : ' if garde_frais else 'Vos frais de livraison (payés par la boutique) : ') ~ fcfa(mes_frais) }}
+        </p>
+        {% endif %}
+        {% endif %}
         <div class="grid grid-cols-3 gap-2 mt-4 text-center">
             <div class="bg-white/10 rounded-xl py-2"><p class="text-2xl font-bold">{{ a_livrer|length }}</p><p class="text-[11px] text-white/70">à livrer</p></div>
             <div class="bg-white/10 rounded-xl py-2"><p class="text-2xl font-bold">{{ livrees_jour }}</p><p class="text-[11px] text-white/70">livrées aujourd'hui</p></div>

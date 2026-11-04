@@ -55,7 +55,10 @@ def mettre_a_jour_schema():
                                 ('source', "VARCHAR(30) NOT NULL DEFAULT 'catalogue'"),
                                 ('zone_id', 'INTEGER REFERENCES zones(id)'),
                                 ('stock_deduit', 'BOOLEAN NOT NULL DEFAULT FALSE'),
-                                ('frais_livraison', 'FLOAT NOT NULL DEFAULT 0')]:
+                                ('frais_livraison', 'FLOAT NOT NULL DEFAULT 0'),
+                                ('reglee', 'BOOLEAN NOT NULL DEFAULT FALSE'),
+                                ('date_reglement', 'TIMESTAMP'),
+                                ('frais_payes', 'BOOLEAN NOT NULL DEFAULT FALSE')]:
             if nom not in colonnes_commandes:
                 conn.execute(text(f"ALTER TABLE commandes ADD COLUMN {nom} {definition}"))
         if 'frais' not in {c['name'] for c in inspecteur.get_columns('zones')}:
@@ -82,7 +85,8 @@ def mettre_a_jour_schema():
         for (livreur_id,) in conn.execute(text("SELECT id FROM livreurs WHERE code_acces IS NULL")).fetchall():
             conn.execute(text("UPDATE livreurs SET code_acces = :c WHERE id = :i"), {'c': nouveau_code_lien(), 'i': livreur_id})
         colonnes_boutiques = {c['name'] for c in inspecteur.get_columns('boutiques')}
-        for nom, definition in [('description', 'TEXT'), ('adresse', 'VARCHAR(255)')]:
+        for nom, definition in [('description', 'TEXT'), ('adresse', 'VARCHAR(255)'),
+                                ('mode_frais', "VARCHAR(20) NOT NULL DEFAULT 'livreur_garde'")]:
             if nom not in colonnes_boutiques:
                 conn.execute(text(f"ALTER TABLE boutiques ADD COLUMN {nom} {definition}"))
         if 'lien_public' not in colonnes_boutiques:
