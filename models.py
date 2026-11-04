@@ -220,6 +220,7 @@ class Commande(db.Model):
     tentatives = db.Column(db.Integer, nullable=False, default=0, server_default='0')
     # Photo prise par le livreur à la remise (preuve de livraison)
     photo_preuve = db.Column(db.String(300), nullable=True)
+    date_depart = db.Column(db.DateTime, nullable=True)   # remise au livreur (dernière tentative)
     # Moment de livraison souhaité par le client (« Demain 05/11 · Soir (16h-20h) »)
     creneau = db.Column(db.String(80), nullable=True)
     # Qui a fait quoi (gérant ou vendeur)

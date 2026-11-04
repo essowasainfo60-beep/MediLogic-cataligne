@@ -257,6 +257,7 @@ def valider_commande():
         commande.latitude = commande.longitude = None
     enregistrer_avec_numero(commande, 'numero_commande', Commande.prochain_numero)
     numero_commande = commande.numero
+    memoriser_commande(commande)
     if promo:
         promo.utilisations += 1
         db.session.commit()
@@ -392,6 +393,7 @@ def suivi(code):
     commande = Commande.query.filter_by(code_suivi=code).first()
     if not commande:
         return render_template('client/lien_invalide.html'), 404
+    memoriser_commande(commande)
     return render_template('client/suivi.html', commande=commande, boutique=commande.boutique, fcfa=msg.fcfa)
 
 # ==================== ÉCHEC DE LIVRAISON (livreur) ====================
@@ -424,4 +426,36 @@ def api_promo():
         return jsonify(ok=False, message=erreur or 'Code invalide')
     return jsonify(ok=True, code=promo.code, remise=remise, libelle=promo.libelle,
                    message=f'Code {promo.code} appliqué : {msg.fcfa(remise)} de réduction')
+
+# ==================== MES COMMANDES (depuis le catalogue) ====================
+
+def memoriser_commande(commande):
+    """Ce téléphone retient ses commandes : le client les retrouve depuis le catalogue."""
+    codes = [c for c in session.get('mes_commandes', []) if c != commande.code_suivi]
+    session['mes_commandes'] = ([commande.code_suivi] + codes)[:30]
+    session.modified = True
+
+
+@client_bp.route('/c/<code>/mes-commandes', methods=['GET', 'POST'])
+def mes_commandes(code):
+    boutique = Boutique.query.filter_by(lien_public=code).first()
+    if not boutique or not boutique.active:
+        return render_template('client/lien_invalide.html'), 404
+    session['last_boutique_id'] = boutique.id
+
+    if request.method == 'POST':
+        # Retrouver une commande passée sur un autre téléphone : n° de commande ET téléphone
+        numero = request.form.get('numero', type=int)
+        tel = ''.join(ch for ch in (request.form.get('telephone') or '') if ch.isdigit())[-8:]
+        trouvee = Commande.query.filter_by(boutique_id=boutique.id, numero_commande=numero).first() if numero else None
+        if trouvee and len(tel) == 8 and ''.join(ch for ch in trouvee.client_telephone if ch.isdigit()).endswith(tel):
+            memoriser_commande(trouvee)
+            return redirect(url_for('client.suivi', code=trouvee.code_suivi))
+        flash("Aucune commande ne correspond à ce numéro et ce téléphone.", 'warning')
+        return redirect(url_for('client.mes_commandes', code=code))
+
+    codes = session.get('mes_commandes', [])
+    commandes = (Commande.query.filter(Commande.code_suivi.in_(codes), Commande.boutique_id == boutique.id)
+                 .order_by(Commande.date_commande.desc()).all()) if codes else []
+    return render_template('client/mes_commandes.html', boutique=boutique, commandes=commandes, fcfa=msg.fcfa)
 

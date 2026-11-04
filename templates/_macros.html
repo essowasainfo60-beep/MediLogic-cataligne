@@ -33,3 +33,21 @@
 </div>
 {% endif %}
 {% endmacro %}
+
+{# Onglets de la section Livraisons (suivi + configuration des livreurs et zones). #}
+{% macro onglets_livraison(actif, compteurs={}) %}
+<div class="flex gap-1 overflow-x-auto bg-white rounded-2xl shadow-sm p-1 text-sm whitespace-nowrap">
+    {% for code, icone, libelle in [('en_cours', 'fa-motorcycle', 'En cours'), ('a_relancer', 'fa-rotate-right', 'À relancer'),
+                                    ('livrees', 'fa-circle-check', 'Livrées'), ('livreurs', 'fa-id-badge', 'Par livreur')] %}
+    <a href="{{ url_for('boutique.livraisons', onglet=code) }}"
+       class="px-3 py-2 rounded-xl {{ 'bg-purple-600 text-white font-semibold' if actif == code else 'text-gray-600 hover:bg-gray-100' }}">
+        <i class="fas {{ icone }} mr-1"></i>{{ libelle }}{% if compteurs.get(code) %} <span class="ml-1 text-xs rounded-full px-1.5 {{ 'bg-white/25' if actif == code else 'bg-gray-100' }}">{{ compteurs[code] }}</span>{% endif %}
+    </a>
+    {% endfor %}
+    {% if peut('boutique.livreurs') %}
+    <a href="{{ url_for('boutique.livreurs') }}" class="px-3 py-2 rounded-xl {{ 'bg-purple-600 text-white font-semibold' if actif == 'config' else 'text-gray-600 hover:bg-gray-100' }}">
+        <i class="fas fa-gear mr-1"></i>Livreurs et zones
+    </a>
+    {% endif %}
+</div>
+{% endmacro %}

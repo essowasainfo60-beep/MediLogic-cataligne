@@ -1476,3 +1476,42 @@ def modifier_code_promo(promo_id):
     flash(f"Code {promo.code} {'activé' if promo.actif else 'désactivé'}" + (' · annoncé dans le catalogue' if promo.affiche and promo.actif else ''), 'success')
     return redirect(url_for('boutique.codes_promo'))
 
+# ==================== LIVRAISONS (suivi) ====================
+
+@boutique_bp.route('/livraisons')
+@login_required
+def livraisons():
+    """Tableau des livraisons : en cours, à relancer, livrées (historique), par livreur."""
+    onglet = request.args.get('onglet', 'en_cours')
+    base = Commande.query.filter_by(boutique_id=current_user.id)
+    maintenant = datetime.utcnow()
+    debut_jour = maintenant.replace(hour=0, minute=0, second=0, microsecond=0)
+
+    en_cours = base.filter_by(statut='en_livraison').order_by(Commande.date_depart).all()
+    a_relancer = base.filter_by(statut='echec').order_by(Commande.date_echec.desc()).all()
+
+    # Historique des livraisons terminées, filtrable
+    jours = request.args.get('jours', 7, type=int)
+    jours = jours if jours in (1, 7, 30, 90, 365) else 7
+    livreur_id = request.args.get('livreur', type=int)
+    historique_q = base.filter(Commande.statut.in_(['livree', 'retournee']),
+                               Commande.date_livraison >= debut_jour - timedelta(days=jours - 1))
+    if livreur_id:
+        historique_q = historique_q.filter_by(livreur_id=livreur_id)
+    livrees = historique_q.order_by(Commande.date_livraison.desc()).limit(500).all()
+
+    # Par livreur
+    livreurs_liste = Livreur.query.filter_by(boutique_id=current_user.id).order_by(Livreur.actif.desc(), Livreur.nom).all()
+    bilan = []
+    for l in livreurs_liste:
+        cmds = base.filter_by(livreur_id=l.id)
+        livrees_jour = cmds.filter(Commande.statut == 'livree', Commande.date_livraison >= debut_jour).all()
+        non_reglees = cmds.filter(Commande.statut.in_(['livree', 'retournee']), Commande.reglee.is_(False)).all()
+        bilan.append({'livreur': l, 'en_cours': cmds.filter_by(statut='en_livraison').count(),
+                      'livrees_jour': len(livrees_jour), 'echecs': cmds.filter_by(statut='echec').count(),
+                      'a_remettre': sum(caisse.a_remettre(c) for c in non_reglees)})
+    return render_template('boutique/livraisons.html', onglet=onglet, en_cours=en_cours, a_relancer=a_relancer,
+                           livrees=livrees, bilan=bilan, livreurs=livreurs_liste, jours=jours, livreur_id=livreur_id,
+                           maintenant=maintenant, fcfa=msg.fcfa,
+                           livrees_jour=base.filter(Commande.statut == 'livree', Commande.date_livraison >= debut_jour).count())
+

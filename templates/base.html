@@ -79,7 +79,7 @@
     {% set liens_boutique = [
         ('boutique.dashboard', 'fa-house', 'Accueil'),
         ('boutique.commandes', 'fa-receipt', 'Commandes'),
-        ('boutique.livreurs', 'fa-motorcycle', 'Livraison'),
+        ('boutique.livraisons', 'fa-motorcycle', 'Livraisons'),
         ('boutique.clients', 'fa-address-book', 'Clients'),
         ('boutique.articles', 'fa-boxes-stacked', 'Articles'),
         ('boutique.inventaire', 'fa-warehouse', 'Stock'),
@@ -183,6 +183,12 @@
                         </div>
                     </details>
                     {% else %}
+                    {% if vitrine and vitrine.lien_public %}
+                    <a href="{{ url_for('client.mes_commandes', code=vitrine.lien_public) }}"
+                       class="flex items-center gap-1.5 px-2.5 sm:px-3 py-2 rounded-xl bg-purple-50 text-purple-700 text-xs sm:text-sm font-semibold whitespace-nowrap hover:bg-purple-100">
+                        <i class="fas fa-box-open"></i><span>Mes commandes</span>
+                    </a>
+                    {% endif %}
                     <button type="button" onclick="basculerTheme()" class="h-9 w-9 rounded-lg text-gray-500 hover:bg-gray-100" title="Mode clair / nuit">
                         <i class="fas fa-moon icone-theme"></i>
                     </button>

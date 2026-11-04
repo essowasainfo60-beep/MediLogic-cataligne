@@ -4,6 +4,9 @@
 {% block title %}Livreurs - {{ current_user.nom_boutique }}{% endblock %}
 
 {% block content %}
+<div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mb-2">
+    {% from "_macros.html" import onglets_livraison with context %}{{ onglets_livraison("config") }}
+</div>
 <div class="max-w-4xl mx-auto px-4 py-6">
     <h1 class="text-2xl md:text-3xl font-bold text-gray-800 mb-6">
         <i class="fas fa-motorcycle text-purple-500 mr-2"></i> Livreurs

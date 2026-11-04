@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+
+{% block title %}Mes commandes · {{ boutique.nom_boutique }}{% endblock %}
+
+{% block content %}
+<div class="max-w-[640px] mx-auto px-4 space-y-4">
+    <a href="{{ url_for('client.catalogue', code=boutique.lien_public) }}" class="text-sm text-purple-600 hover:underline"><i class="fas fa-arrow-left mr-1"></i> Retour au catalogue</a>
+    <h1 class="text-2xl font-extrabold text-gray-900"><i class="fas fa-box-open text-purple-500 mr-2"></i> Mes commandes</h1>
+
+    {% for c in commandes %}
+    <a href="{{ url_for('client.suivi', code=c.code_suivi) }}" class="block bg-white rounded-2xl shadow-md p-4 hover:-translate-y-0.5 transition">
+        <div class="flex items-center justify-between gap-3">
+            <div class="min-w-0">
+                <p class="font-bold text-gray-900">Commande n°{{ c.numero }}</p>
+                <p class="text-xs text-gray-500">{{ c.date_commande.strftime('%d/%m/%Y à %H:%M') }} · {{ c.articles_json|length }} article(s)</p>
+                <p class="text-sm text-gray-600 truncate">{% for a in c.articles_json %}{{ a.nom }} ×{{ a.quantite }}{{ ', ' if not loop.last }}{% endfor %}</p>
+            </div>
+            <div class="text-right flex-shrink-0">
+                <p class="font-bold text-gray-900">{{ fcfa(c.total) }}</p>
+                {% set libelles = {'nouvelle': 'Reçue', 'confirmee': 'Confirmée', 'en_livraison': 'En route 🛵', 'echec': 'À reprogrammer', 'livree': 'Livrée ✓', 'retournee': 'Retournée', 'annulee': 'Annulée'} %}
+                <span class="inline-block mt-1 px-2 py-0.5 rounded-full text-xs font-semibold {{ c.statut_classe }}">{{ libelles.get(c.statut, c.statut_libelle) }}</span>
+            </div>
+        </div>
+    </a>
+    {% else %}
+    <div class="bg-white rounded-2xl shadow-md p-6 text-center text-gray-500">
+        <i class="fas fa-box-open text-4xl text-gray-300 mb-2"></i>
+        <p>Aucune commande sur ce téléphone pour l'instant.</p>
+    </div>
+    {% endfor %}
+
+    <!-- Commande passée sur un autre téléphone -->
+    <form method="POST" class="bg-white rounded-2xl shadow-md p-5 space-y-3">
+        <p class="font-semibold text-gray-900">Retrouver une commande</p>
+        <p class="text-xs text-gray-500">Passée sur un autre téléphone ? Indiquez son numéro (reçu par WhatsApp) et votre numéro de téléphone.</p>
+        <div class="grid grid-cols-2 gap-2">
+            <input type="number" name="numero" required min="1" placeholder="N° de commande" class="border border-gray-300 px-3 py-2.5">
+            <input type="tel" name="telephone" required placeholder="Votre téléphone" class="border border-gray-300 px-3 py-2.5">
+        </div>
+        <button type="submit" class="w-full bg-purple-600 text-white py-2.5 rounded-xl font-semibold hover:bg-purple-700">Retrouver ma commande</button>
+    </form>
+</div>
+{% endblock %}

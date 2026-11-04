@@ -56,6 +56,7 @@ def changer_statut(commande, statut):
         return
     if statut == 'en_livraison':
         commande.tentatives = (commande.tentatives or 0) + 1
+        commande.date_depart = datetime.utcnow()
     if statut != 'retournee':
         # Retour en arrière (en livraison, annulée…) : la vente n'a pas eu lieu
         commande.date_livraison = None
