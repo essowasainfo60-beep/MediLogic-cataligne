@@ -82,6 +82,17 @@ def lire_prix(valeur):
         return None
 
 
+def lire_options_article(form):
+    """Jusqu'à 3 options : « option_nom_1 = Taille », « option_valeurs_1 = S, M, L »."""
+    options = {}
+    for i in (1, 2, 3):
+        nom = (form.get(f'option_nom_{i}') or '').strip()[:30]
+        valeurs = [v.strip()[:30] for v in (form.get(f'option_valeurs_{i}') or '').split(',') if v.strip()]
+        if nom and valeurs:
+            options[nom] = list(dict.fromkeys(valeurs))[:20]
+    return options or None
+
+
 def article_de_la_boutique(article_id):
     article = Article.query.get_or_404(article_id)
     return article if article.boutique_id == current_user.id else None
@@ -401,6 +412,7 @@ def ajouter_article():
             description=(request.form.get('description') or '').strip(),
             prix=prix,
             photos_urls=urls,
+            options=lire_options_article(request.form),
         )
         enregistrer_avec_numero(article, 'numero', Article.prochain_numero)
         stock_initial = request.form.get('stock', type=int)
@@ -434,6 +446,7 @@ def modifier_article(article_id):
         article.nom = nom
         article.description = (request.form.get('description') or '').strip()
         article.prix = prix
+        article.options = lire_options_article(request.form)
 
         urls, echecs = enregistrer_photos(request.files.getlist('nouvelles_photos'), current_user.id)
         if urls:
@@ -661,11 +674,23 @@ def nouvelle_commande():
         f = request.form
         lignes = []
         par_id = {a.id: a for a in catalogue}
-        for article_id, qte in zip(f.getlist('article_id'), f.getlist('quantite')):
+        choix_lignes = f.getlist('article_choix') or [''] * len(f.getlist('article_id'))
+        for article_id, qte, choix_texte in zip(f.getlist('article_id'), f.getlist('quantite'), choix_lignes):
             article = par_id.get(int(article_id)) if article_id.isdigit() else None
             quantite = int(qte) if qte.isdigit() else 0
             if article and quantite > 0:
-                lignes.append({'nom': article.nom, 'prix': article.prix, 'quantite': quantite, 'article_id': article.id,
+                # « Taille=M|Couleur=Rouge » envoyé par la page
+                choisis = dict(p.split('=', 1) for p in (choix_texte or '').split('|') if '=' in p)
+                try:
+                    choix = article.lire_choix(choisis)
+                except ValueError as e:
+                    flash(f'« {article.nom} » : {e}', 'danger')
+                    return render_template('boutique/nouvelle_commande.html', catalogue=catalogue,
+                                           sources=Commande.SOURCES, zones=zones_actives(), form=f,
+                                           index_quartiers=index_quartiers(zones_actives()), creneaux=creneaux_disponibles(),
+                                           livreurs=Livreur.query.filter_by(boutique_id=current_user.id, actif=True).order_by(Livreur.nom).all())
+                lignes.append({'nom': article.nom + (f' ({choix})' if choix else ''), 'options': choix or None,
+                               'prix': article.prix, 'quantite': quantite, 'article_id': article.id,
                                'numero': article.numero,
                                'boutique_id': current_user.id, 'photo': (article.photos_urls or [None])[0]})
         # Articles hors catalogue (montrés en live mais pas encore en ligne)

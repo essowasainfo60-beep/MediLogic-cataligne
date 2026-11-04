@@ -166,16 +166,29 @@
                 {% if article.stock is not none and article.stock <= 0 %}
                 <p class="mt-auto pt-4"><span class="block text-center bg-gray-100 text-gray-500 py-2.5 rounded-xl font-semibold">Épuisé pour le moment</span></p>
                 {% else %}
-                <form method="POST" action="{{ url_for('client.ajouter_panier') }}" class="ajout-panier mt-auto pt-4 flex gap-2">
+                <form method="POST" action="{{ url_for('client.ajouter_panier') }}" class="ajout-panier mt-auto pt-4 space-y-2">
                     <input type="hidden" name="article_id" value="{{ article.id }}">
-                    <div class="flex items-center border-2 border-gray-100 rounded-xl">
-                        <button type="button" class="moins px-3 py-2 text-gray-500 hover:text-purple-600" aria-label="Moins">−</button>
-                        <input type="number" name="quantite" value="1" min="1" max="99" class="w-10 text-center focus:outline-none" aria-label="Quantité">
-                        <button type="button" class="plus px-3 py-2 text-gray-500 hover:text-purple-600" aria-label="Plus">+</button>
+                    {% if article.options %}
+                    <div class="grid grid-cols-{{ 2 if article.options|length > 1 else 1 }} gap-2">
+                        {% for option, valeurs in article.options.items() %}
+                        <select name="option_{{ option }}" required aria-label="{{ option }}"
+                                class="w-full border-2 border-gray-100 rounded-xl px-2 py-2 text-sm">
+                            <option value="">{{ option }}…</option>
+                            {% for v in valeurs %}<option>{{ v }}</option>{% endfor %}
+                        </select>
+                        {% endfor %}
                     </div>
-                    <button type="submit" class="flex-1 bg-green-600 text-white rounded-xl font-semibold hover:bg-green-700 transition">
-                        <i class="fas fa-cart-plus mr-1"></i> Ajouter
-                    </button>
+                    {% endif %}
+                    <div class="flex gap-2">
+                        <div class="flex items-center border-2 border-gray-100 rounded-xl">
+                            <button type="button" class="moins px-3 py-2 text-gray-500 hover:text-purple-600" aria-label="Moins">−</button>
+                            <input type="number" name="quantite" value="1" min="1" max="99" class="w-10 text-center focus:outline-none" aria-label="Quantité">
+                            <button type="button" class="plus px-3 py-2 text-gray-500 hover:text-purple-600" aria-label="Plus">+</button>
+                        </div>
+                        <button type="submit" class="flex-1 bg-green-600 text-white rounded-xl font-semibold hover:bg-green-700 transition py-2">
+                            <i class="fas fa-cart-plus mr-1"></i> Ajouter
+                        </button>
+                    </div>
                 </form>
                 {% endif %}
             </div>

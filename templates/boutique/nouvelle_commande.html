@@ -136,7 +136,8 @@
 <script>
 const CATALOGUE = [
     {% for a in catalogue %}{ id: {{ a.id }}, numero: {{ a.numero or 0 }}, nom: {{ a.nom|tojson }}, prix: {{ a.prix }},
-      stock: {{ a.stock if a.stock is not none else 'null' }}, photo: {{ ((a.photos_urls or [])|select|first or '')|tojson }} },
+      stock: {{ a.stock if a.stock is not none else 'null' }}, photo: {{ ((a.photos_urls or [])|select|first or '')|tojson }},
+      options: {{ (a.options or {})|tojson }} },
     {% endfor %}];
 const lignes = document.getElementById('lignes');
 const fcfa = (v) => Math.round(v).toLocaleString('fr-FR') + ' FCFA';
@@ -152,7 +153,8 @@ function ajouterLibre() { brancher(document.getElementById('modeleLibre').conten
 
 // ---------- Ajout d'un article du catalogue (ou +1 s'il y est déjà) ----------
 function ajouterArticle(a) {
-    const existante = lignes.querySelector(`.ligne[data-article="${a.id}"]`);
+    const aDesOptions = Object.keys(a.options || {}).length > 0;
+    const existante = aDesOptions ? null : lignes.querySelector(`.ligne[data-article="${a.id}"]`);
     if (existante) {
         const q = existante.querySelector('[name="quantite"]');
         q.value = (+q.value || 0) + 1;
@@ -165,14 +167,22 @@ function ajouterArticle(a) {
     div.dataset.prix = a.prix;
     div.innerHTML = `
         <input type="hidden" name="article_id" value="${a.id}">
+        <input type="hidden" name="article_choix" value="">
         ${a.photo ? `<img src="${echapper(a.photo)}" alt="" class="h-10 w-10 rounded-lg object-cover flex-shrink-0">`
                   : '<span class="h-10 w-10 rounded-lg bg-gray-200 flex-shrink-0"></span>'}
         <span class="flex-1 min-w-0">
             <span class="block text-sm font-semibold text-gray-800 truncate"><span class="text-purple-600">n°${a.numero}</span> · ${echapper(a.nom)}</span>
             <span class="block text-xs text-gray-500">${fcfa(a.prix)}${a.stock !== null ? ' · stock ' + a.stock : ''}</span>
+            ${aDesOptions ? '<span class="flex flex-wrap gap-1 mt-1">' + Object.entries(a.options).map(([o, vals]) =>
+                `<select data-option="${echapper(o)}" required class="choix border border-gray-300 px-1 py-1 text-xs"><option value="">${echapper(o)}…</option>` +
+                vals.map((v) => `<option>${echapper(v)}</option>`).join('') + '</select>').join('') + '</span>' : ''}
         </span>
         <input type="number" name="quantite" value="1" min="1" class="w-16 border border-gray-300 px-2 py-1.5 text-sm text-center" aria-label="Quantité">
         <button type="button" class="retirer text-red-500 px-2" aria-label="Retirer"><i class="fas fa-trash"></i></button>`;
+    div.querySelectorAll('select.choix').forEach((sel) => sel.addEventListener('change', () => {
+        div.querySelector('[name="article_choix"]').value = [...div.querySelectorAll('select.choix')]
+            .map((x) => x.dataset.option + '=' + x.value).join('|');
+    }));
     brancher(div);
 }
 

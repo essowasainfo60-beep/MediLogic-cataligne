@@ -1,3 +1,4 @@
+import hashlib
 from datetime import datetime
 from urllib.parse import quote
 
@@ -112,12 +113,21 @@ def ajouter_panier():
     if any(item.get('boutique_id') != article.boutique_id for item in panier.values()):
         panier = {}
 
-    cle = str(article.id)
+    # Choix du client (taille, couleur…) : chaque combinaison est une ligne du panier
+    try:
+        choix = article.lire_choix({o: request.form.get(f'option_{o}') for o in (article.options or {})})
+    except ValueError as e:
+        if veut_json:
+            return jsonify(success=False, message=str(e)), 400
+        flash(str(e), 'danger')
+        return redirect(url_for('client.catalogue', code=visitee.lien_public))
+    cle = str(article.id) + (('-' + hashlib.md5(choix.encode()).hexdigest()[:8]) if choix else '')
     if cle in panier:
         panier[cle]['quantite'] += quantite
     else:
         panier[cle] = {
-            'nom': article.nom,
+            'nom': article.nom + (f' ({choix})' if choix else ''),
+            'options': choix or None,
             'prix': article.prix,
             'quantite': quantite,
             'boutique_id': article.boutique_id,
@@ -144,10 +154,9 @@ def voir_panier():
 
     return render_template('client/panier.html', panier=panier, total=total, boutique=boutique)
 
-@client_bp.route('/modifier_quantite/<int:article_id>', methods=['POST'])
-def modifier_quantite(article_id):
+@client_bp.route('/modifier_quantite/<cle>', methods=['POST'])
+def modifier_quantite(cle):
     panier = session.get('panier', {})
-    cle = str(article_id)
     if cle in panier:
         quantite = request.form.get('quantite', 1, type=int) or 0
         if quantite <= 0:
@@ -158,12 +167,12 @@ def modifier_quantite(article_id):
         session.modified = True
     return redirect(url_for('client.voir_panier'))
 
-@client_bp.route('/retirer_panier/<int:article_id>')
-def retirer_panier(article_id):
+@client_bp.route('/retirer_panier/<cle>')
+def retirer_panier(cle):
     panier = session.get('panier', {})
 
-    if str(article_id) in panier:
-        del panier[str(article_id)]
+    if cle in panier:
+        del panier[cle]
         session['panier'] = panier
         session.modified = True
         flash('Article retiré du panier', 'info')

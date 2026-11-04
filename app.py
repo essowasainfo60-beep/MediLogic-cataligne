@@ -112,6 +112,8 @@ def mettre_a_jour_schema():
         colonnes_articles = {c['name'] for c in inspecteur.get_columns('articles')}
         if 'stock' not in colonnes_articles:
             conn.execute(text("ALTER TABLE articles ADD COLUMN stock INTEGER"))
+        if 'options' not in colonnes_articles:
+            conn.execute(text("ALTER TABLE articles ADD COLUMN options JSON"))
         if 'numero' not in colonnes_articles:
             conn.execute(text("ALTER TABLE articles ADD COLUMN numero INTEGER"))
         # Numérotation propre à chaque boutique (articles et commandes) : 1, 2, 3…

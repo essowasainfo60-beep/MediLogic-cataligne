@@ -42,6 +42,22 @@
                 </div>
 
                 <div>
+                    <label class="block text-gray-700 text-sm font-bold mb-1">Options proposées au client</label>
+                    <p class="text-xs text-gray-500 mb-2">Ex. Taille : S, M, L, XL — Couleur : Rouge, Bleu. Le client devra choisir avant d'ajouter au panier.</p>
+                    {% for i in [1, 2, 3] %}
+                    {% set options_existantes = ((article.options if article is defined and article.options else {})|dictsort) %}
+                    {% set paire = options_existantes[i - 1] if options_existantes|length >= i else none %}
+                    <div class="grid grid-cols-3 gap-2 mb-2">
+                        <input type="text" name="option_nom_{{ i }}" value="{{ paire[0] if paire else '' }}" maxlength="30"
+                               placeholder="{{ ['Taille', 'Couleur', 'Autre option'][i - 1] }}" class="px-3 py-2 border border-gray-300 rounded-lg text-sm">
+                        <input type="text" name="option_valeurs_{{ i }}" value="{{ paire[1]|join(', ') if paire else '' }}"
+                               placeholder="{{ ['S, M, L, XL', 'Rouge, Bleu, Noir', 'Valeurs séparées par des virgules'][i - 1] }}"
+                               class="col-span-2 px-3 py-2 border border-gray-300 rounded-lg text-sm">
+                    </div>
+                    {% endfor %}
+                </div>
+
+                <div>
                     <label class="block text-gray-700 text-sm font-bold mb-2">Photos (plusieurs possible)</label>
                     <input type="file" name="photos" multiple accept="image/*" id="photosInput"
                            class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary transition">

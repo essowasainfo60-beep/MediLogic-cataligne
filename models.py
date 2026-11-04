@@ -158,6 +158,18 @@ class Article(db.Model):
     photos_urls = db.Column(db.JSON, default=list)
     stock = db.Column(db.Integer, nullable=True)  # None = stock non suivi pour cet article
     numero = db.Column(db.Integer, nullable=True)  # n° propre à la boutique : 1, 2, 3…
+    # Choix proposés au client, ex. {"Taille": ["S", "M", "L"], "Couleur": ["Rouge", "Bleu"]}
+    options = db.Column(db.JSON, nullable=True)
+
+    def lire_choix(self, choisis):
+        """Valide les choix du client ({option: valeur}) ; renvoie le texte « Taille M, Rouge » ou lève ValueError."""
+        morceaux = []
+        for option, valeurs in (self.options or {}).items():
+            valeur = (choisis.get(option) or '').strip()
+            if valeur not in valeurs:
+                raise ValueError(f'Choisissez : {option.lower()}')
+            morceaux.append(f'{option} {valeur}' if option.lower().startswith('taille') or option.lower().startswith('pointure') else valeur)
+        return ', '.join(morceaux)
 
     @staticmethod
     def prochain_numero(boutique_id):

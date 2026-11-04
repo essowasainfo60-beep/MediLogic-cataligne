@@ -25,7 +25,7 @@
                             {% endif %}
                             <div class="flex-1">
                                 <p class="font-semibold text-gray-800">{{ item.nom }}</p>
-                                <form method="POST" action="{{ url_for('client.modifier_quantite', article_id=id) }}"
+                                <form method="POST" action="{{ url_for('client.modifier_quantite', cle=id) }}"
                                       class="flex items-center gap-2 text-sm text-gray-500 mt-1">
                                     <span>{{ "%.0f"|format(item.prix) }} FCFA ×</span>
                                     <input type="number" name="quantite" value="{{ item.quantite }}" min="0" max="999"
@@ -35,7 +35,7 @@
                             </div>
                             <div class="text-right">
                                 <p class="font-bold text-primary">{{ "%.0f"|format(item.prix * item.quantite) }} FCFA</p>
-                                <a href="{{ url_for('client.retirer_panier', article_id=id) }}" 
+                                <a href="{{ url_for('client.retirer_panier', cle=id) }}" 
                                    class="text-red-500 text-sm hover:text-red-700">
                                     <i class="fas fa-trash"></i> Retirer
                                 </a>
