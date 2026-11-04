@@ -99,3 +99,15 @@ def echec_client(commande):
             f"Quand êtes-vous disponible pour la recevoir ? Répondez-nous ici et nous la relançons.\n\n"
             f"{commande.boutique.nom_boutique}{_suivi(commande)}")
 
+
+
+def arrivee_client(commande):
+    """Envoyé par le livreur quand il appuie sur « Je suis arrivé »."""
+    nom_livreur = commande.livreur.nom if commande.livreur else 'votre livreur'
+    return (f"📍 *VOTRE LIVREUR EST ARRIVÉ*\n{TRAIT}\n"
+            f"Bonjour {commande.client_nom},\n\n"
+            f"Je suis {nom_livreur}, livreur de {commande.boutique.nom_boutique}.\n"
+            f"Je suis arrivé avec votre commande n°{commande.numero} :\n"
+            f"🏠 {commande.client_adresse}\n\n"
+            f"💰 *À payer : {fcfa(commande.total)}*\n\n"
+            f"Je vous attends, merci de sortir 🙏")

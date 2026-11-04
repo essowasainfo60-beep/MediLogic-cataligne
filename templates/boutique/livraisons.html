@@ -34,6 +34,7 @@
                     <p class="font-extrabold text-gray-900">{{ fcfa(c.total) }}</p>
                     <p class="text-xs {{ 'text-red-600 font-bold' if minutes >= 240 else ('text-orange-600 font-semibold' if minutes >= 120 else 'text-gray-500') }}">
                         <i class="fas fa-stopwatch mr-0.5"></i> en route depuis {{ duree(c.date_depart) }}</p>
+                    {% if c.date_arrivee %}<p class="text-xs text-green-700 font-semibold"><i class="fas fa-location-dot mr-0.5"></i> arrivé chez le client à {{ c.date_arrivee.strftime('%H:%M') }}</p>{% endif %}
                 </div>
             </div>
             <div class="flex flex-wrap items-center gap-2 mt-3 pt-3 border-t border-gray-100 text-sm">

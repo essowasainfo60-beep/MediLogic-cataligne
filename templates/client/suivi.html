@@ -2,10 +2,31 @@
 
 {% block title %}Suivi de ma commande n°{{ commande.numero }}{% endblock %}
 
+{% block manifest %}<link rel="manifest" href="{{ url_for('client.manifest_suivi', code=commande.code_suivi) }}">{% endblock %}
+
 {% block content %}
 {% set etapes = [('Reçue', 'fa-receipt'), ('Confirmée', 'fa-circle-check'), ('En route', 'fa-motorcycle'), ('Livrée', 'fa-house-circle-check')] %}
 {% set rang = {'nouvelle': 0, 'confirmee': 1, 'en_livraison': 2, 'echec': 2, 'livree': 3, 'retournee': 3}.get(commande.statut, 0) %}
 <div class="max-w-[640px] mx-auto px-4 space-y-4">
+    <div id="banniereArrivee" class="{{ '' if commande.date_arrivee and commande.statut == 'en_livraison' else 'hidden' }} bg-green-600 text-white rounded-2xl shadow-md p-5 text-center">
+        <p class="text-3xl">🛵📍</p>
+        <p class="text-xl font-extrabold mt-1">Votre livreur est arrivé !</p>
+        <p class="text-sm text-green-50 mt-1">{{ commande.livreur.nom if commande.livreur else 'Le livreur' }} vous attend<span id="heureArrivee">{% if commande.date_arrivee %} depuis {{ commande.date_arrivee.strftime('%H:%M') }}{% endif %}</span>.
+            À payer : <strong>{{ fcfa(commande.total) }}</strong></p>
+        {% if commande.livreur %}
+        <a href="tel:{{ commande.livreur.telephone|replace(' ', '') }}" class="inline-block mt-3 bg-white text-green-700 font-bold px-5 py-2 rounded-xl"><i class="fas fa-phone mr-1"></i> Appeler le livreur</a>
+        {% endif %}
+    </div>
+
+    {% if cle_push %}
+    <div id="carteAlerte" class="bg-purple-50 border border-purple-200 rounded-2xl p-4 text-sm">
+        <p class="font-semibold text-purple-900"><i class="fas fa-bell mr-1"></i> Être prévenu quand le livreur arrive</p>
+        <p class="text-purple-800 mt-1">Votre téléphone sonnera dès que le livreur est devant chez vous, même si cette page est fermée.</p>
+        <button type="button" id="btnAlerte" class="mt-3 w-full bg-purple-600 text-white py-2.5 rounded-xl font-semibold hover:bg-purple-700">🔔 Activer l'alerte</button>
+        <p id="etatAlerte" class="mt-2 text-purple-800"></p>
+    </div>
+    {% endif %}
+
     <div class="bg-white rounded-2xl shadow-md p-5">
         <p class="text-sm text-gray-500">{{ boutique.nom_boutique }}</p>
         <h1 class="text-2xl font-extrabold text-gray-900">Commande n°{{ commande.numero }}</h1>
@@ -29,7 +50,7 @@
                 <div class="pt-1.5">
                     <p class="font-semibold {{ 'text-gray-900' if fait or actuel else 'text-gray-400' }}">{{ libelle }}</p>
                     {% if libelle == 'En route' and commande.livreur and commande.statut == 'en_livraison' %}
-                    <p class="text-sm text-gray-600">Votre livreur <strong>{{ commande.livreur.nom }}</strong> arrive.
+                    <p class="text-sm text-gray-600">Votre livreur <strong>{{ commande.livreur.nom }}</strong> {{ 'est arrivé' if commande.date_arrivee else 'arrive' }}.
                         <a href="tel:{{ commande.livreur.telephone|replace(' ', '') }}" class="text-purple-600 font-semibold ml-1"><i class="fas fa-phone"></i> L'appeler</a></p>
                     {% elif libelle == 'En route' and commande.statut == 'echec' %}
                     <p class="text-sm text-red-700">Le livreur n'a pas pu vous livrer{% if commande.motif_echec %} ({{ commande.motif_echec|lower }}){% endif %}. La boutique va vous recontacter.</p>
@@ -71,6 +92,103 @@
     {% endif %}
 </div>
 {% if commande.statut in ['nouvelle', 'confirmee', 'en_livraison'] %}
-<script>setTimeout(() => location.reload(), 60000);  // mise à jour automatique</script>
+<script>
+(function () {
+    const URL_ETAT = {{ url_for('client.suivi_etat', code=commande.code_suivi)|tojson }};
+    const URL_ABO = {{ url_for('client.suivi_abonner', code=commande.code_suivi)|tojson }};
+    const CLE = {{ (cle_push or '')|tojson }};
+    const statutInitial = {{ commande.statut|tojson }};
+    let arriveeConnue = {{ (commande.date_arrivee.strftime('%H:%M') if commande.date_arrivee and commande.statut == 'en_livraison' else none)|tojson }};
+
+    // ---------- Son (le navigateur exige un premier toucher sur la page) ----------
+    let son = null;
+    function debloquerSon() {
+        try { son = son || new (window.AudioContext || window.webkitAudioContext)(); son.resume(); } catch (e) {}
+    }
+    document.addEventListener('click', debloquerSon);
+    document.addEventListener('touchstart', debloquerSon, { passive: true });
+    function sonner() {
+        if (navigator.vibrate) navigator.vibrate([400, 150, 400, 150, 400, 150, 800]);
+        if (!son) return;
+        for (let i = 0; i < 6; i++) {
+            const osc = son.createOscillator(), vol = son.createGain(), t = son.currentTime + i * 0.35;
+            osc.frequency.value = i % 2 ? 660 : 880;
+            vol.gain.setValueAtTime(0.0001, t);
+            vol.gain.exponentialRampToValueAtTime(0.6, t + 0.02);
+            vol.gain.exponentialRampToValueAtTime(0.0001, t + 0.3);
+            osc.connect(vol).connect(son.destination);
+            osc.start(t); osc.stop(t + 0.32);
+        }
+    }
+
+    // ---------- Page ouverte : elle sonne à l'arrivée du livreur ----------
+    setInterval(() => {
+        fetch(URL_ETAT, { cache: 'no-store' }).then((r) => r.json()).then((d) => {
+            if (d.arrivee && d.arrivee !== arriveeConnue) {
+                arriveeConnue = d.arrivee;
+                document.getElementById('banniereArrivee').classList.remove('hidden');
+                document.getElementById('heureArrivee').textContent = ' depuis ' + d.arrivee;
+                window.scrollTo({ top: 0, behavior: 'smooth' });
+                sonner();
+            } else if (d.statut !== statutInitial) {
+                location.reload();
+            }
+        }).catch(() => {});
+    }, 15000);
+
+    // ---------- Alerte qui sonne même page fermée (notification) ----------
+    const bouton = document.getElementById('btnAlerte');
+    if (!bouton) return;
+    const etat = document.getElementById('etatAlerte');
+    const iphone = /iPhone|iPad|iPod/.test(navigator.userAgent);
+    const installee = window.navigator.standalone || window.matchMedia('(display-mode: standalone)').matches;
+    const possible = 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window;
+
+    function cle(b64) {
+        const s = (b64 + '='.repeat((4 - b64.length % 4) % 4)).replace(/-/g, '+').replace(/_/g, '/');
+        return Uint8Array.from(atob(s), (c) => c.charCodeAt(0));
+    }
+    const enTexte = (octets) => Array.from(new Uint8Array(octets)).join(',');
+    function active() {
+        bouton.classList.add('hidden');
+        etat.innerHTML = "✅ <strong>Alerte activée.</strong> Votre téléphone sonnera à l'arrivée du livreur.";
+    }
+    async function activer(demander) {
+        debloquerSon();
+        if (!possible) {
+            etat.innerHTML = iphone && !installee
+                ? "Sur iPhone : touchez <strong>Partager</strong> puis <strong>« Sur l'écran d'accueil »</strong>, ouvrez la commande depuis cette icône et activez l'alerte. Sinon, gardez cette page ouverte : elle sonnera."
+                : "Votre navigateur ne permet pas l'alerte. Gardez cette page ouverte : elle sonnera à l'arrivée du livreur.";
+            return;
+        }
+        if (Notification.permission !== 'granted') {
+            if (!demander) return;
+            if (await Notification.requestPermission() !== 'granted') {
+                etat.textContent = "Alerte refusée. Gardez cette page ouverte : elle sonnera à l'arrivée du livreur.";
+                return;
+            }
+        }
+        try {
+            const reg = await navigator.serviceWorker.register('/sw.js');
+            await navigator.serviceWorker.ready;
+            let abo = await reg.pushManager.getSubscription();
+            const k = abo && abo.options && abo.options.applicationServerKey;
+            if (abo && k && enTexte(k) !== enTexte(cle(CLE))) { await abo.unsubscribe(); abo = null; }
+            if (!abo) abo = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: cle(CLE) });
+            const r = await fetch(URL_ABO, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(abo) });
+            if (!r.ok) throw new Error('refus');
+            active();
+        } catch (e) {
+            etat.textContent = "Impossible d'activer l'alerte sur ce téléphone. Gardez cette page ouverte : elle sonnera.";
+        }
+    }
+    bouton.addEventListener('click', () => {
+        bouton.textContent = 'Activation…';
+        activer(true).finally(() => { bouton.textContent = "🔔 Activer l'alerte"; });
+    });
+    if (!possible && iphone && !installee) activer(false);
+    if (possible && Notification.permission === 'granted') activer(false);   // déjà accepté : on réabonne en silence
+})();
+</script>
 {% endif %}
 {% endblock %}

@@ -10,6 +10,7 @@ import messages_whatsapp as msg
 from zones_detection import zone_pour_adresse, index_quartiers
 from creneaux import creneaux_disponibles
 import promos
+import notifications
 from utils import enregistrer_photo
 import stock
 from models import db, Boutique, Article, Commande, Photo, Zone, Livreur, enregistrer_avec_numero
@@ -351,7 +352,8 @@ def espace_livreur(code):
                            livrees_jour=len(du_jour), encaisse_jour=sum(c.total for c in du_jour),
                            a_remettre=a_remettre, mes_frais=mes_frais,
                            garde_frais=livreur.boutique.mode_frais != 'boutique_collecte',
-                           onglet=request.args.get('onglet', 'a_livrer'), fcfa=msg.fcfa, motifs=Commande.MOTIFS_ECHEC)
+                           onglet=request.args.get('onglet', 'a_livrer'), fcfa=msg.fcfa, motifs=Commande.MOTIFS_ECHEC,
+                           lien_arrivee=lambda c: msg.lien_whatsapp(c.client_telephone, msg.arrivee_client(c)))
 
 @client_bp.route('/l/<code>/livree/<int:commande_id>', methods=['POST'])
 def espace_livreur_livree(code, commande_id):
@@ -365,6 +367,29 @@ def espace_livreur_livree(code, commande_id):
         db.session.commit()
         flash(f"Commande n°{commande.numero} livrée à {commande.date_livraison.strftime('%H:%M')}"
               + (" avec photo de preuve" if commande.photo_preuve else "") + ". Merci !", 'success')
+    return redirect(url_for('client.espace_livreur', code=code))
+
+@client_bp.route('/l/<code>/arrive/<int:commande_id>', methods=['POST'])
+def espace_livreur_arrive(code, commande_id):
+    """« Je suis arrivé » : heure enregistrée, téléphone du client qui sonne
+    (notification), et le livreur peut aussi envoyer le message WhatsApp."""
+    livreur = livreur_par_code(code)
+    commande = Commande.query.filter_by(id=commande_id, livreur_id=livreur.id).first_or_404()
+    prevenus = 0
+    if commande.statut == 'en_livraison':
+        commande.date_arrivee = datetime.utcnow()
+        db.session.commit()
+        prevenus = notifications.envoyer(
+            commande, f'🛵 Votre livreur est arrivé !',
+            f'{livreur.nom} est devant chez vous avec la commande n°{commande.numero} de '
+            f'{commande.boutique.nom_boutique}. À payer : {msg.fcfa(commande.total)}.',
+            url_for('client.suivi', code=commande.code_suivi))
+    if request.accept_mimetypes.best == 'application/json' or request.is_json:
+        return jsonify(ok=commande.statut == 'en_livraison', prevenus=prevenus,
+                       heure=commande.date_arrivee.strftime('%H:%M') if commande.date_arrivee else None)
+    if commande.date_arrivee:
+        flash(f"Arrivée signalée à {commande.date_arrivee.strftime('%H:%M')}"
+              + (" : le téléphone du client sonne." if prevenus else ". Envoyez aussi le message WhatsApp au client."), 'success')
     return redirect(url_for('client.espace_livreur', code=code))
 
 @client_bp.route('/l/<code>/manifest.json')
@@ -395,7 +420,36 @@ def suivi(code):
     if not commande:
         return render_template('client/lien_invalide.html'), 404
     memoriser_commande(commande)
-    return render_template('client/suivi.html', commande=commande, boutique=commande.boutique, fcfa=msg.fcfa)
+    cle_push = notifications.cles_vapid()[0] if commande.statut in ('nouvelle', 'confirmee', 'en_livraison') else None
+    return render_template('client/suivi.html', commande=commande, boutique=commande.boutique, fcfa=msg.fcfa,
+                           cle_push=cle_push)
+
+@client_bp.route('/suivi/<code>/etat')
+def suivi_etat(code):
+    """Interrogé régulièrement par la page de suivi ouverte (pour sonner à l'arrivée)."""
+    commande = Commande.query.filter_by(code_suivi=code).first_or_404()
+    return jsonify(statut=commande.statut,
+                   arrivee=commande.date_arrivee.strftime('%H:%M') if commande.date_arrivee and commande.statut == 'en_livraison' else None)
+
+@client_bp.route('/suivi/<code>/abonner', methods=['POST'])
+def suivi_abonner(code):
+    """Le client accepte d'être prévenu : son téléphone sonnera quand le livreur arrive."""
+    commande = Commande.query.filter_by(code_suivi=code).first_or_404()
+    if commande.statut not in ('nouvelle', 'confirmee', 'en_livraison'):
+        return jsonify(ok=False), 400
+    return jsonify(ok=notifications.abonner(commande, request.get_json(silent=True)))
+
+@client_bp.route('/suivi/<code>/manifest.json')
+def manifest_suivi(code):
+    """Ajoutée à l'écran d'accueil (iPhone), la page de suivi peut recevoir l'alerte d'arrivée."""
+    commande = Commande.query.filter_by(code_suivi=code).first_or_404()
+    return jsonify({
+        'name': f'Ma commande · {commande.boutique.nom_boutique}', 'short_name': f'Commande {commande.numero}',
+        'id': f'/suivi/{code}', 'start_url': f'/suivi/{code}', 'scope': '/', 'display': 'standalone',
+        'background_color': '#ffffff', 'theme_color': '#7c3aed', 'lang': 'fr',
+        'icons': [{'src': '/static/icons/icon-192.png', 'sizes': '192x192', 'type': 'image/png'},
+                  {'src': '/static/icons/icon-512.png', 'sizes': '512x512', 'type': 'image/png'}],
+    })
 
 # ==================== ÉCHEC DE LIVRAISON (livreur) ====================
 

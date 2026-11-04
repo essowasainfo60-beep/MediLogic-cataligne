@@ -88,6 +88,17 @@
                 <a href="https://wa.me/{{ tel }}" target="_blank" class="text-center bg-green-500 text-white py-2.5 rounded-xl text-sm"><i class="fab fa-whatsapp"></i><span class="block text-[11px]">WhatsApp</span></a>
                 <a href="{{ c.lien_carte }}" target="_blank" class="text-center bg-gray-900 text-white py-2.5 rounded-xl text-sm"><i class="fas fa-route"></i><span class="block text-[11px]">Itinéraire</span></a>
             </div>
+            <div class="px-4 pb-3">
+                {% if c.date_arrivee %}
+                <p class="text-center text-sm text-green-700 font-semibold mb-2"><i class="fas fa-location-dot mr-1"></i> Arrivée signalée à {{ c.date_arrivee.strftime('%H:%M') }}</p>
+                {% endif %}
+                <a href="{{ lien_arrivee(c) }}" target="_blank" rel="noopener"
+                   data-arrive="{{ url_for('client.espace_livreur_arrive', code=livreur.code_acces, commande_id=c.id) }}"
+                   class="btn-arrive block w-full text-center {{ 'bg-orange-100 text-orange-800' if c.date_arrivee else 'bg-orange-500 text-white hover:bg-orange-600' }} py-3.5 rounded-xl text-lg font-bold">
+                    📍 {{ 'Prévenir encore le client' if c.date_arrivee else 'Je suis arrivé' }}
+                </a>
+                <p class="etat-arrive text-[11px] text-gray-500 text-center mt-1">Fait sonner le téléphone du client et ouvre WhatsApp avec le message prêt à envoyer.</p>
+            </div>
             <form method="POST" enctype="multipart/form-data" action="{{ url_for('client.espace_livreur_livree', code=livreur.code_acces, commande_id=c.id) }}" class="px-4 pb-4"
                   data-question="Confirmer : la commande n°{{ c.numero }} est livrée à {{ c.client_nom }} et {{ fcfa(c.total) }} encaissés ?"
                   onsubmit="return confirm(this.dataset.question)">
@@ -142,6 +153,24 @@
 <script>
 // Nouvelles courses : la page se met à jour toute seule (toutes les 2 minutes, si elle est affichée)
 setInterval(() => { if (!document.hidden && !document.querySelector('details[open]')) location.reload(); }, 120000);
+
+// « Je suis arrivé » : on prévient le serveur (notification qui sonne chez le client)
+// pendant que le lien ouvre WhatsApp avec le message prêt.
+document.querySelectorAll('.btn-arrive').forEach((bouton) => {
+    bouton.addEventListener('click', () => {
+        const etat = bouton.parentElement.querySelector('.etat-arrive');
+        etat.textContent = "Envoi de l'alerte au client…";
+        fetch(bouton.dataset.arrive, { method: 'POST', keepalive: true, headers: { 'Accept': 'application/json' } })
+            .then((r) => r.json())
+            .then((d) => {
+                etat.className = 'etat-arrive text-xs text-center mt-1 font-semibold ' + (d.prevenus ? 'text-green-700' : 'text-orange-700');
+                etat.textContent = d.prevenus
+                    ? '✓ Arrivée signalée à ' + d.heure + ' : le téléphone du client sonne.'
+                    : '✓ Arrivée signalée à ' + d.heure + ". Le client n'a pas activé l'alerte : envoyez le message WhatsApp.";
+            })
+            .catch(() => { etat.textContent = 'Pas de connexion : envoyez le message WhatsApp ou appelez le client.'; });
+    });
+});
 
 // Installation comme une application
 let invitation = null;

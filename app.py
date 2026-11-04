@@ -105,7 +105,8 @@ def mettre_a_jour_schema():
                                 ('confirmee_par', 'VARCHAR(120)'),
                                 ('code_promo', 'VARCHAR(30)'),
                                 ('remise', 'FLOAT NOT NULL DEFAULT 0'),
-                                ('date_depart', 'TIMESTAMP')]:
+                                ('date_depart', 'TIMESTAMP'),
+                                ('date_arrivee', 'TIMESTAMP')]:
             if nom not in colonnes_commandes:
                 conn.execute(text(f"ALTER TABLE commandes ADD COLUMN {nom} {definition}"))
         if 'frais' not in {c['name'] for c in inspecteur.get_columns('zones')}:

@@ -221,6 +221,7 @@ class Commande(db.Model):
     # Photo prise par le livreur à la remise (preuve de livraison)
     photo_preuve = db.Column(db.String(300), nullable=True)
     date_depart = db.Column(db.DateTime, nullable=True)   # remise au livreur (dernière tentative)
+    date_arrivee = db.Column(db.DateTime, nullable=True)  # le livreur a signalé « Je suis arrivé »
     # Moment de livraison souhaité par le client (« Demain 05/11 · Soir (16h-20h) »)
     creneau = db.Column(db.String(80), nullable=True)
     # Qui a fait quoi (gérant ou vendeur)
@@ -534,3 +535,26 @@ class CodePromo(db.Model):
             morceaux.append(f"{self.minimum:,.0f} FCFA d'achat".replace(',', ' '))
         return ('dès ' + ' et '.join(morceaux)) if morceaux else ''
 
+
+
+class AbonnementPush(db.Model):
+    """Téléphone d'un client qui a accepté d'être prévenu (notification qui sonne)
+    pour une commande : « Votre livreur est arrivé »."""
+    __tablename__ = 'abonnements_push'
+
+    id = db.Column(db.Integer, primary_key=True)
+    commande_id = db.Column(db.Integer, db.ForeignKey('commandes.id'), nullable=False, index=True)
+    endpoint = db.Column(db.String(1000), nullable=False)
+    cle_p256dh = db.Column(db.String(200), nullable=False)
+    cle_auth = db.Column(db.String(100), nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    commande = db.relationship('Commande', backref=db.backref('abonnements_push', cascade='all, delete-orphan'))
+
+
+class Parametre(db.Model):
+    """Réglages techniques de l'application (ex. clés des notifications)."""
+    __tablename__ = 'parametres'
+
+    cle = db.Column(db.String(50), primary_key=True)
+    valeur = db.Column(db.Text, nullable=False)
