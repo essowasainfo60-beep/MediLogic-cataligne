@@ -49,6 +49,35 @@
 
 {% block content %}
 <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+    {% set libelles_suivi = {'nouvelle': ('Reçue', 'fa-receipt', 'bg-blue-100 text-blue-700'), 'confirmee': ('Confirmée · en préparation', 'fa-circle-check', 'bg-yellow-100 text-yellow-700'),
+                             'en_livraison': ('En route 🛵', 'fa-motorcycle', 'bg-purple-100 text-purple-700'), 'echec': ('À reprogrammer', 'fa-rotate', 'bg-orange-100 text-orange-700')} %}
+    <!-- Suivi des commandes de ce téléphone -->
+    {% if en_cours %}
+    <div class="mb-4 bg-white rounded-2xl shadow-md border-2 border-purple-200 overflow-hidden">
+        <div class="px-4 py-2.5 bg-purple-50 flex items-center justify-between gap-2">
+            <p class="font-bold text-purple-900"><i class="fas fa-location-crosshairs mr-1"></i> Suivi de {{ 'ma commande' if en_cours|length == 1 else 'mes commandes' }}</p>
+            <a href="{{ url_for('client.mes_commandes', code=boutique.lien_public) }}" class="text-xs text-purple-700 font-semibold hover:underline whitespace-nowrap">Toutes mes commandes ›</a>
+        </div>
+        {% for c in en_cours[:3] %}
+        {% set lib = libelles_suivi[c.statut] %}
+        <a href="{{ url_for('client.suivi', code=c.code_suivi) }}" class="flex items-center gap-3 px-4 py-3 border-t border-gray-100 hover:bg-gray-50">
+            <span class="h-10 w-10 rounded-full flex items-center justify-center flex-shrink-0 {{ lib[2] }}"><i class="fas {{ lib[1] }}"></i></span>
+            <span class="flex-1 min-w-0">
+                <span class="block font-semibold text-gray-900">Commande n°{{ c.numero }} <span class="font-normal text-gray-500 whitespace-nowrap">· {{ '{:,.0f}'.format(c.total).replace(',', ' ') }} FCFA</span></span>
+                <span class="block text-sm {{ 'text-green-700 font-semibold' if c.date_arrivee and c.statut == 'en_livraison' else 'text-gray-500' }}">
+                    {% if c.date_arrivee and c.statut == 'en_livraison' %}📍 Votre livreur est arrivé !{% else %}{{ lib[0] }}{% endif %} · {{ c.date_commande.strftime('%d/%m à %H:%M') }}</span>
+            </span>
+            <span class="bg-purple-600 text-white text-sm font-semibold px-3 py-2 rounded-xl whitespace-nowrap">Suivre <i class="fas fa-chevron-right ml-1 text-xs"></i></span>
+        </a>
+        {% endfor %}
+    </div>
+    {% elif mes_commandes %}
+    <a href="{{ url_for('client.mes_commandes', code=boutique.lien_public) }}" class="mb-4 flex items-center gap-3 bg-white rounded-2xl shadow-sm px-4 py-3 text-sm hover:bg-gray-50">
+        <i class="fas fa-box-open text-purple-600"></i>
+        <span class="flex-1 text-gray-700">Vos {{ mes_commandes|length }} commande(s) précédente(s) — dernière : n°{{ mes_commandes[0].numero }}, {{ mes_commandes[0].statut_libelle|lower if mes_commandes[0].statut not in ['livree'] else 'livrée' }}</span>
+        <span class="text-purple-700 font-semibold whitespace-nowrap">Voir ›</span>
+    </a>
+    {% endif %}
     <!-- En-tête boutique -->
     <div class="bg-gradient-to-r from-purple-600 to-blue-600 rounded-2xl shadow-xl p-5 md:p-8 mb-6 text-white">
         <div class="flex items-center justify-between gap-4">

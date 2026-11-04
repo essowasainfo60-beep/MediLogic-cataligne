@@ -2,7 +2,7 @@ import hashlib
 from datetime import datetime
 from urllib.parse import quote
 
-from flask import (Blueprint, Response, abort, flash, jsonify, redirect,
+from flask import (Blueprint, Response, abort, after_this_request, flash, jsonify, redirect,
                    render_template, request, session, url_for)
 
 import caisse
@@ -86,7 +86,10 @@ def catalogue(code):
     articles = (Article.query.filter_by(boutique_id=boutique_id, archive=False)
                 .order_by(Article.created_at.desc()).all())
 
+    mes_commandes = commandes_du_telephone(boutique)
+    en_cours = [c for c in mes_commandes if c.statut in ('nouvelle', 'confirmee', 'en_livraison', 'echec')]
     return render_template('client/catalogue.html',
+                           mes_commandes=mes_commandes, en_cours=en_cours,
                            promos_affichees=promos_affichees,
                            boutique=boutique,
                            articles=articles,
@@ -485,11 +488,39 @@ def api_promo():
 
 # ==================== MES COMMANDES (depuis le catalogue) ====================
 
+COOKIE_COMMANDES = 'lp_mes_commandes'
+
+
+def codes_memorises():
+    """Codes de suivi des commandes passées sur ce téléphone (session + cookie durable)."""
+    codes = list(session.get('mes_commandes', []))
+    for c in (request.cookies.get(COOKIE_COMMANDES) or '').split('.'):
+        if c and c not in codes and len(c) <= 32 and c.replace('-', '').replace('_', '').isalnum():
+            codes.append(c)
+    return codes[:30]
+
+
 def memoriser_commande(commande):
-    """Ce téléphone retient ses commandes : le client les retrouve depuis le catalogue."""
-    codes = [c for c in session.get('mes_commandes', []) if c != commande.code_suivi]
-    session['mes_commandes'] = ([commande.code_suivi] + codes)[:30]
+    """Ce téléphone retient ses commandes (un an) : le client les retrouve depuis le catalogue."""
+    if not commande.code_suivi:
+        return
+    codes = [commande.code_suivi] + [c for c in codes_memorises() if c != commande.code_suivi]
+    session['mes_commandes'] = codes[:30]
     session.modified = True
+
+    @after_this_request
+    def _cookie(reponse):
+        reponse.set_cookie(COOKIE_COMMANDES, '.'.join(codes[:30]), max_age=365 * 24 * 3600,
+                           httponly=True, samesite='Lax', secure=request.is_secure)
+        return reponse
+
+
+def commandes_du_telephone(boutique):
+    codes = codes_memorises()
+    if not codes:
+        return []
+    return (Commande.query.filter(Commande.code_suivi.in_(codes), Commande.boutique_id == boutique.id)
+            .order_by(Commande.date_commande.desc()).all())
 
 
 @client_bp.route('/c/<code>/mes-commandes', methods=['GET', 'POST'])
@@ -510,8 +541,6 @@ def mes_commandes(code):
         flash("Aucune commande ne correspond à ce numéro et ce téléphone.", 'warning')
         return redirect(url_for('client.mes_commandes', code=code))
 
-    codes = session.get('mes_commandes', [])
-    commandes = (Commande.query.filter(Commande.code_suivi.in_(codes), Commande.boutique_id == boutique.id)
-                 .order_by(Commande.date_commande.desc()).all()) if codes else []
+    commandes = commandes_du_telephone(boutique)
     return render_template('client/mes_commandes.html', boutique=boutique, commandes=commandes, fcfa=msg.fcfa)
 

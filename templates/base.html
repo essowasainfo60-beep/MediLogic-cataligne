@@ -189,7 +189,8 @@
                     {% if vitrine and vitrine.lien_public %}
                     <a href="{{ url_for('client.mes_commandes', code=vitrine.lien_public) }}"
                        class="flex items-center gap-1.5 px-2.5 sm:px-3 py-2 rounded-xl bg-purple-50 text-purple-700 text-xs sm:text-sm font-semibold whitespace-nowrap hover:bg-purple-100">
-                        <i class="fas fa-box-open"></i><span>Mes commandes</span>
+                        <i class="fas fa-box-open"></i><span>{{ 'Suivi' if en_cours is defined and en_cours else 'Mes commandes' }}</span>
+                        {% if en_cours is defined and en_cours %}<span class="bg-purple-600 text-white rounded-full min-w-[20px] h-5 px-1 flex items-center justify-center text-[11px]">{{ en_cours|length }}</span>{% endif %}
                     </a>
                     {% endif %}
                     <button type="button" onclick="basculerTheme()" class="h-9 w-9 rounded-lg text-gray-500 hover:bg-gray-100" title="Mode clair / nuit">
