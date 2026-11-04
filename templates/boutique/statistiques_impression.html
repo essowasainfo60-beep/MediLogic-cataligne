@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Rapport {{ du.strftime('%d/%m/%Y') }} - {{ au.strftime('%d/%m/%Y') }} - {{ boutique.nom_boutique }}</title>
+    <style>
+        @page { size: A4; margin: 12mm; }
+        * { box-sizing: border-box; }
+        body { font-family: Arial, Helvetica, sans-serif; color: #111; font-size: 11px; margin: 0; background: #f3f4f6; }
+        .page { max-width: 210mm; margin: 0 auto; background: #fff; padding: 14mm; }
+        header { display: flex; align-items: center; gap: 12px; border-bottom: 2px solid #111; padding-bottom: 8px; margin-bottom: 12px; }
+        header img { width: 48px; height: 48px; object-fit: contain; }
+        h1 { font-size: 18px; margin: 0; }
+        h2 { font-size: 13px; margin: 16px 0 6px; padding-bottom: 3px; border-bottom: 1px solid #ccc; }
+        .muted { color: #666; }
+        .kpis { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
+        .kpi { border: 1px solid #ddd; border-radius: 6px; padding: 6px 8px; }
+        .kpi b { display: block; font-size: 14px; margin-top: 2px; }
+        table { width: 100%; border-collapse: collapse; }
+        th, td { padding: 3px 5px; border-bottom: 1px solid #e5e7eb; text-align: left; vertical-align: top; }
+        th { background: #f3f4f6; font-size: 10px; text-transform: uppercase; }
+        .r { text-align: right; white-space: nowrap; }
+        tfoot td { font-weight: bold; border-top: 2px solid #111; }
+        .deux { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+        .ligne { display: flex; justify-content: space-between; padding: 2px 0; }
+        .total { border-top: 1px solid #111; font-weight: bold; margin-top: 2px; padding-top: 3px; }
+        .barre { position: sticky; top: 0; background: #111; color: #fff; padding: 8px; text-align: center; }
+        .barre button { background: #8b5cf6; color: #fff; border: 0; padding: 8px 18px; border-radius: 6px; font-weight: bold; cursor: pointer; }
+        tr, .kpi { page-break-inside: avoid; }
+        @media print { body { background: #fff; } .page { padding: 0; max-width: none; } .barre { display: none; } }
+    </style>
+</head>
+<body>
+{% macro heures(h) %}{% if h is none %}—{% elif h < 1 %}{{ (h * 60)|round|int }} min{% elif h < 48 %}{{ '%.1f'|format(h)|replace('.', ',') }} h{% else %}{{ (h / 24)|round(1)|string|replace('.', ',') }} j{% endif %}{% endmacro %}
+<div class="barre"><button onclick="window.print()">🖨 Imprimer / Enregistrer en PDF</button></div>
+<div class="page">
+    <header>
+        {% if boutique.logo_url %}<img src="{{ boutique.logo_url }}" alt="">{% endif %}
+        <div style="flex:1">
+            <h1>{{ boutique.nom_boutique }} — Rapport d'activité</h1>
+            <div>Période du <b>{{ du.strftime('%d/%m/%Y %H:%M') }}</b> au <b>{{ au.strftime('%d/%m/%Y %H:%M') }}</b></div>
+        </div>
+        <div class="muted r">Édité le<br>{{ maintenant.strftime('%d/%m/%Y %H:%M') }}</div>
+    </header>
+
+    <div class="kpis">
+        <div class="kpi">Ventes (articles livrés)<b>{{ fcfa(resume.ventes) }}</b></div>
+        <div class="kpi">Commandes livrées<b>{{ resume.livrees }}</b></div>
+        <div class="kpi">Commandes reçues<b>{{ resume.recues }}</b></div>
+        <div class="kpi">Taux de réussite<b>{{ (resume.taux ~ ' %') if resume.taux is not none else '—' }}</b></div>
+        <div class="kpi">Panier moyen<b>{{ fcfa(resume.panier) }}</b></div>
+        <div class="kpi">Frais de livraison<b>{{ fcfa(resume.frais) }}</b></div>
+        <div class="kpi">Échecs / annulées<b>{{ resume.echecs }} / {{ resume.annulees }}</b></div>
+        <div class="kpi">Délai moyen<b>{{ heures(resume.delai) }}</b></div>
+    </div>
+
+    <div class="deux">
+        <div>
+            <h2>Ventes</h2>
+            <div class="ligne"><span>Montant brut des articles</span><span>{{ fcfa(resume.brut) }}</span></div>
+            <div class="ligne"><span>− Réductions (codes promo)</span><span>{{ fcfa(resume.remises) }}</span></div>
+            <div class="ligne total"><span>= Ventes de la boutique</span><span>{{ fcfa(resume.ventes) }}</span></div>
+            <div class="ligne"><span>+ Frais de livraison (livreurs)</span><span>{{ fcfa(resume.frais) }}</span></div>
+            <div class="ligne total"><span>= Payé par les clients</span><span>{{ fcfa(resume.encaisse_clients) }}</span></div>
+            <div class="ligne"><span>dont encore chez les livreurs</span><span>{{ fcfa(resume.chez_livreurs) }}</span></div>
+        </div>
+        <div>
+            <h2>Caisse sur la période</h2>
+            <div class="ligne"><span>Encaissé (versements + ventes boutique)</span><span>+ {{ fcfa(caisse_periode.encaisse) }}</span></div>
+            <div class="ligne"><span>Apports</span><span>+ {{ fcfa(caisse_periode.apports) }}</span></div>
+            <div class="ligne"><span>Charges</span><span>− {{ fcfa(caisse_periode.charges) }}</span></div>
+            <div class="ligne"><span>Autres sorties</span><span>− {{ fcfa(caisse_periode.autres_sorties) }}</span></div>
+            <div class="ligne total"><span>Mouvement net</span><span>{{ fcfa(caisse_periode.solde_periode) }}</span></div>
+            {% for cat, montant in charges_cat %}
+            <div class="ligne muted"><span>· {{ cat }}</span><span>{{ fcfa(montant) }}</span></div>
+            {% endfor %}
+        </div>
+    </div>
+    <p class="muted">Une vente compte le jour de sa livraison ; l'argent entre en caisse le jour où il est remis par le livreur.</p>
+
+    <h2>Ventes {{ 'par heure' if par_heure else 'par jour' }}</h2>
+    {% set lignes = [] %}{% for l in jours_labels %}{% if jours_valeurs[loop.index0] %}{% set _ = lignes.append((l, jours_valeurs[loop.index0])) %}{% endif %}{% endfor %}
+    {% if lignes %}
+    <table>
+        <thead><tr><th>{{ 'Heure' if par_heure else 'Jour' }}</th><th class="r">Ventes</th></tr></thead>
+        <tbody>{% for l, v in lignes %}<tr><td>{{ l }}</td><td class="r">{{ fcfa(v) }}</td></tr>{% endfor %}</tbody>
+        <tfoot><tr><td>Total</td><td class="r">{{ fcfa(resume.ventes) }}</td></tr></tfoot>
+    </table>
+    {% else %}<p class="muted">Aucune vente livrée sur la période.</p>{% endif %}
+
+    {% if top %}
+    <h2>Articles vendus</h2>
+    <table>
+        <thead><tr><th>#</th><th>Article</th><th class="r">Quantité</th><th class="r">Montant</th></tr></thead>
+        <tbody>{% for t in top %}<tr><td>{{ loop.index }}</td><td>{% if t.numero %}n°{{ t.numero }} · {% endif %}{{ t.nom }}</td><td class="r">{{ t.quantite }}</td><td class="r">{{ fcfa(t.montant) }}</td></tr>{% endfor %}</tbody>
+    </table>
+    {% endif %}
+
+    {% for titre, groupes in [('Par livreur', par_livreur), ('Par zone', par_zone), ('Par provenance', par_source)] if groupes %}
+    <h2>{{ titre }}</h2>
+    <table>
+        <thead><tr><th></th><th class="r">Livrées</th><th class="r">Échecs</th><th class="r">Délai moyen</th><th class="r">Frais livr.</th><th class="r">Ventes</th></tr></thead>
+        <tbody>{% for g in groupes %}<tr><td>{{ g.nom }}</td><td class="r">{{ g.livrees }}</td><td class="r">{{ g.echecs }}</td><td class="r">{{ heures(g.delai) }}</td><td class="r">{{ fcfa(g.frais) }}</td><td class="r">{{ fcfa(g.ventes) }}</td></tr>{% endfor %}</tbody>
+    </table>
+    {% endfor %}
+
+    <h2>Détail des commandes livrées ({{ livrees|length }})</h2>
+    {% if livrees %}
+    <table>
+        <thead><tr><th>N°</th><th>Livrée le</th><th>Client</th><th>Zone / livreur</th><th>Articles</th><th class="r">Net</th><th class="r">Frais</th><th class="r">Total</th><th>Réglée</th></tr></thead>
+        <tbody>
+        {% for c in livrees %}
+        <tr>
+            <td>{{ c.numero }}</td>
+            <td>{{ c.date_livraison.strftime('%d/%m %H:%M') }}{% if c.date_commande.date() != c.date_livraison.date() %}<br><span class="muted">cmd {{ c.date_commande.strftime('%d/%m') }}</span>{% endif %}</td>
+            <td>{{ c.client_nom }}<br><span class="muted">{{ c.client_telephone }}</span></td>
+            <td>{{ c.zone.nom if c.zone else '—' }}<br><span class="muted">{{ c.livreur.nom if c.livreur else 'boutique' }}</span></td>
+            <td>{% for a in c.articles_json %}{{ a.quantite }}× {{ a.nom }}{% if not loop.last %}, {% endif %}{% endfor %}{% if c.statut == 'retournee' %} <b>(retournée)</b>{% endif %}</td>
+            <td class="r">{{ fcfa(c.net_articles) }}</td>
+            <td class="r">{{ fcfa(c.frais_livraison or 0) }}</td>
+            <td class="r">{{ fcfa(c.total) }}</td>
+            <td>{{ 'oui' if c.reglee or not c.livreur_id else 'non' }}</td>
+        </tr>
+        {% endfor %}
+        </tbody>
+        <tfoot><tr><td colspan="5">Total</td><td class="r">{{ fcfa(resume.ventes) }}</td><td class="r">{{ fcfa(resume.frais) }}</td><td class="r">{{ fcfa(resume.encaisse_clients) }}</td><td></td></tr></tfoot>
+    </table>
+    {% else %}<p class="muted">Aucune commande livrée sur la période.</p>{% endif %}
+
+    {% if echecs %}
+    <h2>Échecs de livraison ({{ echecs|length }})</h2>
+    <table>
+        <thead><tr><th>N°</th><th>Date</th><th>Client</th><th>Livreur</th><th>Motif</th><th>Statut actuel</th></tr></thead>
+        <tbody>{% for c in echecs %}<tr><td>{{ c.numero }}</td><td>{{ c.date_echec.strftime('%d/%m %H:%M') }}</td><td>{{ c.client_nom }}</td><td>{{ c.livreur.nom if c.livreur else '—' }}</td><td>{{ c.motif_echec or '—' }}</td><td>{{ c.statut }}</td></tr>{% endfor %}</tbody>
+    </table>
+    {% endif %}
+
+    {% if annulees %}
+    <h2>Commandes annulées ({{ annulees|length }})</h2>
+    <table>
+        <thead><tr><th>N°</th><th>Commandée le</th><th>Client</th><th class="r">Montant</th></tr></thead>
+        <tbody>{% for c in annulees %}<tr><td>{{ c.numero }}</td><td>{{ c.date_commande.strftime('%d/%m %H:%M') }}</td><td>{{ c.client_nom }}</td><td class="r">{{ fcfa(c.total) }}</td></tr>{% endfor %}</tbody>
+    </table>
+    {% endif %}
+</div>
+</body>
+</html>

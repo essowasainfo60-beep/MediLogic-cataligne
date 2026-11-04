@@ -5,21 +5,38 @@
 {% macro heures(h) %}{% if h is none %}—{% elif h < 1 %}{{ (h * 60)|round|int }} min{% elif h < 48 %}{{ '%.1f'|format(h)|replace('.', ',') }} h{% else %}{{ (h / 24)|round(1)|string|replace('.', ',') }} j{% endif %}{% endmacro %}
 
 {% block content %}
+{% set lien_impression = url_for('boutique.statistiques', du=du.strftime('%Y-%m-%dT%H:%M'), au=au.strftime('%Y-%m-%dT%H:%M'), imprimer=1) %}
 <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-6">
-    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-        <h1 class="text-2xl md:text-3xl font-extrabold text-gray-900"><i class="fas fa-chart-line text-purple-500 mr-2"></i> Statistiques</h1>
-        <div class="flex gap-1 bg-white rounded-xl shadow-sm p-1 text-sm">
-            {% for j, lib in [(7, '7 jours'), (30, '30 jours'), (90, '3 mois'), (365, '1 an')] %}
-            <a href="{{ url_for('boutique.statistiques', jours=j) }}" class="px-3 py-1.5 rounded-lg {{ 'bg-purple-600 text-white font-semibold' if jours == j else 'text-gray-600 hover:bg-gray-100' }}">{{ lib }}</a>
+    <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
+        <div>
+            <h1 class="text-2xl md:text-3xl font-extrabold text-gray-900"><i class="fas fa-chart-line text-purple-500 mr-2"></i> Statistiques</h1>
+            <p class="text-sm text-gray-500">Du {{ du.strftime('%d/%m/%Y à %H:%M') }} au {{ au.strftime('%d/%m/%Y à %H:%M') }}</p>
+        </div>
+        <a href="{{ lien_impression }}" target="_blank" class="bg-gray-800 text-white px-4 py-2.5 rounded-xl font-semibold hover:bg-gray-900 text-center">
+            <i class="fas fa-print mr-1"></i> Imprimer le rapport détaillé
+        </a>
+    </div>
+
+    <!-- Période -->
+    <div class="bg-white rounded-2xl shadow-md p-4 space-y-3">
+        <div class="flex flex-wrap gap-1 text-sm">
+            {% for j, lib in [(1, "Aujourd'hui"), (7, '7 jours'), (30, '30 jours'), (90, '3 mois'), (365, '1 an')] %}
+            <a href="{{ url_for('boutique.statistiques', jours=j) }}" class="px-3 py-1.5 rounded-lg {{ 'bg-purple-600 text-white font-semibold' if jours == j else 'bg-gray-100 text-gray-700 hover:bg-gray-200' }}">{{ lib }}</a>
             {% endfor %}
         </div>
+        <form method="GET" class="flex flex-wrap items-end gap-2 text-sm">
+            <label class="text-gray-500">Du<input type="datetime-local" name="du" value="{{ du.strftime('%Y-%m-%dT%H:%M') }}" class="block mt-1 border border-gray-300 px-2 py-1.5"></label>
+            <label class="text-gray-500">Au<input type="datetime-local" name="au" value="{{ au.strftime('%Y-%m-%dT%H:%M') }}" class="block mt-1 border border-gray-300 px-2 py-1.5"></label>
+            <button type="submit" class="bg-purple-600 text-white px-4 py-2 rounded-lg font-semibold">Afficher la période</button>
+            {% if not jours %}<span class="px-2 py-1 rounded-full bg-purple-50 text-purple-700 text-xs">Période personnalisée</span>{% endif %}
+        </form>
     </div>
 
     <!-- Indicateurs -->
     <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
         {% for lib, val, detail in [
-            ('Ventes (articles livrés)', fcfa(resume.ventes), resume.livrees ~ ' commande(s) livrée(s)'),
-            ('Commandes reçues', resume.commandes, resume.clients ~ ' client(s) différent(s)'),
+            ('Ventes (articles livrés)', fcfa(resume.ventes), resume.livrees ~ ' livraison(s)' ~ ((' · ' ~ fcfa(resume.remises) ~ ' de réductions') if resume.remises else '')),
+            ('Commandes reçues', resume.recues, resume.clients ~ ' client(s) · ' ~ resume.annulees ~ ' annulée(s)'),
             ('Taux de livraison réussie', (resume.taux ~ ' %') if resume.taux is not none else '—', resume.echecs ~ ' échec(s) de livraison'),
             ('Panier moyen', fcfa(resume.panier), 'délai moyen : ' ~ heures(resume.delai)),
         ] %}
@@ -31,20 +48,38 @@
         {% endfor %}
     </div>
 
-    <!-- Graphique des ventes -->
+    <!-- Rapprochement ventes / caisse -->
     <div class="bg-white rounded-2xl shadow-md p-5">
-        <div class="flex items-center justify-between mb-3">
-            <h2 class="font-bold text-gray-900">Ventes par jour (articles livrés)</h2>
-            <span class="text-xs text-gray-500">Frais de livraison sur la période : {{ fcfa(resume.frais) }} (pour les livreurs)</span>
+        <h2 class="font-bold text-gray-900 mb-3"><i class="fas fa-scale-balanced text-purple-500 mr-1"></i> Ventes et caisse sur la période</h2>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6 text-sm">
+            <div class="space-y-1.5">
+                <div class="flex justify-between"><span>Payé par les clients (articles + livraison)</span><strong>{{ fcfa(resume.encaisse_clients) }}</strong></div>
+                <div class="flex justify-between text-gray-500"><span>− frais de livraison (pour les livreurs)</span><span>{{ fcfa(resume.frais) }}</span></div>
+                <div class="flex justify-between border-t pt-1.5"><span class="font-semibold">= Ventes de la boutique</span><strong>{{ fcfa(resume.ventes) }}</strong></div>
+                <div class="flex justify-between text-orange-600"><span>dont encore chez les livreurs</span><span>{{ fcfa(resume.chez_livreurs) }}</span></div>
+            </div>
+            <div class="space-y-1.5">
+                <div class="flex justify-between"><span>Encaissé en caisse (versements + ventes en boutique)</span><strong class="text-green-700">+ {{ fcfa(caisse_periode.encaisse) }}</strong></div>
+                <div class="flex justify-between"><span>Charges</span><span class="text-red-600">− {{ fcfa(caisse_periode.charges) }}</span></div>
+                <div class="flex justify-between"><span>Autres sorties (retraits, remboursements, paiements livreurs)</span><span class="text-red-600">− {{ fcfa(caisse_periode.autres_sorties) }}</span></div>
+                <div class="flex justify-between"><span>Apports</span><span class="text-blue-600">+ {{ fcfa(caisse_periode.apports) }}</span></div>
+                <div class="flex justify-between border-t pt-1.5"><span class="font-semibold">Mouvement de caisse sur la période</span><strong>{{ fcfa(caisse_periode.solde_periode) }}</strong></div>
+            </div>
         </div>
-        <div class="h-64"><canvas id="graphVentes" aria-label="Ventes par jour"></canvas></div>
+        <p class="text-xs text-gray-500 mt-3"><i class="fas fa-circle-info mr-1"></i>
+            Une vente compte le jour de sa livraison ; l'argent entre en caisse le jour où le livreur le remet. Un écart entre les deux correspond à l'argent encore chez les livreurs, ou remis sur une autre période.</p>
+    </div>
+
+    <!-- Graphique -->
+    <div class="bg-white rounded-2xl shadow-md p-5">
+        <h2 class="font-bold text-gray-900 mb-3">Ventes {{ 'par heure' if par_heure else 'par jour' }} (articles livrés)</h2>
+        <div class="h-64"><canvas id="graphVentes" aria-label="Ventes"></canvas></div>
     </div>
 
     <div class="grid grid-cols-1 xl:grid-cols-2 gap-6">
-        <!-- Meilleurs articles -->
         <div class="bg-white rounded-2xl shadow-md">
             <h2 class="px-5 py-4 border-b border-gray-100 font-bold text-gray-900">Articles les plus vendus</h2>
-            {% for t in top %}
+            {% for t in top[:10] %}
             <div class="flex items-center gap-3 px-5 py-2.5 border-b border-gray-100 text-sm">
                 <span class="w-6 text-gray-400 font-bold">{{ loop.index }}</span>
                 <span class="flex-1 min-w-0 truncate">{% if t.numero %}<span class="text-purple-600">n°{{ t.numero }}</span> · {% endif %}{{ t.nom }}</span>
@@ -62,17 +97,17 @@
             {% if groupes %}
             <table class="w-full text-sm">
                 <thead class="bg-gray-50 text-gray-600 text-left">
-                    <tr><th class="px-5 py-2"></th><th class="px-3 py-2 text-right">Commandes</th><th class="px-3 py-2 text-right">Livrées</th>
-                        <th class="px-3 py-2 text-right">Échecs</th><th class="px-3 py-2 text-right">Délai moyen</th><th class="px-5 py-2 text-right">Ventes</th></tr>
+                    <tr><th class="px-5 py-2"></th><th class="px-3 py-2 text-right">Livrées</th><th class="px-3 py-2 text-right">Échecs</th>
+                        <th class="px-3 py-2 text-right">Délai moyen</th><th class="px-3 py-2 text-right">Frais livr.</th><th class="px-5 py-2 text-right">Ventes</th></tr>
                 </thead>
                 <tbody class="divide-y divide-gray-100">
                     {% for g in groupes %}
                     <tr>
                         <td class="px-5 py-2 font-medium">{{ g.nom }}</td>
-                        <td class="px-3 py-2 text-right">{{ g.commandes }}</td>
                         <td class="px-3 py-2 text-right text-green-700">{{ g.livrees }}</td>
                         <td class="px-3 py-2 text-right {{ 'text-red-600' if g.echecs }}">{{ g.echecs }}</td>
                         <td class="px-3 py-2 text-right">{{ heures(g.delai) }}</td>
+                        <td class="px-3 py-2 text-right whitespace-nowrap">{{ fcfa(g.frais) }}</td>
                         <td class="px-5 py-2 text-right font-semibold whitespace-nowrap">{{ fcfa(g.ventes) }}</td>
                     </tr>
                     {% endfor %}
@@ -95,10 +130,8 @@
     const grille = nuit ? 'rgba(148,163,184,.15)' : 'rgba(15,23,42,.06)';
     new Chart(document.getElementById('graphVentes'), {
         type: 'bar',
-        data: {
-            labels: {{ jours_labels|tojson }},
-            datasets: [{ label: 'Ventes', data: {{ jours_valeurs|tojson }}, backgroundColor: '#8b5cf6', borderRadius: 6, maxBarThickness: 28 }],
-        },
+        data: { labels: {{ jours_labels|tojson }},
+                datasets: [{ label: 'Ventes', data: {{ jours_valeurs|tojson }}, backgroundColor: '#8b5cf6', borderRadius: 6, maxBarThickness: 28 }] },
         options: {
             responsive: true, maintainAspectRatio: false,
             plugins: { legend: { display: false },

@@ -1371,33 +1371,64 @@ def api_client():
 @boutique_bp.route('/statistiques')
 @login_required
 def statistiques():
-    jours = request.args.get('jours', 30, type=int)
-    jours = jours if jours in (7, 30, 90, 365) else 30
-    debut = (datetime.utcnow() - timedelta(days=jours - 1)).replace(hour=0, minute=0, second=0, microsecond=0)
-    cmds = Commande.query.filter(Commande.boutique_id == current_user.id, Commande.date_commande >= debut).all()
-    livrees = [c for c in cmds if c.statut in ('livree', 'retournee')]
-    terminees = [c for c in cmds if c.statut in ('livree', 'retournee', 'echec', 'annulee')]
+    """Statistiques sur une période libre (date + heure). Une VENTE compte à sa date
+    de LIVRAISON (quand l'argent arrive) ; une commande REÇUE compte à sa date de commande."""
+    maintenant = datetime.utcnow()
+    jours = request.args.get('jours', type=int)
 
-    # Ventes (articles livrés) par jour
-    par_jour = {(debut + timedelta(days=i)).strftime('%d/%m'): 0 for i in range(jours)}
+    def lire_moment(valeur):
+        for fmt in ('%Y-%m-%dT%H:%M', '%Y-%m-%d'):
+            try:
+                return datetime.strptime(valeur or '', fmt)
+            except ValueError:
+                pass
+        return None
+
+    du, au = lire_moment(request.args.get('du')), lire_moment(request.args.get('au'))
+    if not du or not au or du >= au:
+        jours = jours if jours in (1, 7, 30, 90, 365) else 30
+        au = maintenant
+        du = (maintenant - timedelta(days=jours - 1)).replace(hour=0, minute=0, second=0, microsecond=0)
+    else:
+        jours = None
+        if len(request.args.get('au', '')) == 10:      # date sans heure : toute la journée de fin
+            au = au + timedelta(days=1) - timedelta(seconds=1)
+
+    base = Commande.query.filter_by(boutique_id=current_user.id)
+    recues = base.filter(Commande.date_commande >= du, Commande.date_commande <= au).all()
+    livrees = (base.filter(Commande.statut.in_(['livree', 'retournee']),
+                           Commande.date_livraison >= du, Commande.date_livraison <= au)
+               .order_by(Commande.date_livraison).all())
+    echecs = base.filter(Commande.date_echec >= du, Commande.date_echec <= au).all()
+    annulees = [c for c in recues if c.statut == 'annulee']
+
+    # Ventes par jour (ou par heure si la période fait 2 jours ou moins)
+    par_heure = (au - du) <= timedelta(days=2)
+    pas = timedelta(hours=1) if par_heure else timedelta(days=1)
+    debut_case = du.replace(minute=0, second=0, microsecond=0) if par_heure else du.replace(hour=0, minute=0, second=0, microsecond=0)
+    cases = {}
+    t = debut_case
+    while t <= au and len(cases) < 400:
+        cases[t.strftime('%d/%m %Hh' if par_heure else '%d/%m')] = 0
+        t += pas
     for c in livrees:
-        jour = (c.date_livraison or c.date_commande).strftime('%d/%m')
-        if jour in par_jour:
-            par_jour[jour] += c.net_articles
+        cle = c.date_livraison.strftime('%d/%m %Hh' if par_heure else '%d/%m')
+        if cle in cases:
+            cases[cle] += c.net_articles
 
     def regrouper(cle):
         groupes = {}
-        for c in cmds:
+        for c in livrees:
             nom = cle(c)
-            g = groupes.setdefault(nom, {'nom': nom, 'commandes': 0, 'livrees': 0, 'echecs': 0, 'ventes': 0, 'delais': []})
-            g['commandes'] += 1
-            if c.statut in ('livree', 'retournee'):
-                g['livrees'] += 1
-                g['ventes'] += c.net_articles
-                if c.date_livraison:
-                    g['delais'].append((c.date_livraison - c.date_commande).total_seconds() / 3600)
-            if c.statut == 'echec' or c.motif_echec:
-                g['echecs'] += 1
+            g = groupes.setdefault(nom, {'nom': nom, 'livrees': 0, 'ventes': 0, 'frais': 0, 'delais': [], 'echecs': 0})
+            g['livrees'] += 1
+            g['ventes'] += c.net_articles
+            g['frais'] += c.frais_livraison or 0
+            if c.date_livraison and c.date_depart and c.date_livraison >= c.date_depart:
+                g['delais'].append((c.date_livraison - c.date_depart).total_seconds() / 3600)
+        for c in echecs:
+            nom = cle(c)
+            groupes.setdefault(nom, {'nom': nom, 'livrees': 0, 'ventes': 0, 'frais': 0, 'delais': [], 'echecs': 0})['echecs'] += 1
         for g in groupes.values():
             g['delai'] = sum(g['delais']) / len(g['delais']) if g['delais'] else None
         return sorted(groupes.values(), key=lambda g: -g['ventes'])
@@ -1405,30 +1436,57 @@ def statistiques():
     top = {}
     for c in livrees:
         for a in c.articles_json:
-            t = top.setdefault(a['nom'], {'nom': a['nom'], 'numero': a.get('numero'), 'quantite': 0, 'montant': 0})
-            t['quantite'] += int(a['quantite'])
-            t['montant'] += a['prix'] * int(a['quantite'])
+            t2 = top.setdefault(a['nom'], {'nom': a['nom'], 'numero': a.get('numero'), 'quantite': 0, 'montant': 0})
+            t2['quantite'] += int(a['quantite'])
+            t2['montant'] += a['prix'] * int(a['quantite'])
 
-    delais = [(c.date_livraison - c.date_commande).total_seconds() / 3600 for c in livrees if c.date_livraison]
+    # Caisse sur la même période (pour comparer avec les ventes)
+    mouvements = (MouvementCaisse.query.filter(MouvementCaisse.boutique_id == current_user.id,
+                                               MouvementCaisse.date >= du, MouvementCaisse.date <= au).all())
+    caisse_periode = {
+        'encaisse': sum(m.montant for m in mouvements if m.type in ('versement', 'vente_directe')),
+        'charges': -sum(m.montant for m in mouvements if m.type == 'charge'),
+        'autres_sorties': -sum(m.montant for m in mouvements if m.montant < 0 and m.type != 'charge'),
+        'apports': sum(m.montant for m in mouvements if m.type == 'apport'),
+        'solde_periode': sum(m.montant for m in mouvements),
+    }
+    charges_cat = {}
+    for m in mouvements:
+        if m.type == 'charge':
+            charges_cat[m.categorie or 'Divers'] = charges_cat.get(m.categorie or 'Divers', 0) - m.montant
+    chez_livreurs = sum(caisse.a_remettre(c) for c in livrees if c.livreur_id and not c.reglee)
+
+    delais = [(c.date_livraison - c.date_depart).total_seconds() / 3600 for c in livrees
+              if c.date_livraison and c.date_depart and c.date_livraison >= c.date_depart]
+    terminees = len(livrees) + len(echecs)
     resume = {
-        'commandes': len(cmds),
+        'recues': len(recues),
         'livrees': len(livrees),
-        'taux': round(100 * len(livrees) / len(terminees)) if terminees else None,
+        'taux': round(100 * len(livrees) / terminees) if terminees else None,
         'ventes': sum(c.net_articles for c in livrees),
+        'brut': sum(c.sous_total for c in livrees),
         'remises': sum(c.remise or 0 for c in livrees),
         'frais': sum(c.frais_livraison or 0 for c in livrees),
+        'encaisse_clients': sum(c.total for c in livrees),
         'panier': (sum(c.net_articles for c in livrees) / len(livrees)) if livrees else 0,
         'delai': (sum(delais) / len(delais)) if delais else None,
-        'echecs': sum(1 for c in cmds if c.statut == 'echec' or c.motif_echec),
-        'clients': len({_tel(c.client_telephone) for c in cmds}),
+        'echecs': len(echecs),
+        'annulees': len(annulees),
+        'clients': len({_tel(c.client_telephone) for c in recues + livrees}),
+        'chez_livreurs': chez_livreurs,
     }
-    return render_template('boutique/statistiques.html', jours=jours, resume=resume, fcfa=msg.fcfa,
-                           jours_labels=list(par_jour.keys()), jours_valeurs=list(par_jour.values()),
-                           top=sorted(top.values(), key=lambda t: -t['montant'])[:10],
-                           par_zone=regrouper(lambda c: c.zone.nom if c.zone else 'Sans zone'),
-                           par_livreur=[g for g in regrouper(lambda c: c.livreur.nom if c.livreur else 'Sans livreur')
-                                        if g['nom'] != 'Sans livreur' or g['livrees']],
-                           par_source=regrouper(lambda c: c.source_libelle))
+    contexte = dict(jours=jours, du=du, au=au, resume=resume, fcfa=msg.fcfa, par_heure=par_heure,
+                    jours_labels=list(cases.keys()), jours_valeurs=list(cases.values()),
+                    top=sorted(top.values(), key=lambda t: -t['montant']),
+                    par_zone=regrouper(lambda c: c.zone.nom if c.zone else 'Sans zone'),
+                    par_livreur=regrouper(lambda c: c.livreur.nom if c.livreur else 'Sans livreur (boutique)'),
+                    par_source=regrouper(lambda c: c.source_libelle),
+                    livrees=livrees, echecs=echecs, annulees=annulees,
+                    caisse_periode=caisse_periode, charges_cat=sorted(charges_cat.items(), key=lambda x: -x[1]),
+                    maintenant=maintenant, boutique=current_user)
+    if request.args.get('imprimer'):
+        return render_template('boutique/statistiques_impression.html', **contexte)
+    return render_template('boutique/statistiques.html', **contexte)
 
 # ==================== CODES PROMO ====================
 
