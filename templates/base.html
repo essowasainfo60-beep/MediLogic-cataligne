@@ -91,7 +91,14 @@
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <div class="flex justify-between items-center h-16 gap-3">
                 <!-- Identité : boutique connectée, boutique visitée, ou LivraPlus -->
-                <div class="flex items-center min-w-0">
+                <div class="flex items-center min-w-0 gap-2">
+                    {% if espace_boutique %}
+                    <button type="button" id="btnMenuLateral" onclick="ouvrirMenuLateral()" aria-label="Ouvrir le menu" aria-controls="menuLateral" aria-expanded="false"
+                            class="md:hidden relative h-10 w-10 -ml-1 flex-shrink-0 rounded-xl text-gray-700 hover:bg-gray-100 flex items-center justify-center">
+                        <i class="fas fa-bars text-lg"></i>
+                        {% if nouvelles_commandes %}<span class="pastille-nouvelles absolute top-1 right-1 bg-red-500 text-white text-[9px] font-bold rounded-full min-w-[16px] h-4 px-1 flex items-center justify-center">{{ nouvelles_commandes }}</span>{% endif %}
+                    </button>
+                    {% endif %}
                     {% if vitrine %}
                     <a href="{{ url_for('boutique.dashboard') if espace_boutique else url_for('client.catalogue', code=vitrine.lien_public) }}" class="flex items-center gap-2.5 min-w-0">
                         {% if vitrine.logo_url %}
@@ -150,15 +157,6 @@
                                 <p class="font-semibold text-gray-800">{{ current_user.proprietaire_prenom }} {{ current_user.proprietaire_nom }}</p>
                                 <p class="text-xs text-gray-500 truncate">{{ current_user.email }}</p>
                             </div>
-                            <!-- Liens principaux (téléphone) -->
-                            <div class="md:hidden border-b border-gray-100 pb-1 mb-1">
-                                {% for endpoint, icone, libelle in liens_boutique if peut(endpoint) %}
-                                <a href="{{ url_for(endpoint) }}" class="flex items-center gap-3 px-4 py-2 hover:bg-gray-50 {{ 'text-purple-700 font-semibold' if request.endpoint == endpoint else 'text-gray-700' }}">
-                                    <i class="fas {{ icone }} w-4 text-center"></i> {{ libelle }}
-                                    {% if endpoint == 'boutique.commandes' and nouvelles_commandes %}<span class="pastille-nouvelles ml-auto bg-red-500 text-white text-[10px] font-bold rounded-full px-1.5">{{ nouvelles_commandes }}</span>{% endif %}
-                                </a>
-                                {% endfor %}
-                            </div>
                             {% if peut('boutique.codes_promo') %}
                             <a href="{{ url_for('boutique.codes_promo') }}" class="flex items-center gap-3 px-4 py-2 text-gray-700 hover:bg-gray-50"><i class="fas fa-ticket w-4 text-center"></i> Codes promo</a>
                             {% endif %}
@@ -201,6 +199,83 @@
             </div>
         </div>
     </nav>
+
+    {% if espace_boutique %}
+    <!-- Menu latéral gauche (téléphone) : s'ouvre avec ☰, se ferme en choisissant un onglet -->
+    <div id="fondMenuLateral" onclick="fermerMenuLateral()" class="md:hidden fixed inset-0 z-[60] bg-black/40 opacity-0 pointer-events-none transition-opacity duration-200"></div>
+    <aside id="menuLateral" aria-label="Menu" aria-hidden="true"
+           class="md:hidden fixed inset-y-0 left-0 z-[61] w-[82%] max-w-[320px] bg-white shadow-2xl flex flex-col -translate-x-full transition-transform duration-200 ease-out">
+        <div class="flex items-center gap-3 px-4 h-16 border-b border-gray-100 flex-shrink-0">
+            {% if current_user.logo_url %}
+            <img src="{{ current_user.logo_url }}" alt="" class="h-10 w-10 rounded-xl object-contain bg-white border border-gray-200 flex-shrink-0">
+            {% else %}
+            <span class="h-10 w-10 rounded-xl bg-[#0b1d35] text-teal-300 flex items-center justify-center font-bold flex-shrink-0">{{ current_user.nom_boutique[:1]|upper }}</span>
+            {% endif %}
+            <span class="min-w-0 flex-1">
+                <span class="block font-bold text-gray-900 truncate leading-tight">{{ current_user.nom_boutique }}</span>
+                <span class="block text-xs text-gray-500 truncate">{{ current_user.proprietaire_prenom }} · {{ current_user.role_libelle }}</span>
+            </span>
+            <button type="button" onclick="fermerMenuLateral()" aria-label="Fermer le menu" class="h-9 w-9 rounded-lg text-gray-500 hover:bg-gray-100 flex-shrink-0"><i class="fas fa-xmark text-lg"></i></button>
+        </div>
+        <nav class="flex-1 overflow-y-auto py-2 text-[15px]">
+            {% for endpoint, icone, libelle in liens_boutique if peut(endpoint) %}
+            <a href="{{ url_for(endpoint) }}"
+               class="flex items-center gap-3 mx-2 px-3 py-3 rounded-xl {{ 'bg-purple-50 text-purple-700 font-semibold' if request.endpoint == endpoint else 'text-gray-700 hover:bg-gray-50' }}">
+                <i class="fas {{ icone }} w-5 text-center"></i> {{ 'Statistiques' if libelle == 'Stats' else libelle }}
+                {% if endpoint == 'boutique.commandes' and nouvelles_commandes %}<span class="pastille-nouvelles ml-auto bg-red-500 text-white text-[11px] font-bold rounded-full px-2 py-0.5">{{ nouvelles_commandes }}</span>{% endif %}
+            </a>
+            {% endfor %}
+            <div class="border-t border-gray-100 my-2 mx-4"></div>
+            {% for endpoint, icone, libelle in [('boutique.codes_promo', 'fa-ticket', 'Codes promo'), ('boutique.historique', 'fa-clock-rotate-left', 'Historique et export'),
+                                               ('boutique.profil', 'fa-store', 'Ma boutique'), ('boutique.vendeurs', 'fa-users', 'Équipe et accès')] if peut(endpoint) %}
+            <a href="{{ url_for(endpoint) }}"
+               class="flex items-center gap-3 mx-2 px-3 py-2.5 rounded-xl text-sm {{ 'bg-purple-50 text-purple-700 font-semibold' if request.endpoint == endpoint else 'text-gray-600 hover:bg-gray-50' }}">
+                <i class="fas {{ icone }} w-5 text-center"></i> {{ libelle }}
+            </a>
+            {% endfor %}
+            <a href="{{ url_for('client.catalogue', code=current_user.lien_public) }}" target="_blank" class="flex items-center gap-3 mx-2 px-3 py-2.5 rounded-xl text-sm text-gray-600 hover:bg-gray-50">
+                <i class="fas fa-eye w-5 text-center"></i> Voir mon catalogue
+            </a>
+        </nav>
+        <div class="border-t border-gray-100 p-2 flex-shrink-0 text-sm">
+            <button type="button" onclick="basculerTheme()" class="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-gray-600 hover:bg-gray-50">
+                <i class="fas fa-moon w-5 text-center icone-theme"></i> <span class="libelle-theme">Mode nuit</span>
+            </button>
+            <a href="{{ url_for('boutique.logout') }}" class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-red-600 hover:bg-red-50">
+                <i class="fas fa-right-from-bracket w-5 text-center"></i> Déconnexion
+            </a>
+        </div>
+    </aside>
+    <script>
+        function ouvrirMenuLateral() {
+            document.getElementById('menuLateral').classList.remove('-translate-x-full');
+            document.getElementById('menuLateral').setAttribute('aria-hidden', 'false');
+            document.getElementById('fondMenuLateral').classList.remove('opacity-0', 'pointer-events-none');
+            document.getElementById('btnMenuLateral').setAttribute('aria-expanded', 'true');
+            document.body.style.overflow = 'hidden';
+        }
+        function fermerMenuLateral() {
+            document.getElementById('menuLateral').classList.add('-translate-x-full');
+            document.getElementById('menuLateral').setAttribute('aria-hidden', 'true');
+            document.getElementById('fondMenuLateral').classList.add('opacity-0', 'pointer-events-none');
+            document.getElementById('btnMenuLateral').setAttribute('aria-expanded', 'false');
+            document.body.style.overflow = '';
+        }
+        // Choisir un onglet ferme le menu ; la touche Échap aussi ; glisser vers la gauche aussi.
+        document.querySelectorAll('#menuLateral a').forEach(function (a) { a.addEventListener('click', fermerMenuLateral); });
+        document.addEventListener('keydown', function (e) { if (e.key === 'Escape') fermerMenuLateral(); });
+        (function () {
+            var menu = document.getElementById('menuLateral'), x0 = null;
+            menu.addEventListener('touchstart', function (e) { x0 = e.touches[0].clientX; }, { passive: true });
+            menu.addEventListener('touchend', function (e) {
+                if (x0 !== null && x0 - e.changedTouches[0].clientX > 60) fermerMenuLateral();
+                x0 = null;
+            }, { passive: true });
+        })();
+        // Retour arrière du navigateur (page gardée en mémoire) : menu fermé
+        window.addEventListener('pageshow', fermerMenuLateral);
+    </script>
+    {% endif %}
 
     <!-- Messages -->
     <div class="max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 mt-4">

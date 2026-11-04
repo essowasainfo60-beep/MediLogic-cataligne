@@ -53,7 +53,7 @@ table thead th { font-weight: 600; font-size: .78rem; text-transform: uppercase;
 /* Champ de recherche des listes */
 .recherche { position: relative; }
 .recherche i { position: absolute; left: .9rem; top: 50%; transform: translateY(-50%); color: #9ca3af; pointer-events: none; }
-.recherche input { width: 100%; padding: .65rem 1rem .65rem 2.5rem; border: 1.5px solid var(--bordure); background: var(--carte); }
+.recherche input { width: 100%; padding: .65rem 5.5rem .65rem 2.5rem; border: 1.5px solid var(--bordure); background: var(--carte); text-overflow: ellipsis; }
 .recherche .compte { position: absolute; right: .9rem; top: 50%; transform: translateY(-50%); font-size: .75rem; color: #9ca3af; }
 
 /* Menu utilisateur */
