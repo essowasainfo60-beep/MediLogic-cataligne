@@ -67,6 +67,9 @@
                                 <i class="fas fa-map-marker-alt mr-1"></i>
                                 <strong>Adresse :</strong> {{ commande.client_adresse }}
                             </p>
+                            {% if commande.creneau %}
+                            <p class="text-sm text-purple-700 mt-1"><i class="fas fa-clock mr-1"></i> <strong>Livraison :</strong> {{ commande.creneau }}</p>
+                            {% endif %}
                             {% if commande.instructions %}
                             <p class="text-sm text-gray-600 mt-1">
                                 <i class="fas fa-pen-alt mr-1"></i>

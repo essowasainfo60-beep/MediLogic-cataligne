@@ -68,6 +68,12 @@
                             {{ 'Voir la position du client sur Google Maps' if commande.carte_integree else 'Chercher cette adresse sur Google Maps' }}
                         </a>
                     </div>
+                    {% if commande.creneau %}
+                    <div class="md:col-span-2">
+                        <p class="text-sm text-gray-500">Livraison souhaitée</p>
+                        <p class="font-medium text-purple-700"><i class="fas fa-clock mr-1"></i> {{ commande.creneau }}</p>
+                    </div>
+                    {% endif %}
                     {% if commande.instructions %}
                     <div class="md:col-span-2">
                         <p class="text-sm text-gray-500">Instructions du client</p>
@@ -178,6 +184,12 @@
                     {% endif %}
                 {% endif %}
 
+                {% if commande.photo_preuve %}
+                <div class="mt-3">
+                    <p class="text-sm text-gray-600 mb-1"><i class="fas fa-camera mr-1"></i> Photo de preuve prise par le livreur :</p>
+                    <a href="{{ commande.photo_preuve }}" target="_blank"><img src="{{ commande.photo_preuve }}" alt="Preuve de livraison" class="h-40 rounded-xl border object-cover"></a>
+                </div>
+                {% endif %}
                 {% if commande.livreur %}
                 <p class="mt-3 text-sm text-gray-700">
                     Livreur : <strong>{{ commande.livreur.nom }}</strong> · {{ commande.livreur.telephone }}

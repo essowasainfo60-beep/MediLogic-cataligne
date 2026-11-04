@@ -18,6 +18,7 @@ from models import (db, Boutique, Vendeur, Article, Commande, CleBiometrique, Li
 from utils import enregistrer_photo, enregistrer_photos, supprimer_photo_stockee, TAILLE_LOGO_PX
 from zones_modele import ZONES_LOME
 from zones_detection import zone_pour_adresse, index_quartiers
+from creneaux import creneaux_disponibles
 
 boutique_bp = Blueprint('boutique', __name__)
 
@@ -599,7 +600,7 @@ def nouvelle_commande():
             flash('Client (nom, téléphone, adresse) et au moins un article sont obligatoires', 'danger')
             return render_template('boutique/nouvelle_commande.html', catalogue=catalogue,
                                    sources=Commande.SOURCES, zones=zones_actives(), form=f,
-                                   index_quartiers=index_quartiers(zones_actives()),
+                                   index_quartiers=index_quartiers(zones_actives()), creneaux=creneaux_disponibles(),
                                    livreurs=Livreur.query.filter_by(boutique_id=current_user.id, actif=True).order_by(Livreur.nom).all())
 
         zone = Zone.query.filter_by(id=f.get('zone_id', type=int), boutique_id=current_user.id).first()
@@ -620,6 +621,7 @@ def nouvelle_commande():
             statut='confirmee',  # la boutique l'a prise elle-même : déjà confirmée
             source=f.get('source') if f.get('source') in Commande.SOURCES else 'autre',
             zone=zone,
+            creneau=f.get('creneau') if f.get('creneau') in creneaux_disponibles() else None,
             lu=True,
         )
         enregistrer_avec_numero(commande, 'numero_commande', Commande.prochain_numero)
@@ -635,7 +637,7 @@ def nouvelle_commande():
 
     return render_template('boutique/nouvelle_commande.html', catalogue=catalogue,
                            sources=Commande.SOURCES, zones=zones_actives(), form=request.args,
-                           index_quartiers=index_quartiers(zones_actives()),
+                           index_quartiers=index_quartiers(zones_actives()), creneaux=creneaux_disponibles(),
                            livreurs=Livreur.query.filter_by(boutique_id=current_user.id, actif=True).order_by(Livreur.nom).all())
 
 @boutique_bp.route('/commande/<int:commande_id>/attribuer', methods=['POST'])

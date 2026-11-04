@@ -7,6 +7,8 @@ from flask import (Blueprint, Response, abort, flash, jsonify, redirect,
 import caisse
 import messages_whatsapp as msg
 from zones_detection import zone_pour_adresse, index_quartiers
+from creneaux import creneaux_disponibles
+from utils import enregistrer_photo
 import stock
 from models import db, Boutique, Article, Commande, Photo, Zone, Livreur, enregistrer_avec_numero
 
@@ -190,7 +192,8 @@ def valider_commande():
     if request.method == 'GET':
         return render_template('client/commande.html', panier=panier, total=total, boutique=boutique,
                                zones=[z for z in boutique.zones if z.active],
-                               index_quartiers=index_quartiers([z for z in boutique.zones if z.active]))
+                               index_quartiers=index_quartiers([z for z in boutique.zones if z.active]),
+                               creneaux=creneaux_disponibles())
 
     client_nom = (request.form.get('client_nom') or '').strip()
     client_telephone = (request.form.get('client_telephone') or '').strip()
@@ -201,7 +204,8 @@ def valider_commande():
         flash('Nom, téléphone et adresse sont obligatoires', 'danger')
         return render_template('client/commande.html', panier=panier, total=total, boutique=boutique,
                                zones=[z for z in boutique.zones if z.active],
-                               index_quartiers=index_quartiers([z for z in boutique.zones if z.active]))
+                               index_quartiers=index_quartiers([z for z in boutique.zones if z.active]),
+                               creneaux=creneaux_disponibles())
 
 
     zones_actives = [z for z in boutique.zones if z.active]
@@ -227,6 +231,7 @@ def valider_commande():
         statut='nouvelle',
         zone=zone,
         frais_livraison=frais,
+        creneau=request.form.get('creneau') if request.form.get('creneau') in creneaux_disponibles() else None,
         latitude=lire_coordonnee(request.form.get('latitude'), 90),
         longitude=lire_coordonnee(request.form.get('longitude'), 180),
     )
@@ -245,6 +250,8 @@ def valider_commande():
         message += f"🧭 *Zone:* {commande.zone.nom}\n"
     if commande.latitude is not None:
         message += f"🗺️ *Position GPS:* https://maps.google.com/?q={commande.latitude},{commande.longitude}\n"
+    if commande.creneau:
+        message += f"🕒 *Livraison souhaitée:* {commande.creneau}\n"
     if instructions:
         message += f"\n📝 *Instructions:*\n\"{instructions}\"\n"
     message += "━━━━━━━━━━━━━━━━━━\n"
@@ -326,9 +333,13 @@ def espace_livreur_livree(code, commande_id):
     livreur = livreur_par_code(code)
     commande = Commande.query.filter_by(id=commande_id, livreur_id=livreur.id).first_or_404()
     if commande.statut == 'en_livraison':
+        photo = request.files.get('photo')
+        if photo and photo.filename:
+            commande.photo_preuve = enregistrer_photo(photo, commande.boutique_id)
         stock.changer_statut(commande, 'livree')
         db.session.commit()
-        flash(f"Commande n°{commande.numero} livrée à {commande.date_livraison.strftime('%H:%M')}. Merci !", 'success')
+        flash(f"Commande n°{commande.numero} livrée à {commande.date_livraison.strftime('%H:%M')}"
+              + (" avec photo de preuve" if commande.photo_preuve else "") + ". Merci !", 'success')
     return redirect(url_for('client.espace_livreur', code=code))
 
 @client_bp.route('/l/<code>/manifest.json')

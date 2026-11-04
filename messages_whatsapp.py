@@ -71,7 +71,8 @@ def course_livreur(commande, lien_livraison):
              f"📱 *Tél :* {commande.client_telephone}\n"
              f"📍 *Adresse :* {commande.client_adresse}\n"
              + (f"🧭 *Zone :* {commande.zone.nom}\n" if commande.zone else "") +
-             f"🗺️ *Itinéraire :* {commande.lien_carte}\n")
+             f"🗺️ *Itinéraire :* {commande.lien_carte}\n"
+             + (f"🕒 *Livraison souhaitée :* {commande.creneau}\n" if commande.creneau else ""))
     if commande.instructions:
         texte += f"📝 *Instructions :* {commande.instructions}\n"
     texte += (f"{TRAIT}\n{_recap(commande)}\n"

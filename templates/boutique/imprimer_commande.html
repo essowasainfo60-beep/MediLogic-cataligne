@@ -76,6 +76,7 @@
         {% if commande.zone %}<p>Zone : {{ commande.zone.nom }}</p>{% endif %}
         <p>{{ commande.client_adresse }}</p>
         {% if commande.latitude is not none %}<p>GPS : {{ '%.5f'|format(commande.latitude) }}, {{ '%.5f'|format(commande.longitude) }}</p>{% endif %}
+        {% if commande.creneau %}<p><strong>Livraison : {{ commande.creneau }}</strong></p>{% endif %}
         {% if commande.instructions %}<p><em>Note : {{ commande.instructions }}</em></p>{% endif %}
         <div class="qr" id="qr80" style="margin-top:4px"></div>
         <p class="qr-legende">Scanner pour l'itinéraire</p>
@@ -127,6 +128,7 @@
                 {% if commande.zone %}<p><strong>Zone : {{ commande.zone.nom }}</strong></p>{% endif %}
                 <p>{{ commande.client_adresse }}</p>
                 {% if commande.latitude is not none %}<p>GPS : {{ '%.5f'|format(commande.latitude) }}, {{ '%.5f'|format(commande.longitude) }}</p>{% endif %}
+                {% if commande.creneau %}<p><strong>Livraison souhaitée : {{ commande.creneau }}</strong></p>{% endif %}
                 {% if commande.instructions %}<p><em>Note : {{ commande.instructions }}</em></p>{% endif %}
             </div>
             <div class="bloc" style="flex:0 0 auto; text-align:center">

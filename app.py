@@ -94,7 +94,9 @@ def mettre_a_jour_schema():
                                 ('code_suivi', 'VARCHAR(32)'),
                                 ('motif_echec', 'VARCHAR(200)'),
                                 ('date_echec', 'TIMESTAMP'),
-                                ('tentatives', 'INTEGER NOT NULL DEFAULT 0')]:
+                                ('tentatives', 'INTEGER NOT NULL DEFAULT 0'),
+                                ('photo_preuve', 'VARCHAR(300)'),
+                                ('creneau', 'VARCHAR(80)')]:
             if nom not in colonnes_commandes:
                 conn.execute(text(f"ALTER TABLE commandes ADD COLUMN {nom} {definition}"))
         if 'frais' not in {c['name'] for c in inspecteur.get_columns('zones')}:
