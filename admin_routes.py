@@ -191,7 +191,7 @@ def supprimer_boutique(boutique_id):
     flash(f'La boutique "{boutique.nom_boutique}" a été supprimée', 'danger')
     return redirect(url_for('admin.admin_dashboard'))
 
-MDP_FORT = re.compile(r'^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z\d]).{10,}$')
+MDP_FORT = re.compile(r'^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z\d]).{8,}$')
 
 
 @admin_bp.route('/compte', methods=['GET', 'POST'])
@@ -209,7 +209,7 @@ def compte_admin():
         elif not re.fullmatch(r'[^@\s]+@[^@\s]+\.[^@\s]+', email):
             flash('Email invalide', 'danger')
         elif nouveau and not MDP_FORT.match(nouveau):
-            flash('Nouveau mot de passe trop faible : au moins 10 caractères, une majuscule, une minuscule, '
+            flash('Nouveau mot de passe trop faible : au moins 8 caractères, une majuscule, une minuscule, '
                   'un chiffre et un symbole', 'danger')
         elif nouveau != confirmation:
             flash('La confirmation ne correspond pas au nouveau mot de passe', 'danger')
