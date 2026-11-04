@@ -102,7 +102,9 @@ def mettre_a_jour_schema():
                                 ('photo_preuve', 'VARCHAR(300)'),
                                 ('creneau', 'VARCHAR(80)'),
                                 ('saisie_par', 'VARCHAR(120)'),
-                                ('confirmee_par', 'VARCHAR(120)')]:
+                                ('confirmee_par', 'VARCHAR(120)'),
+                                ('code_promo', 'VARCHAR(30)'),
+                                ('remise', 'FLOAT NOT NULL DEFAULT 0')]:
             if nom not in colonnes_commandes:
                 conn.execute(text(f"ALTER TABLE commandes ADD COLUMN {nom} {definition}"))
         if 'frais' not in {c['name'] for c in inspecteur.get_columns('zones')}:

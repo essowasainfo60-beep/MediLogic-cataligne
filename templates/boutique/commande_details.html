@@ -111,6 +111,7 @@
             <!-- Total -->
             <div class="mb-6 space-y-1">
                 <div class="flex justify-between text-gray-600"><span>Sous-total articles</span><span>{{ fcfa(commande.sous_total) }}</span></div>
+                {% if commande.remise %}<div class="flex justify-between text-green-700"><span>Code {{ commande.code_promo }}</span><span>-{{ fcfa(commande.remise) }}</span></div>{% endif %}
                 <div class="flex justify-between items-center text-gray-600">
                     <span>Livraison{% if commande.zone %} ({{ commande.zone.nom }}){% endif %}</span>
                     {% if commande.statut not in ['livree', 'retournee'] %}

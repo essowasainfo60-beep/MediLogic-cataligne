@@ -9,11 +9,12 @@ from flask import Blueprint, Response, render_template, redirect, url_for, flash
 from flask_login import login_user, logout_user, login_required, current_user
 
 import caisse
+import promos
 import securite
 import messages_whatsapp as msg
 import stock
 import webauthn_service
-from models import (db, Boutique, Vendeur, EspaceVendeur, Article, Commande, CleBiometrique, Livreur, Zone,
+from models import (db, Boutique, Vendeur, EspaceVendeur, Article, Commande, CleBiometrique, Livreur, Zone, CodePromo,
                     MouvementStock, MouvementCaisse, Retour, nouveau_code_lien, enregistrer_avec_numero)
 from utils import enregistrer_photo, enregistrer_photos, supprimer_photo_stockee, TAILLE_LOGO_PX
 from zones_modele import ZONES_LOME
@@ -34,7 +35,7 @@ GESTION = {
     'inventaire', 'entree_stock', 'mouvements_stock', 'ajouter_article', 'modifier_article', 'supprimer_photo',
     'photo_principale', 'archiver_article', 'restaurer_article', 'articles_archives', 'livreurs', 'basculer_livreur',
     'ajouter_zone', 'modifier_zone', 'zones_modele', 'envoyer_espace_livreur', 'nouveau_lien_livreur',
-    'statistiques', 'historique', 'historique_csv', 'retour_commande',
+    'statistiques', 'historique', 'historique_csv', 'retour_commande', 'codes_promo', 'modifier_code_promo',
 }
 ROLES_AUTORISES = {'vendeur': set(), 'caissier': CAISSE, 'gestionnaire': CAISSE | GESTION}
 
@@ -315,7 +316,7 @@ def dashboard():
                            echecs_count=echecs_count,
                            du_jour=du_jour,
                            livrees_jour=len(livrees_jour),
-                           encaisse_jour=sum(c.sous_total for c in livrees_jour),
+                           encaisse_jour=sum(c.net_articles for c in livrees_jour),
                            solde_caisse=solde_caisse, chez_livreurs=chez_livreurs,
                            ruptures=ruptures,
                            dernieres=dernieres,
@@ -685,6 +686,10 @@ def nouvelle_commande():
                                    index_quartiers=index_quartiers(zones_actives()), creneaux=creneaux_disponibles(),
                                    livreurs=Livreur.query.filter_by(boutique_id=current_user.id, actif=True).order_by(Livreur.nom).all())
 
+        sous_total_lignes = sum(l['prix'] * l['quantite'] for l in lignes)
+        promo, remise, erreur_promo = promos.verifier(current_user.id, f.get('code_promo'), sous_total_lignes)
+        if erreur_promo:
+            flash(erreur_promo + ' La commande a été enregistrée sans réduction.', 'warning')
         zone = Zone.query.filter_by(id=f.get('zone_id', type=int), boutique_id=current_user.id).first()
         if not zone:
             zone, _ = zone_pour_adresse(client_adresse, zones_actives())
@@ -698,7 +703,9 @@ def nouvelle_commande():
             client_adresse=client_adresse,
             instructions=(f.get('instructions') or '').strip() or None,
             articles_json=lignes,
-            total=sum(l['prix'] * l['quantite'] for l in lignes) + frais,
+            total=sous_total_lignes - remise + frais,
+            code_promo=promo.code if promo else None,
+            remise=remise,
             frais_livraison=frais,
             statut='confirmee',  # la boutique l'a prise elle-même : déjà confirmée
             source=f.get('source') if f.get('source') in Commande.SOURCES else 'autre',
@@ -708,6 +715,9 @@ def nouvelle_commande():
             lu=True,
         )
         enregistrer_avec_numero(commande, 'numero_commande', Commande.prochain_numero)
+        if promo:
+            promo.utilisations += 1
+            db.session.commit()
         livreur = Livreur.query.filter_by(id=f.get('livreur_id', type=int), boutique_id=current_user.id, actif=True).first()
         if livreur:
             confier_au_livreur(commande, livreur)
@@ -1282,7 +1292,7 @@ def _clients():
         f['sources'].add(c.source_libelle)
         if c.statut == 'livree':
             f['livrees'] += 1
-            f['depense'] += c.sous_total
+            f['depense'] += c.net_articles
         elif c.statut == 'echec':
             f['echecs'] += 1
         elif c.statut == 'annulee':
@@ -1348,7 +1358,7 @@ def statistiques():
     for c in livrees:
         jour = (c.date_livraison or c.date_commande).strftime('%d/%m')
         if jour in par_jour:
-            par_jour[jour] += c.sous_total
+            par_jour[jour] += c.net_articles
 
     def regrouper(cle):
         groupes = {}
@@ -1358,7 +1368,7 @@ def statistiques():
             g['commandes'] += 1
             if c.statut in ('livree', 'retournee'):
                 g['livrees'] += 1
-                g['ventes'] += c.sous_total
+                g['ventes'] += c.net_articles
                 if c.date_livraison:
                     g['delais'].append((c.date_livraison - c.date_commande).total_seconds() / 3600)
             if c.statut == 'echec' or c.motif_echec:
@@ -1379,9 +1389,10 @@ def statistiques():
         'commandes': len(cmds),
         'livrees': len(livrees),
         'taux': round(100 * len(livrees) / len(terminees)) if terminees else None,
-        'ventes': sum(c.sous_total for c in livrees),
+        'ventes': sum(c.net_articles for c in livrees),
+        'remises': sum(c.remise or 0 for c in livrees),
         'frais': sum(c.frais_livraison or 0 for c in livrees),
-        'panier': (sum(c.sous_total for c in livrees) / len(livrees)) if livrees else 0,
+        'panier': (sum(c.net_articles for c in livrees) / len(livrees)) if livrees else 0,
         'delai': (sum(delais) / len(delais)) if delais else None,
         'echecs': sum(1 for c in cmds if c.statut == 'echec' or c.motif_echec),
         'clients': len({_tel(c.client_telephone) for c in cmds}),
@@ -1393,4 +1404,50 @@ def statistiques():
                            par_livreur=[g for g in regrouper(lambda c: c.livreur.nom if c.livreur else 'Sans livreur')
                                         if g['nom'] != 'Sans livreur' or g['livrees']],
                            par_source=regrouper(lambda c: c.source_libelle))
+
+# ==================== CODES PROMO ====================
+
+@boutique_bp.route('/promos', methods=['GET', 'POST'])
+@login_required
+def codes_promo():
+    if request.method == 'POST':
+        code = promos.normaliser_code(request.form.get('code'))
+        valeur = lire_prix(request.form.get('valeur'))
+        type_promo = 'montant' if request.form.get('type') == 'montant' else 'pourcentage'
+        if not code or not valeur or (type_promo == 'pourcentage' and valeur > 100):
+            flash('Code et réduction valides obligatoires (pourcentage entre 1 et 100)', 'danger')
+        elif CodePromo.query.filter_by(boutique_id=current_user.id, code=code).first():
+            flash(f'Le code {code} existe déjà', 'danger')
+        else:
+            date_fin = _lire_date(request.form.get('date_fin'))
+            db.session.add(CodePromo(
+                boutique_id=current_user.id, code=code, type=type_promo, valeur=valeur,
+                minimum=lire_prix(request.form.get('minimum')) or None,
+                date_fin=date_fin.date() if date_fin else None,
+                utilisations_max=request.form.get('utilisations_max', type=int) or None,
+                affiche=bool(request.form.get('affiche')),
+            ))
+            db.session.commit()
+            flash(f'Code {code} créé', 'success')
+        return redirect(url_for('boutique.codes_promo'))
+
+    codes = CodePromo.query.filter_by(boutique_id=current_user.id).order_by(CodePromo.actif.desc(), CodePromo.created_at.desc()).all()
+    remises = dict(db.session.query(Commande.code_promo, db.func.sum(Commande.remise))
+                   .filter(Commande.boutique_id == current_user.id, Commande.code_promo.isnot(None),
+                           Commande.statut != 'annulee').group_by(Commande.code_promo).all())
+    return render_template('boutique/promos.html', codes=codes, remises=remises, fcfa=msg.fcfa,
+                           aujourdhui=datetime.utcnow().strftime('%Y-%m-%d'))
+
+
+@boutique_bp.route('/promos/<int:promo_id>', methods=['POST'])
+@login_required
+def modifier_code_promo(promo_id):
+    promo = CodePromo.query.filter_by(id=promo_id, boutique_id=current_user.id).first_or_404()
+    if 'actif' in request.form:
+        promo.actif = request.form['actif'] == '1'
+    if 'affiche' in request.form:
+        promo.affiche = request.form['affiche'] == '1'
+    db.session.commit()
+    flash(f"Code {promo.code} {'activé' if promo.actif else 'désactivé'}" + (' · annoncé dans le catalogue' if promo.affiche and promo.actif else ''), 'success')
+    return redirect(url_for('boutique.codes_promo'))
 

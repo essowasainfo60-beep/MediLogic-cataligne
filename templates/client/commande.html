@@ -28,6 +28,10 @@
                             <span>Articles</span>
                             <span>{{ "%.0f"|format(total) }} FCFA</span>
                         </div>
+                        <div class="flex justify-between font-normal text-green-700" id="ligneRemise" hidden>
+                            <span id="libelleRemise">Réduction</span>
+                            <span id="remiseAffichee"></span>
+                        </div>
                         <div class="flex justify-between font-normal" id="ligneFrais" {% if not zones %}hidden{% endif %}>
                             <span>Livraison</span>
                             <span id="fraisAffiches">{{ 'à choisir (zone)' if zones else '0 FCFA' }}</span>
@@ -38,10 +42,18 @@
                         </div>
                     </div>
                 </div>
+                <!-- Code promo -->
+                <div class="mt-3 flex gap-2">
+                    <input type="text" id="champCode" placeholder="Code promo (facultatif)" maxlength="30"
+                           class="flex-1 min-w-0 px-3 py-2 border border-gray-300 rounded-lg uppercase text-sm">
+                    <button type="button" onclick="appliquerCode()" class="px-4 py-2 rounded-lg bg-gray-800 text-white text-sm font-semibold">Appliquer</button>
+                </div>
+                <p id="infoCode" class="text-xs mt-1 hidden"></p>
             </div>
 
             <!-- Formulaire client -->
             <form method="POST" id="commandeForm">
+                <input type="hidden" name="code_promo" id="codePromo">
                 <div class="space-y-4">
                     <div>
                         <label class="block text-gray-700 text-sm font-bold mb-2">Nom complet *</label>
@@ -157,7 +169,30 @@ function majFrais() {
     const total = document.getElementById('totalAffiche');
     const fmt = (v) => Math.round(v).toLocaleString('fr-FR') + ' FCFA';
     document.getElementById('fraisAffiches').textContent = choix && choix.value ? fmt(frais) : 'à choisir (zone)';
-    total.textContent = fmt(+total.dataset.sousTotal + frais);
+    total.textContent = fmt(+total.dataset.sousTotal - (+total.dataset.remise || 0) + frais);
+}
+
+async function appliquerCode() {
+    const code = document.getElementById('champCode').value.trim();
+    const info = document.getElementById('infoCode');
+    const total = document.getElementById('totalAffiche');
+    info.classList.remove('hidden');
+    const d = await (await fetch("{{ url_for('client.api_promo') }}?code=" + encodeURIComponent(code))).json();
+    if (d.ok) {
+        document.getElementById('codePromo').value = d.code;
+        total.dataset.remise = d.remise;
+        document.getElementById('ligneRemise').hidden = false;
+        document.getElementById('libelleRemise').textContent = 'Code ' + d.code + ' (' + d.libelle + ')';
+        document.getElementById('remiseAffichee').textContent = '-' + Math.round(d.remise).toLocaleString('fr-FR') + ' FCFA';
+        info.className = 'text-xs mt-1 text-green-700'; info.textContent = '✓ ' + d.message;
+    } else {
+        document.getElementById('codePromo').value = '';
+        total.dataset.remise = 0;
+        document.getElementById('ligneRemise').hidden = true;
+        info.className = 'text-xs mt-1 text-red-600'; info.textContent = d.message;
+    }
+    if (document.getElementById('zoneClient')) majFrais();
+    else total.textContent = Math.round(+total.dataset.sousTotal - (+total.dataset.remise || 0)).toLocaleString('fr-FR') + ' FCFA';
 }
 
 function partagerPosition() {

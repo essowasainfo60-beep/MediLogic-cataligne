@@ -8,6 +8,7 @@ import caisse
 import messages_whatsapp as msg
 from zones_detection import zone_pour_adresse, index_quartiers
 from creneaux import creneaux_disponibles
+import promos
 from utils import enregistrer_photo
 import stock
 from models import db, Boutique, Article, Commande, Photo, Zone, Livreur, enregistrer_avec_numero
@@ -76,10 +77,15 @@ def catalogue(code):
 
     session['last_boutique_id'] = boutique.id
     boutique_id = boutique.id
+    from datetime import date
+    promos_affichees = [p for p in boutique.codes_promo if p.actif and p.affiche
+                        and (not p.date_fin or p.date_fin >= date.today())
+                        and (not p.utilisations_max or p.utilisations < p.utilisations_max)]
     articles = (Article.query.filter_by(boutique_id=boutique_id, archive=False)
                 .order_by(Article.created_at.desc()).all())
 
     return render_template('client/catalogue.html',
+                           promos_affichees=promos_affichees,
                            boutique=boutique,
                            articles=articles,
                            panier=session.get('panier', {}))
@@ -212,6 +218,7 @@ def valider_commande():
     zone = Zone.query.filter_by(id=request.form.get('zone_id', type=int), boutique_id=boutique.id, active=True).first()
     # Le quartier écrit dans l'adresse fait foi : « Agoè Télessou » est livré en zone Agoè,
     # même si une autre zone (moins chère) a été choisie dans la liste.
+    promo, remise, _ = promos.verifier(boutique.id, request.form.get('code_promo'), total)
     zone_adresse, _ = zone_pour_adresse(client_adresse, zones_actives)
     if zone_adresse:
         zone = zone_adresse
@@ -227,7 +234,9 @@ def valider_commande():
         client_adresse=client_adresse,
         instructions=instructions or None,
         articles_json=list(panier.values()),
-        total=total + frais,
+        total=total - remise + frais,
+        code_promo=promo.code if promo else None,
+        remise=remise,
         statut='nouvelle',
         zone=zone,
         frais_livraison=frais,
@@ -239,6 +248,9 @@ def valider_commande():
         commande.latitude = commande.longitude = None
     enregistrer_avec_numero(commande, 'numero_commande', Commande.prochain_numero)
     numero_commande = commande.numero
+    if promo:
+        promo.utilisations += 1
+        db.session.commit()
 
     # ==================== MESSAGE WHATSAPP POUR LA BOUTIQUE ====================
     message = f"🆕 *NOUVELLE COMMANDE N°{numero_commande}*\n"
@@ -270,6 +282,8 @@ def valider_commande():
         message += "\n"
 
     message += "━━━━━━━━━━━━━━━━━━\n"
+    if remise:
+        message += f"🎁 *Code {promo.code}:* -{remise:,.0f} FCFA\n"
     if frais:
         message += f"🛵 *Livraison ({zone.nom}):* {frais:,.0f} FCFA\n"
     message += f"💰 *TOTAL: {commande.total:,.0f} FCFA*\n"
@@ -386,4 +400,19 @@ def espace_livreur_echec(code, commande_id):
         db.session.commit()
         flash(f"Commande n°{commande.numero} signalée « {motif} ». La boutique est prévenue.", 'warning')
     return redirect(url_for('client.espace_livreur', code=code))
+
+# ==================== CODE PROMO (vérification depuis le panier) ====================
+
+@client_bp.route('/api/promo')
+def api_promo():
+    panier = session.get('panier', {})
+    boutique = boutique_du_panier(panier)
+    if not boutique:
+        return jsonify(ok=False, message='Panier vide')
+    total = sum(item['prix'] * item['quantite'] for item in panier.values())
+    promo, remise, erreur = promos.verifier(boutique.id, request.args.get('code'), total)
+    if not promo:
+        return jsonify(ok=False, message=erreur or 'Code invalide')
+    return jsonify(ok=True, code=promo.code, remise=remise, libelle=promo.libelle,
+                   message=f'Code {promo.code} appliqué : {msg.fcfa(remise)} de réduction')
 

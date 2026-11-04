@@ -31,7 +31,7 @@ def a_remettre(commande):
     """Ce que le livreur doit remettre à la boutique pour cette commande."""
     if commande.boutique.mode_frais == 'boutique_collecte':
         return commande.total
-    return commande.sous_total
+    return commande.net_articles
 
 
 def commande_livree(commande):

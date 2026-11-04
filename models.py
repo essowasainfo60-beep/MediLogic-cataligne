@@ -213,6 +213,9 @@ class Commande(db.Model):
     # Qui a fait quoi (gérant ou vendeur)
     saisie_par = db.Column(db.String(120), nullable=True)
     confirmee_par = db.Column(db.String(120), nullable=True)
+    # Code promo : réduction sur les articles (total = articles - remise + livraison)
+    code_promo = db.Column(db.String(30), nullable=True)
+    remise = db.Column(db.Float, nullable=False, default=0, server_default='0')
 
     boutique = db.relationship('Boutique', backref=db.backref('commandes', cascade='all, delete-orphan'))
     livreur = db.relationship('Livreur', backref='commandes')
@@ -265,8 +268,13 @@ class Commande(db.Model):
     def sous_total(self):
         return sum(a['prix'] * a['quantite'] for a in self.articles_json)
 
+    @property
+    def net_articles(self):
+        """Ce que rapportent les articles à la boutique, après la remise."""
+        return self.sous_total - (self.remise or 0)
+
     def recalculer_total(self):
-        self.total = self.sous_total + (self.frais_livraison or 0)
+        self.total = self.net_articles + (self.frais_livraison or 0)
 
     @property
     def numero(self):
@@ -474,4 +482,31 @@ class MouvementCaisse(db.Model):
     @property
     def type_classe(self):
         return self.TYPES.get(self.type, ('', 'bg-gray-100 text-gray-800'))[1]
+
+
+class CodePromo(db.Model):
+    """Code de réduction (ex. LIVE10 pour un live TikTok)."""
+    __tablename__ = 'codes_promo'
+    __table_args__ = (db.UniqueConstraint('boutique_id', 'code', name='uq_code_promo_boutique'),)
+
+    id = db.Column(db.Integer, primary_key=True)
+    boutique_id = db.Column(db.Integer, db.ForeignKey('boutiques.id'), nullable=False, index=True)
+    code = db.Column(db.String(30), nullable=False)
+    type = db.Column(db.String(15), nullable=False, default='pourcentage')   # 'pourcentage' ou 'montant'
+    valeur = db.Column(db.Float, nullable=False)
+    minimum = db.Column(db.Float, nullable=True)            # achat minimum (articles)
+    date_fin = db.Column(db.Date, nullable=True)
+    utilisations_max = db.Column(db.Integer, nullable=True)
+    utilisations = db.Column(db.Integer, nullable=False, default=0)
+    affiche = db.Column(db.Boolean, nullable=False, default=False)   # annoncé en haut du catalogue
+    actif = db.Column(db.Boolean, nullable=False, default=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    boutique = db.relationship('Boutique', backref=db.backref('codes_promo', cascade='all, delete-orphan'))
+
+    @property
+    def libelle(self):
+        if self.type == 'pourcentage':
+            return f"-{self.valeur:g} %"
+        return f"-{self.valeur:,.0f} FCFA".replace(',', ' ')
 

@@ -70,6 +70,14 @@
                 <span class="compteur-panier ml-2 bg-purple-600 text-white rounded-full min-w-[24px] h-6 px-1.5 flex items-center justify-center text-xs font-bold">{{ panier_quantite }}</span>
             </a>
         </div>
+        {% for p in promos_affichees %}
+        <div class="mt-4 flex items-center gap-3 bg-white/15 rounded-xl px-4 py-2 text-sm">
+            <i class="fas fa-ticket text-lg"></i>
+            <span>Code <strong class="font-mono bg-white text-purple-700 rounded px-2 py-0.5">{{ p.code }}</strong> : {{ p.libelle }}
+                {% if p.minimum %}dès {{ '{:,.0f}'.format(p.minimum).replace(',', ' ') }} FCFA{% endif %}
+                {% if p.date_fin %}· jusqu'au {{ p.date_fin.strftime('%d/%m') }}{% endif %}</span>
+        </div>
+        {% endfor %}
         {% set zones_livraison = boutique.zones|selectattr('active')|sort(attribute='frais')|list %}
         {% if zones_livraison %}
         <details class="mt-4 bg-white/10 rounded-xl px-4 py-2 text-sm">

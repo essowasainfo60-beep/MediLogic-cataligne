@@ -28,6 +28,8 @@ def _suivi(commande):
 def _recap(commande):
     lignes = [f"   • {a['nom']} x{a['quantite']} = {fcfa(a['prix'] * a['quantite'])}" for a in commande.articles_json]
     texte = "\n".join(lignes)
+    if commande.remise:
+        texte += f"\n   🎁 Code {commande.code_promo} = -{fcfa(commande.remise)}"
     if commande.frais_livraison:
         texte += f"\n   🛵 Livraison{' (' + commande.zone.nom + ')' if commande.zone else ''} = {fcfa(commande.frais_livraison)}"
     return texte + f"\n\n💰 *TOTAL : {fcfa(commande.total)}*"

@@ -103,6 +103,11 @@
             </div>
 
             <div class="flex justify-between items-center mt-5 pt-4 border-t">
+                <label for="codePromoSaisie" class="text-gray-700">Code promo</label>
+                <input type="text" name="code_promo" id="codePromoSaisie" maxlength="30" value="{{ form.get('code_promo', '') }}" placeholder="Facultatif"
+                       class="w-32 border border-gray-300 rounded-lg px-2 py-1.5 text-right uppercase">
+            </div>
+            <div class="flex justify-between items-center mt-3">
                 <label for="fraisLivraison" class="text-gray-700">Frais de livraison (FCFA)</label>
                 <input type="number" name="frais_livraison" id="fraisLivraison" min="0" step="50" value="{{ form.get('frais_livraison', '') }}"
                        placeholder="0" oninput="calculer()" class="w-32 border border-gray-300 rounded-lg px-2 py-1.5 text-right">

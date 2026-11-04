@@ -90,6 +90,7 @@
         <div class="sep"></div>
         <table>
             <tr><td>Sous-total</td><td style="text-align:right">{{ fcfa(commande.sous_total) }}</td></tr>
+            {% if commande.remise %}<tr><td>Code {{ commande.code_promo }}</td><td style="text-align:right">-{{ fcfa(commande.remise) }}</td></tr>{% endif %}
             <tr><td>Livraison</td><td style="text-align:right">{{ fcfa(commande.frais_livraison or 0) }}</td></tr>
             <tr class="total"><td>TOTAL</td><td style="text-align:right">{{ fcfa(commande.total) }}</td></tr>
         </table>
@@ -155,6 +156,7 @@
                 <tr><td>{% if a.numero %}n°{{ a.numero }} · {% endif %}{{ a.nom }}</td><td class="num">{{ fcfa(a.prix) }}</td><td class="num">{{ a.quantite }}</td><td class="num">{{ fcfa(a.prix * a.quantite) }}</td></tr>
                 {% endfor %}
                 <tr><td colspan="3" class="num">Sous-total articles</td><td class="num">{{ fcfa(commande.sous_total) }}</td></tr>
+                {% if commande.remise %}<tr><td colspan="3" class="num">Réduction (code {{ commande.code_promo }})</td><td class="num">-{{ fcfa(commande.remise) }}</td></tr>{% endif %}
                 <tr><td colspan="3" class="num">Frais de livraison{% if commande.zone %} ({{ commande.zone.nom }}){% endif %}</td><td class="num">{{ fcfa(commande.frais_livraison or 0) }}</td></tr>
                 <tr class="total"><td colspan="3">TOTAL À PAYER</td><td class="num">{{ fcfa(commande.total) }}</td></tr>
             </tbody>
