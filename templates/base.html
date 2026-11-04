@@ -159,6 +159,9 @@
                                 </a>
                                 {% endfor %}
                             </div>
+                            {% if peut('boutique.codes_promo') %}
+                            <a href="{{ url_for('boutique.codes_promo') }}" class="flex items-center gap-3 px-4 py-2 text-gray-700 hover:bg-gray-50"><i class="fas fa-ticket w-4 text-center"></i> Codes promo</a>
+                            {% endif %}
                             {% if peut('boutique.historique') %}
                             <a href="{{ url_for('boutique.historique') }}" class="flex items-center gap-3 px-4 py-2 text-gray-700 hover:bg-gray-50"><i class="fas fa-clock-rotate-left w-4 text-center"></i> Historique et export</a>
                             {% endif %}
