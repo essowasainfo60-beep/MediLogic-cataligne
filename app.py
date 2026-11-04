@@ -76,6 +76,17 @@ def sante():
     return jsonify(ok=True)
 
 
+def creer_compte_admin():
+    """Premier démarrage : le compte administrateur est créé dans la base à partir de
+    ADMIN_EMAIL / ADMIN_PASSWORD. Ensuite, il se modifie depuis la page admin."""
+    from models import Administrateur
+    if Administrateur.query.first() is None:
+        compte = Administrateur(email=app.config['ADMIN_EMAIL'].strip().lower())
+        compte.set_mot_de_passe(app.config['ADMIN_PASSWORD'])
+        db.session.add(compte)
+        db.session.commit()
+
+
 def mettre_a_jour_schema():
     """Crée les tables manquantes (dont `photos`) et ajoute les colonnes
     récentes sur une base existante, sans toucher aux données."""
@@ -163,6 +174,7 @@ def mettre_a_jour_schema():
 
 with app.app_context():
     mettre_a_jour_schema()
+    creer_compte_admin()
 
 
 # ==================== APPLICATION INSTALLABLE (PWA) ====================

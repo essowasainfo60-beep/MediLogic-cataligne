@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+
+{% block title %}Admin - Mes identifiants{% endblock %}
+
+{% block content %}
+<div class="max-w-xl mx-auto px-4 space-y-4">
+    <div>
+        <h1 class="text-2xl font-extrabold text-gray-900"><i class="fas fa-user-shield text-purple-500 mr-2"></i> Mes identifiants administrateur</h1>
+        <p class="text-sm text-gray-500">Enregistrés dans la base Neon (table « administrateurs », mot de passe chiffré).</p>
+    </div>
+    {% if recuperation %}
+    <div class="bg-orange-50 border border-orange-300 text-orange-900 rounded-xl p-3 text-sm">
+        <i class="fas fa-life-ring mr-1"></i> Connexion de secours : choisissez un nouveau mot de passe, puis retirez
+        <code>ADMIN_RECUPERATION</code> des réglages Render.
+    </div>
+    {% endif %}
+    <form method="POST" class="bg-white rounded-2xl shadow-md p-5 space-y-3">
+        <label class="block text-sm text-gray-600">Email de connexion
+            <input type="email" name="email" required value="{{ compte.email }}" class="mt-1 w-full border border-gray-300 px-3 py-2"></label>
+        <label class="block text-sm text-gray-600">Nouveau mot de passe <span class="text-gray-400">(laisser vide pour le garder)</span>
+            <input type="password" name="nouveau_mot_de_passe" autocomplete="new-password" minlength="10" class="mt-1 w-full border border-gray-300 px-3 py-2"></label>
+        <label class="block text-sm text-gray-600">Confirmer le nouveau mot de passe
+            <input type="password" name="confirmation" autocomplete="new-password" class="mt-1 w-full border border-gray-300 px-3 py-2"></label>
+        <p class="text-xs text-gray-500">Au moins 10 caractères, avec majuscule, minuscule, chiffre et symbole.</p>
+        {% if not recuperation %}
+        <label class="block text-sm text-gray-600 pt-2 border-t border-gray-100">Mot de passe actuel (pour confirmer)
+            <input type="password" name="mot_de_passe_actuel" required autocomplete="current-password" class="mt-1 w-full border border-gray-300 px-3 py-2"></label>
+        {% endif %}
+        <button type="submit" class="w-full bg-purple-600 text-white py-2.5 rounded-xl font-semibold hover:bg-purple-700">Enregistrer</button>
+    </form>
+    <p class="text-xs text-gray-500">
+        {% if compte.derniere_connexion %}Dernière connexion : {{ compte.derniere_connexion.strftime('%d/%m/%Y à %H:%M') }} · {% endif %}
+        Dernière modification : {{ compte.modifie_le.strftime('%d/%m/%Y à %H:%M') if compte.modifie_le else '—' }}
+    </p>
+</div>
+{% endblock %}

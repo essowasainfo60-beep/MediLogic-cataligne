@@ -1,13 +1,14 @@
 import hmac
+import os
 import re
-from datetime import date
+from datetime import date, datetime
 from functools import wraps
 
 from flask import Blueprint, render_template, redirect, url_for, flash, request, session, current_app
 
 import abonnement
 import securite
-from models import db, Boutique, Commande, Article, PaiementAbonnement
+from models import db, Administrateur, Boutique, Commande, Article, PaiementAbonnement
 import messages_whatsapp as msg
 
 admin_bp = Blueprint('admin', __name__)
@@ -34,10 +35,23 @@ def admin_login():
             flash(f'Trop d\'essais incorrects. Réessayez dans {attente} minute(s).', 'danger')
             return render_template('admin/login.html'), 429
 
+        compte = Administrateur.query.filter(db.func.lower(Administrateur.email) == email).first()
+        valide = compte is not None and compte.verifier_mot_de_passe(password)
+        # Secours (mot de passe oublié) : ADMIN_RECUPERATION=1 dans Render + ADMIN_EMAIL / ADMIN_PASSWORD
         cfg = current_app.config
-        if email == cfg['ADMIN_EMAIL'].lower() and hmac.compare_digest(password.encode(), cfg['ADMIN_PASSWORD'].encode()):
+        if not valide and os.environ.get('ADMIN_RECUPERATION') == '1' and email == cfg['ADMIN_EMAIL'].strip().lower() \
+                and hmac.compare_digest(password.encode(), cfg['ADMIN_PASSWORD'].encode()):
+            compte = Administrateur.query.first()
+            valide = True
+            if compte:
+                session['admin_recuperation'] = True
+        if valide:
             securite.succes(request, 'admin')
             session['is_admin'] = True
+            session['admin_id'] = compte.id if compte else None
+            if compte:
+                compte.derniere_connexion = datetime.utcnow()
+                db.session.commit()
             flash('Connexion administrateur réussie', 'success')
             return redirect(url_for('admin.admin_dashboard'))
         else:
@@ -48,7 +62,8 @@ def admin_login():
 
 @admin_bp.route('/logout')
 def admin_logout():
-    session.pop('is_admin', None)
+    for cle in ('is_admin', 'admin_id', 'admin_recuperation'):
+        session.pop(cle, None)
     flash('Déconnexion réussie', 'success')
     return redirect(url_for('admin.admin_login'))
 
@@ -175,3 +190,35 @@ def supprimer_boutique(boutique_id):
     db.session.commit()
     flash(f'La boutique "{boutique.nom_boutique}" a été supprimée', 'danger')
     return redirect(url_for('admin.admin_dashboard'))
+
+MDP_FORT = re.compile(r'^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z\d]).{10,}$')
+
+
+@admin_bp.route('/compte', methods=['GET', 'POST'])
+@admin_required
+def compte_admin():
+    """Changer l'email et le mot de passe de l'administrateur (enregistrés dans Neon)."""
+    compte = db.session.get(Administrateur, session.get('admin_id') or 0) or Administrateur.query.first()
+    if request.method == 'POST':
+        actuel = request.form.get('mot_de_passe_actuel') or ''
+        email = (request.form.get('email') or '').strip().lower()
+        nouveau = request.form.get('nouveau_mot_de_passe') or ''
+        confirmation = request.form.get('confirmation') or ''
+        if not session.get('admin_recuperation') and not compte.verifier_mot_de_passe(actuel):
+            flash('Mot de passe actuel incorrect', 'danger')
+        elif not re.fullmatch(r'[^@\s]+@[^@\s]+\.[^@\s]+', email):
+            flash('Email invalide', 'danger')
+        elif nouveau and not MDP_FORT.match(nouveau):
+            flash('Nouveau mot de passe trop faible : au moins 10 caractères, une majuscule, une minuscule, '
+                  'un chiffre et un symbole', 'danger')
+        elif nouveau != confirmation:
+            flash('La confirmation ne correspond pas au nouveau mot de passe', 'danger')
+        else:
+            compte.email = email
+            if nouveau:
+                compte.set_mot_de_passe(nouveau)
+            db.session.commit()
+            session.pop('admin_recuperation', None)
+            flash('Identifiants administrateur mis à jour' + (' (nouveau mot de passe enregistré)' if nouveau else ''), 'success')
+            return redirect(url_for('admin.compte_admin'))
+    return render_template('admin/compte.html', compte=compte, recuperation=session.get('admin_recuperation'))

@@ -595,3 +595,22 @@ class PaiementAbonnement(db.Model):
         annee, mois = map(int, self.mois.split('-'))
         return ['janvier', 'février', 'mars', 'avril', 'mai', 'juin', 'juillet', 'août',
                 'septembre', 'octobre', 'novembre', 'décembre'][mois - 1] + f' {annee}'
+
+
+class Administrateur(db.Model):
+    """Compte de l'administrateur global LivraPlus (identifiants modifiables, mot de passe chiffré)."""
+    __tablename__ = 'administrateurs'
+
+    id = db.Column(db.Integer, primary_key=True)
+    email = db.Column(db.String(120), unique=True, nullable=False)
+    mot_de_passe_hash = db.Column(db.String(255), nullable=False)
+    derniere_connexion = db.Column(db.DateTime, nullable=True)
+    modifie_le = db.Column(db.DateTime, default=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    def set_mot_de_passe(self, mot_de_passe):
+        self.mot_de_passe_hash = generate_password_hash(mot_de_passe)
+        self.modifie_le = datetime.utcnow()
+
+    def verifier_mot_de_passe(self, mot_de_passe):
+        return check_password_hash(self.mot_de_passe_hash, mot_de_passe or '')
