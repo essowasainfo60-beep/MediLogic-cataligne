@@ -97,15 +97,15 @@
                         </td>
                         <td class="px-6 py-4 whitespace-nowrap text-sm space-x-2">
                             {% if not boutique.active %}
-                                <a href="{{ url_for('admin.activer_boutique', boutique_id=boutique.id) }}" 
-                                   class="text-green-600 hover:text-green-900 transition" onclick="return confirm('Activer cette boutique ?')">
-                                    <i class="fas fa-check-circle"></i> Activer
-                                </a>
+                                <form method="POST" action="{{ url_for('admin.activer_boutique', boutique_id=boutique.id) }}" class="inline"
+                                      onsubmit="return confirm('Activer cette boutique ?')">
+                                    <button type="submit" class="text-green-600 hover:text-green-900 transition"><i class="fas fa-check-circle"></i> Activer</button>
+                                </form>
                             {% else %}
-                                <a href="{{ url_for('admin.desactiver_boutique', boutique_id=boutique.id) }}" 
-                                   class="text-yellow-600 hover:text-yellow-900 transition" onclick="return confirm('Désactiver cette boutique ?')">
-                                    <i class="fas fa-pause-circle"></i> Désactiver
-                                </a>
+                                <form method="POST" action="{{ url_for('admin.desactiver_boutique', boutique_id=boutique.id) }}" class="inline"
+                                      onsubmit="return confirm('Désactiver cette boutique ?')">
+                                    <button type="submit" class="text-yellow-600 hover:text-yellow-900 transition"><i class="fas fa-pause-circle"></i> Désactiver</button>
+                                </form>
                             {% endif %}
                             <a href="{{ url_for('admin.reinitialiser_mdp', boutique_id=boutique.id) }}" 
                                class="text-blue-600 hover:text-blue-900 transition">

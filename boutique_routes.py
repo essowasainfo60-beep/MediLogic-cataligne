@@ -9,6 +9,7 @@ from flask import Blueprint, Response, render_template, redirect, url_for, flash
 from flask_login import login_user, logout_user, login_required, current_user
 
 import caisse
+import securite
 import messages_whatsapp as msg
 import stock
 import webauthn_service
@@ -110,6 +111,10 @@ def connexion():
         return redirect(url_for('boutique.dashboard'))
     if request.method == 'POST':
         email = (request.form.get('email') or '').strip().lower()
+        attente = securite.bloque(request, email)
+        if attente:
+            flash(f'Trop d\'essais incorrects. Réessayez dans {attente} minute(s), ou utilisez « Mot de passe oublié ».', 'danger')
+            return render_template('boutique/connexion.html'), 429
         boutique = Boutique.query.filter(db.func.lower(Boutique.email) == email).first()
 
         if boutique and boutique.verifier_mot_de_passe(request.form.get('mot_de_passe') or ''):
@@ -117,9 +122,11 @@ def connexion():
                 flash('Votre compte n\'est pas encore activé par l\'administrateur', 'warning')
                 return redirect(url_for('boutique.connexion'))
 
-            login_user(boutique)
+            securite.succes(request, email)
+            login_user(boutique, remember=True)
             flash(f'Bonjour {boutique.proprietaire_prenom} !', 'success')
             return redirect(url_for('boutique.dashboard'))
+        securite.echec(request, email)
         flash('Email ou mot de passe incorrect', 'danger')
 
     return render_template('boutique/connexion.html')
@@ -190,9 +197,16 @@ def mot_passe_oublie():
     if request.method == 'POST':
         email = (request.form.get('email') or '').strip().lower()
         nouveau_mdp = request.form.get('nouveau_mdp') or ''
+        attente = securite.bloque(request, 'oubli:' + email)
+        if attente:
+            flash(f'Trop d\'essais incorrects. Réessayez dans {attente} minute(s).', 'danger')
+            return render_template('boutique/mot_passe_oublie.html'), 429
         boutique = Boutique.query.filter(db.func.lower(Boutique.email) == email).first()
+        bonne_reponse = boutique and boutique.verifier_reponse_secrete(request.form.get('reponse_secrete') or '')
+        if not bonne_reponse:
+            securite.echec(request, 'oubli:' + email)
 
-        if boutique and boutique.verifier_reponse_secrete(request.form.get('reponse_secrete') or ''):
+        if bonne_reponse:
             if MDP_FORT.match(nouveau_mdp):
                 boutique.set_mot_de_passe(nouveau_mdp)
                 db.session.commit()

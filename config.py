@@ -19,6 +19,18 @@ class Config:
     # Neon coupe les connexions inactives : on les vérifie avant usage
     SQLALCHEMY_ENGINE_OPTIONS = {'pool_pre_ping': True, 'pool_recycle': 280}
 
+    # Cookies de session : jamais lisibles par JavaScript, envoyés seulement en HTTPS en ligne
+    # (Render définit la variable RENDER), et pas envoyés par d'autres sites.
+    EN_LIGNE = bool(os.environ.get('RENDER'))
+    SESSION_COOKIE_HTTPONLY = True
+    SESSION_COOKIE_SAMESITE = 'Lax'
+    SESSION_COOKIE_SECURE = EN_LIGNE
+    REMEMBER_COOKIE_SECURE = EN_LIGNE
+    REMEMBER_COOKIE_HTTPONLY = True
+    # Le jeton anti-falsification reste valable tant que la session est ouverte
+    # (un livreur peut garder sa page ouverte toute la journée).
+    WTF_CSRF_TIME_LIMIT = None
+
     # Uploads : les photos sont compressées puis stockées dans la base
     MAX_CONTENT_LENGTH = 32 * 1024 * 1024  # total d'un envoi (plusieurs photos)
 

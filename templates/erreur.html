@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+
+{% block title %}{{ titre }}{% endblock %}
+
+{% block content %}
+<div class="max-w-md mx-auto px-4 py-16 text-center">
+    <div class="bg-white rounded-2xl shadow-md p-8">
+        <p class="text-6xl font-extrabold text-purple-200">{{ code }}</p>
+        <h1 class="text-xl font-bold text-gray-900 mt-2">{{ titre }}</h1>
+        <p class="text-gray-500 mt-2">{{ message }}</p>
+        <div class="flex gap-2 justify-center mt-6">
+            <a href="javascript:history.back()" class="px-4 py-2 rounded-xl bg-gray-100 text-gray-700 hover:bg-gray-200">Retour</a>
+            <a href="/" class="px-4 py-2 rounded-xl bg-purple-600 text-white hover:bg-purple-700">Accueil</a>
+        </div>
+    </div>
+</div>
+{% endblock %}

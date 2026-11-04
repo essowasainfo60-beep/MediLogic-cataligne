@@ -3,6 +3,7 @@ from functools import wraps
 
 from flask import Blueprint, render_template, redirect, url_for, flash, request, session, current_app
 
+import securite
 from models import db, Boutique
 
 admin_bp = Blueprint('admin', __name__)
@@ -22,15 +23,21 @@ def admin_login():
         return redirect(url_for('admin.admin_dashboard'))
     
     if request.method == 'POST':
-        email = request.form.get('email')
-        password = request.form.get('password')
-        
+        email = (request.form.get('email') or '').strip().lower()
+        password = request.form.get('password') or ''
+        attente = securite.bloque(request, 'admin')
+        if attente:
+            flash(f'Trop d\'essais incorrects. Réessayez dans {attente} minute(s).', 'danger')
+            return render_template('admin/login.html'), 429
+
         cfg = current_app.config
-        if (email or '').strip().lower() == cfg['ADMIN_EMAIL'].lower() and                 hmac.compare_digest((password or '').encode(), cfg['ADMIN_PASSWORD'].encode()):
+        if email == cfg['ADMIN_EMAIL'].lower() and hmac.compare_digest(password.encode(), cfg['ADMIN_PASSWORD'].encode()):
+            securite.succes(request, 'admin')
             session['is_admin'] = True
             flash('Connexion administrateur réussie', 'success')
             return redirect(url_for('admin.admin_dashboard'))
         else:
+            securite.echec(request, 'admin')
             flash('Email ou mot de passe incorrect', 'danger')
     
     return render_template('admin/login.html')
@@ -55,7 +62,7 @@ def admin_dashboard():
                          actives=actives,
                          inactives=inactives)
 
-@admin_bp.route('/activer/<int:boutique_id>')
+@admin_bp.route('/activer/<int:boutique_id>', methods=['POST'])
 @admin_required
 def activer_boutique(boutique_id):
     boutique = Boutique.query.get_or_404(boutique_id)
@@ -64,7 +71,7 @@ def activer_boutique(boutique_id):
     flash(f'La boutique "{boutique.nom_boutique}" a été activée', 'success')
     return redirect(url_for('admin.admin_dashboard'))
 
-@admin_bp.route('/desactiver/<int:boutique_id>')
+@admin_bp.route('/desactiver/<int:boutique_id>', methods=['POST'])
 @admin_required
 def desactiver_boutique(boutique_id):
     boutique = Boutique.query.get_or_404(boutique_id)

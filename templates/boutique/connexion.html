@@ -198,6 +198,7 @@
             <div id="errorMsg" class="alert alert-danger"></div>
 
             <form method="POST" action="{{ url_for('boutique.connexion') }}">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                 <div class="form-group">
                     <label for="email">Email</label>
                     <div class="input-wrap">
@@ -243,15 +244,16 @@
             }
         });
 
+        const JETON = "{{ csrf_token() }}";
         async function seConnecterBiometrie() {
             const erreur = document.getElementById('errorMsg');
             erreur.style.display = 'none';
             try {
-                const rOpt = await fetch("{{ url_for('boutique.biometrie_connexion_options') }}", { method: 'POST' });
+                const rOpt = await fetch("{{ url_for('boutique.biometrie_connexion_options') }}", { method: 'POST', headers: { 'X-CSRFToken': JETON } });
                 const dOpt = await rOpt.json();
                 const assertion = await SimpleWebAuthnBrowser.startAuthentication(dOpt.options);
                 const rVer = await fetch("{{ url_for('boutique.biometrie_connexion_verifier') }}", {
-                    method: 'POST', headers: { 'Content-Type': 'application/json' },
+                    method: 'POST', headers: { 'Content-Type': 'application/json', 'X-CSRFToken': JETON },
                     body: JSON.stringify({ credential: assertion }),
                 });
                 const dVer = await rVer.json();

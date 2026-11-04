@@ -3,6 +3,31 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <!-- Jeton anti-falsification : ajouté à chaque formulaire et à chaque envoi en arrière-plan -->
+    <meta name="csrf-token" content="{{ csrf_token() }}">
+    <script>
+        (function () {
+            var jeton = document.querySelector('meta[name="csrf-token"]').content;
+            var fetchOrigine = window.fetch;
+            window.fetch = function (url, options) {
+                options = options || {};
+                if ((options.method || 'GET').toUpperCase() !== 'GET') {
+                    options.headers = new Headers(options.headers || {});
+                    options.headers.set('X-CSRFToken', jeton);
+                }
+                return fetchOrigine(url, options);
+            };
+            document.addEventListener('DOMContentLoaded', function () {
+                document.querySelectorAll('form').forEach(function (f) {
+                    if ((f.getAttribute('method') || 'get').toLowerCase() === 'post' && !f.querySelector('input[name="csrf_token"]')) {
+                        var champ = document.createElement('input');
+                        champ.type = 'hidden'; champ.name = 'csrf_token'; champ.value = jeton;
+                        f.appendChild(champ);
+                    }
+                });
+            });
+        })();
+    </script>
     <!-- Thème clair / nuit appliqué avant l'affichage (pas de clignotement) -->
     <script>
         (function () {

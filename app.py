@@ -1,5 +1,6 @@
-from flask import Flask, flash, redirect, request, send_from_directory, url_for
+from flask import Flask, flash, jsonify, redirect, render_template, request, send_from_directory, url_for
 from flask_login import LoginManager
+from flask_wtf.csrf import CSRFError, CSRFProtect
 from sqlalchemy import inspect, text
 from werkzeug.exceptions import RequestEntityTooLarge
 from werkzeug.middleware.proxy_fix import ProxyFix
@@ -11,6 +12,9 @@ app.config.from_object('config.Config')
 app.wsgi_app = ProxyFix(app.wsgi_app, x_proto=1, x_host=1)  # Render : URLs en https
 
 db.init_app(app)
+# Chaque formulaire porte un jeton secret : un autre site ne peut pas envoyer
+# d'action (confirmer, supprimer, encaisser…) à la place de l'utilisateur.
+csrf = CSRFProtect(app)
 
 login_manager = LoginManager()
 login_manager.init_app(app)
@@ -38,6 +42,34 @@ app.register_blueprint(client_bp, url_prefix='/')
 def fichier_trop_gros(e):
     flash('Les photos envoyées sont trop lourdes (32 Mo max au total). Envoyez-en moins à la fois.', 'danger')
     return redirect(request.referrer or url_for('client.accueil'))
+
+
+@app.errorhandler(CSRFError)
+def jeton_invalide(e):
+    if request.accept_mimetypes.best == 'application/json' or request.is_json:
+        return jsonify(success=False, message='Page expirée, rechargez-la puis réessayez.'), 400
+    flash('La page avait expiré : rechargez-la puis recommencez.', 'warning')
+    return redirect(request.referrer or url_for('client.accueil'))
+
+
+@app.errorhandler(404)
+def page_introuvable(e):
+    return render_template('erreur.html', code=404, titre='Page introuvable',
+                           message="Cette page n'existe pas ou n'est plus disponible."), 404
+
+
+@app.errorhandler(500)
+def erreur_serveur(e):
+    db.session.rollback()
+    return render_template('erreur.html', code=500, titre='Un problème est survenu',
+                           message="L'opération n'a pas abouti. Réessayez dans un instant ; rien n'a été enregistré à moitié."), 500
+
+
+@app.route('/sante')
+def sante():
+    """Vérification de bon fonctionnement (Render, surveillance)."""
+    db.session.execute(text('SELECT 1'))
+    return jsonify(ok=True)
 
 
 def mettre_a_jour_schema():
