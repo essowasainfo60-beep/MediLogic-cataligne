@@ -236,6 +236,7 @@ def dashboard():
     nouvelles_count = Commande.query.filter_by(boutique_id=current_user.id, statut='nouvelle').count()
     en_livraison_count = Commande.query.filter_by(boutique_id=current_user.id, statut='en_livraison').count()
     confirmees_count = Commande.query.filter_by(boutique_id=current_user.id, statut='confirmee').count()
+    echecs_count = Commande.query.filter_by(boutique_id=current_user.id, statut='echec').count()
 
     debut_jour = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
     du_jour = Commande.query.filter(Commande.boutique_id == current_user.id, Commande.date_commande >= debut_jour).count()
@@ -252,6 +253,7 @@ def dashboard():
     return render_template('boutique/dashboard.html',
                            en_livraison_count=en_livraison_count,
                            confirmees_count=confirmees_count,
+                           echecs_count=echecs_count,
                            du_jour=du_jour,
                            livrees_jour=len(livrees_jour),
                            encaisse_jour=sum(c.sous_total for c in livrees_jour),
@@ -528,13 +530,15 @@ def commande_details(commande_id):
     wa_client = wa_livreur = None
     if commande.livreur and commande.code_livraison:
         wa_client, wa_livreur = liens_whatsapp_livraison(commande)
+    wa_echec = msg.lien_whatsapp(commande.client_telephone, msg.echec_client(commande)) if commande.statut == 'echec' else None
 
     livreurs = Livreur.query.filter_by(boutique_id=current_user.id, actif=True).order_by(Livreur.nom).all()
     # Livreur proposé : celui déjà choisi, sinon le livreur attitré de la zone
     livreur_propose = commande.livreur_id or (commande.zone.livreur_id if commande.zone else None)
     return render_template('boutique/commande_details.html', commande=commande, statuts=Commande.STATUTS,
                            livreurs=livreurs, zones=zones_actives(), livreur_propose=livreur_propose,
-                           wa_client=wa_client, wa_livreur=wa_livreur,
+                           wa_client=wa_client, wa_livreur=wa_livreur, wa_echec=wa_echec,
+                           lien_suivi=msg.lien_suivi(commande),
                            gboutik_url=current_app.config['GBOUTIK_URL'])
 
 @boutique_bp.route('/commande/<int:commande_id>/frais', methods=['POST'])
@@ -648,9 +652,11 @@ def attribuer_livreur(commande_id):
         return redirect(url_for('boutique.commande_details', commande_id=commande_id))
 
     deja_en_route = commande.statut == 'en_livraison'
+    relance = commande.statut == 'echec'
     confier_au_livreur(commande, livreur)
     db.session.commit()
     flash((f'Commande n°{commande.numero} confiée à {livreur.nom}.' if deja_en_route
+           else f'Livraison n°{commande.numero} relancée avec {livreur.nom} (tentative {commande.tentatives}).' if relance
            else f'Commande n°{commande.numero} confirmée et en livraison avec {livreur.nom}.')
           + ' Étape suivante : prévenez le client et envoyez la course au livreur (boutons WhatsApp).', 'success')
     return redirect(url_for('boutique.commande_details', commande_id=commande.id) + '#livraison')
@@ -1151,4 +1157,152 @@ def caisse_supprimer(mouvement_id):
         db.session.commit()
         flash('Mouvement supprimé', 'warning')
     return redirect(url_for('boutique.page_caisse'))
+
+# ==================== ALERTES : NOUVELLES COMMANDES ====================
+
+@boutique_bp.route('/api/nouvelles')
+@login_required
+def api_nouvelles():
+    """Interrogé toutes les 30 s par l'espace boutique : son + notification à l'arrivée d'une commande."""
+    nouvelles = (Commande.query.filter_by(boutique_id=current_user.id, statut='nouvelle')
+                 .order_by(Commande.id.desc()).all())
+    derniere = nouvelles[0] if nouvelles else None
+    return jsonify(nombre=len(nouvelles), dernier_id=derniere.id if derniere else 0,
+                   derniere=None if not derniere else {
+                       'numero': derniere.numero, 'client': derniere.client_nom, 'total': msg.fcfa(derniere.total),
+                       'lien': url_for('boutique.commande_details', commande_id=derniere.id)})
+
+# ==================== FICHIER CLIENTS ====================
+
+def _tel(numero):
+    chiffres = ''.join(c for c in (numero or '') if c.isdigit())
+    return chiffres[-8:] if len(chiffres) >= 8 else chiffres   # 8 derniers chiffres : +228 90… = 90…
+
+
+def _clients():
+    """Clients reconstitués à partir des commandes (un client = un numéro de téléphone)."""
+    fiches = {}
+    for c in Commande.query.filter_by(boutique_id=current_user.id).order_by(Commande.date_commande).all():
+        cle = _tel(c.client_telephone)
+        if not cle:
+            continue
+        f = fiches.setdefault(cle, {'cle': cle, 'commandes': 0, 'livrees': 0, 'echecs': 0, 'annulees': 0,
+                                    'depense': 0, 'premiere': c.date_commande, 'sources': set()})
+        f.update(nom=c.client_nom, telephone=c.client_telephone, adresse=c.client_adresse,
+                 zone=c.zone, derniere=c.date_commande)
+        f['commandes'] += 1
+        f['sources'].add(c.source_libelle)
+        if c.statut == 'livree':
+            f['livrees'] += 1
+            f['depense'] += c.sous_total
+        elif c.statut == 'echec':
+            f['echecs'] += 1
+        elif c.statut == 'annulee':
+            f['annulees'] += 1
+    return sorted(fiches.values(), key=lambda f: f['derniere'], reverse=True)
+
+
+@boutique_bp.route('/clients')
+@login_required
+def clients():
+    liste = _clients()
+    return render_template('boutique/clients.html', clients=liste, fcfa=msg.fcfa,
+                           fideles=sum(1 for f in liste if f['livrees'] >= 3))
+
+
+@boutique_bp.route('/clients/<cle>')
+@login_required
+def fiche_client(cle):
+    fiche = next((f for f in _clients() if f['cle'] == cle), None)
+    if not fiche:
+        flash('Client introuvable', 'warning')
+        return redirect(url_for('boutique.clients'))
+    commandes_client = [c for c in Commande.query.filter_by(boutique_id=current_user.id)
+                        .order_by(Commande.date_commande.desc()).all() if _tel(c.client_telephone) == cle]
+    articles = {}
+    for c in commandes_client:
+        if c.statut == 'livree':
+            for a in c.articles_json:
+                articles[a['nom']] = articles.get(a['nom'], 0) + int(a['quantite'])
+    return render_template('boutique/fiche_client.html', f=fiche, commandes=commandes_client, fcfa=msg.fcfa,
+                           articles_preferes=sorted(articles.items(), key=lambda x: -x[1])[:5])
+
+
+@boutique_bp.route('/api/client')
+@login_required
+def api_client():
+    """Saisie manuelle : retrouve le client à partir de son numéro (nom, adresse, zone)."""
+    cle = _tel(request.args.get('tel'))
+    if len(cle) < 8:
+        return jsonify(trouve=False)
+    derniere = next((c for c in Commande.query.filter_by(boutique_id=current_user.id)
+                     .order_by(Commande.date_commande.desc()).all() if _tel(c.client_telephone) == cle), None)
+    if not derniere:
+        return jsonify(trouve=False)
+    nb = sum(1 for c in Commande.query.filter_by(boutique_id=current_user.id).all() if _tel(c.client_telephone) == cle)
+    return jsonify(trouve=True, nom=derniere.client_nom, adresse=derniere.client_adresse,
+                   zone_id=derniere.zone_id, commandes=nb)
+
+# ==================== STATISTIQUES ====================
+
+@boutique_bp.route('/statistiques')
+@login_required
+def statistiques():
+    jours = request.args.get('jours', 30, type=int)
+    jours = jours if jours in (7, 30, 90, 365) else 30
+    debut = (datetime.utcnow() - timedelta(days=jours - 1)).replace(hour=0, minute=0, second=0, microsecond=0)
+    cmds = Commande.query.filter(Commande.boutique_id == current_user.id, Commande.date_commande >= debut).all()
+    livrees = [c for c in cmds if c.statut in ('livree', 'retournee')]
+    terminees = [c for c in cmds if c.statut in ('livree', 'retournee', 'echec', 'annulee')]
+
+    # Ventes (articles livrés) par jour
+    par_jour = {(debut + timedelta(days=i)).strftime('%d/%m'): 0 for i in range(jours)}
+    for c in livrees:
+        jour = (c.date_livraison or c.date_commande).strftime('%d/%m')
+        if jour in par_jour:
+            par_jour[jour] += c.sous_total
+
+    def regrouper(cle):
+        groupes = {}
+        for c in cmds:
+            nom = cle(c)
+            g = groupes.setdefault(nom, {'nom': nom, 'commandes': 0, 'livrees': 0, 'echecs': 0, 'ventes': 0, 'delais': []})
+            g['commandes'] += 1
+            if c.statut in ('livree', 'retournee'):
+                g['livrees'] += 1
+                g['ventes'] += c.sous_total
+                if c.date_livraison:
+                    g['delais'].append((c.date_livraison - c.date_commande).total_seconds() / 3600)
+            if c.statut == 'echec' or c.motif_echec:
+                g['echecs'] += 1
+        for g in groupes.values():
+            g['delai'] = sum(g['delais']) / len(g['delais']) if g['delais'] else None
+        return sorted(groupes.values(), key=lambda g: -g['ventes'])
+
+    top = {}
+    for c in livrees:
+        for a in c.articles_json:
+            t = top.setdefault(a['nom'], {'nom': a['nom'], 'numero': a.get('numero'), 'quantite': 0, 'montant': 0})
+            t['quantite'] += int(a['quantite'])
+            t['montant'] += a['prix'] * int(a['quantite'])
+
+    delais = [(c.date_livraison - c.date_commande).total_seconds() / 3600 for c in livrees if c.date_livraison]
+    resume = {
+        'commandes': len(cmds),
+        'livrees': len(livrees),
+        'taux': round(100 * len(livrees) / len(terminees)) if terminees else None,
+        'ventes': sum(c.sous_total for c in livrees),
+        'frais': sum(c.frais_livraison or 0 for c in livrees),
+        'panier': (sum(c.sous_total for c in livrees) / len(livrees)) if livrees else 0,
+        'delai': (sum(delais) / len(delais)) if delais else None,
+        'echecs': sum(1 for c in cmds if c.statut == 'echec' or c.motif_echec),
+        'clients': len({_tel(c.client_telephone) for c in cmds}),
+    }
+    return render_template('boutique/statistiques.html', jours=jours, resume=resume, fcfa=msg.fcfa,
+                           jours_labels=list(par_jour.keys()), jours_valeurs=list(par_jour.values()),
+                           top=sorted(top.values(), key=lambda t: -t['montant'])[:10],
+                           par_zone=regrouper(lambda c: c.zone.nom if c.zone else 'Sans zone'),
+                           par_livreur=[g for g in regrouper(lambda c: c.livreur.nom if c.livreur else 'Sans livreur')
+                                        if g['nom'] != 'Sans livreur' or g['livrees']],
+                           par_source=regrouper(lambda c: c.source_libelle))
 

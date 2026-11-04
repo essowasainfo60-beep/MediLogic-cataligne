@@ -1,0 +1,66 @@
+{% extends "base.html" %}
+
+{% block title %}{{ f.nom }} - client{% endblock %}
+
+{% block content %}
+{% set tel = f.telephone|select('in', '0123456789')|join %}
+<div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-5">
+    <a href="{{ url_for('boutique.clients') }}" class="text-sm text-purple-600 hover:underline"><i class="fas fa-arrow-left mr-1"></i> Tous les clients</a>
+
+    <div class="bg-white rounded-2xl shadow-md p-5 flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+        <div class="flex items-center gap-4">
+            <span class="h-14 w-14 rounded-2xl bg-gradient-to-br from-purple-600 to-indigo-600 text-white flex items-center justify-center text-xl font-bold">{{ f.nom[:1]|upper }}</span>
+            <div>
+                <h1 class="text-2xl font-extrabold text-gray-900">{{ f.nom }}
+                    {% if f.livrees >= 3 %}<span class="ml-1 text-xs align-middle bg-amber-100 text-amber-800 rounded-full px-2 py-0.5">⭐ Client fidèle</span>{% endif %}</h1>
+                <p class="text-gray-500">{{ f.telephone }} · client depuis le {{ f.premiere.strftime('%d/%m/%Y') }}</p>
+                <p class="text-sm text-gray-500"><i class="fas fa-location-dot mr-1"></i>{{ f.adresse }}{% if f.zone %} · zone {{ f.zone.nom }}{% endif %}</p>
+            </div>
+        </div>
+        <div class="flex flex-wrap gap-2">
+            <a href="tel:{{ f.telephone|replace(' ', '') }}" class="bg-blue-500 text-white px-4 py-2.5 rounded-xl font-semibold"><i class="fas fa-phone mr-1"></i> Appeler</a>
+            <a href="https://wa.me/{{ tel }}" target="_blank" class="bg-green-500 text-white px-4 py-2.5 rounded-xl font-semibold"><i class="fab fa-whatsapp mr-1"></i> WhatsApp</a>
+            <a href="{{ url_for('boutique.nouvelle_commande', client_nom=f.nom, client_telephone=f.telephone, client_adresse=f.adresse, zone_id=f.zone.id if f.zone else '', source='whatsapp') }}"
+               class="bg-purple-600 text-white px-4 py-2.5 rounded-xl font-semibold"><i class="fas fa-plus mr-1"></i> Nouvelle commande</a>
+        </div>
+    </div>
+
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <div class="bg-white rounded-2xl shadow-md p-4"><p class="text-xs text-gray-500">Commandes</p><p class="text-2xl font-extrabold">{{ f.commandes }}</p></div>
+        <div class="bg-white rounded-2xl shadow-md p-4"><p class="text-xs text-gray-500">Livrées</p><p class="text-2xl font-extrabold text-green-600">{{ f.livrees }}</p></div>
+        <div class="bg-white rounded-2xl shadow-md p-4"><p class="text-xs text-gray-500">Total dépensé</p><p class="text-xl font-extrabold">{{ fcfa(f.depense) }}</p></div>
+        <div class="bg-white rounded-2xl shadow-md p-4"><p class="text-xs text-gray-500">Échecs / annulations</p><p class="text-2xl font-extrabold {{ 'text-red-600' if f.echecs or f.annulees }}">{{ f.echecs + f.annulees }}</p></div>
+    </div>
+
+    <div class="grid grid-cols-1 xl:grid-cols-3 gap-5">
+        <div class="xl:col-span-2 bg-white rounded-2xl shadow-md">
+            <h2 class="px-5 py-4 border-b border-gray-100 font-bold text-gray-900">Historique des commandes</h2>
+            <ul class="divide-y divide-gray-100">
+                {% for c in commandes %}
+                <li>
+                    <a href="{{ url_for('boutique.commande_details', commande_id=c.id) }}" class="flex items-center gap-3 px-5 py-3 hover:bg-gray-50">
+                        <span class="h-9 w-9 rounded-lg bg-gray-100 text-gray-700 flex items-center justify-center text-sm font-bold">{{ c.numero }}</span>
+                        <span class="flex-1 min-w-0">
+                            <span class="block text-sm text-gray-800 truncate">{% for a in c.articles_json %}{{ a.nom }} ×{{ a.quantite }}{{ ', ' if not loop.last }}{% endfor %}</span>
+                            <span class="block text-xs text-gray-500">{{ c.date_commande.strftime('%d/%m/%Y %H:%M') }} · {{ c.source_libelle }}{% if c.livreur %} · {{ c.livreur.nom }}{% endif %}</span>
+                        </span>
+                        <span class="text-right">
+                            <span class="block font-semibold text-sm whitespace-nowrap">{{ fcfa(c.total) }}</span>
+                            <span class="inline-block mt-0.5 px-2 py-0.5 rounded-full text-[11px] font-semibold {{ c.statut_classe }}">{{ c.statut_libelle }}</span>
+                        </span>
+                    </a>
+                </li>
+                {% endfor %}
+            </ul>
+        </div>
+        <div class="bg-white rounded-2xl shadow-md p-5">
+            <h2 class="font-bold text-gray-900 mb-3">Articles préférés</h2>
+            {% for nom, qte in articles_preferes %}
+            <div class="flex justify-between text-sm py-1.5 border-b border-gray-100"><span>{{ nom }}</span><strong>× {{ qte }}</strong></div>
+            {% else %}
+            <p class="text-sm text-gray-500">Pas encore de commande livrée.</p>
+            {% endfor %}
+        </div>
+    </div>
+</div>
+{% endblock %}

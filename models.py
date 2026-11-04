@@ -131,6 +131,12 @@ class Commande(db.Model):
     reglee = db.Column(db.Boolean, nullable=False, default=False, server_default='0')
     date_reglement = db.Column(db.DateTime, nullable=True)
     frais_payes = db.Column(db.Boolean, nullable=False, default=False, server_default='0')
+    # Lien de suivi envoyé au client (/suivi/<code>)
+    code_suivi = db.Column(db.String(32), unique=True, index=True, default=lambda: nouveau_code_lien())
+    # Livraison ratée (client absent, injoignable…) : motif noté par le livreur
+    motif_echec = db.Column(db.String(200), nullable=True)
+    date_echec = db.Column(db.DateTime, nullable=True)
+    tentatives = db.Column(db.Integer, nullable=False, default=0, server_default='0')
 
     boutique = db.relationship('Boutique', backref=db.backref('commandes', cascade='all, delete-orphan'))
     livreur = db.relationship('Livreur', backref='commandes')
@@ -140,10 +146,14 @@ class Commande(db.Model):
         'nouvelle': ('Nouvelle', 'bg-blue-100 text-blue-800'),
         'confirmee': ('Confirmée · à livrer', 'bg-yellow-100 text-yellow-800'),
         'en_livraison': ('En livraison', 'bg-purple-100 text-purple-800'),
+        'echec': ('Échec · à relancer', 'bg-red-100 text-red-800'),
         'livree': ('Livrée', 'bg-green-100 text-green-800'),
         'retournee': ('Retournée', 'bg-orange-100 text-orange-800'),
         'annulee': ('Annulée', 'bg-red-100 text-red-800'),
     }
+
+    MOTIFS_ECHEC = ['Client injoignable', 'Client absent', 'Refus du client', 'Adresse introuvable',
+                    'Reporté à la demande du client', 'Problème de paiement', 'Autre']
 
     SOURCES = {
         'catalogue': 'Catalogue en ligne',

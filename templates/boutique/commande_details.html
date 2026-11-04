@@ -27,13 +27,13 @@
                 <i class="fas fa-circle-info mr-1"></i> Commande {{ commande.statut_libelle|lower }}.
             </p>
             {% else %}
-            {% set rang = {'nouvelle': 0, 'confirmee': 1, 'en_livraison': 2, 'livree': 3}[commande.statut] %}
+            {% set rang = {'nouvelle': 0, 'confirmee': 1, 'en_livraison': 2, 'echec': 2, 'livree': 3}.get(commande.statut, 0) %}
             <ol class="grid grid-cols-4 gap-1 mb-6 text-[11px] sm:text-xs text-center">
                 {% for libelle in ['Reçue', 'Confirmée', 'En livraison', 'Livrée'] %}
                 <li>
                     <div class="h-1.5 rounded-full {{ 'bg-green-500' if loop.index0 <= rang else 'bg-gray-200' }}"></div>
-                    <p class="mt-1.5 {{ 'font-bold text-gray-900' if loop.index0 == rang else ('text-green-700' if loop.index0 < rang else 'text-gray-400') }}">
-                        {% if loop.index0 < rang %}✓ {% endif %}{{ libelle }}
+                    <p class="mt-1.5 {{ 'font-bold text-red-600' if loop.index0 == rang and commande.statut == 'echec' else ('font-bold text-gray-900' if loop.index0 == rang else ('text-green-700' if loop.index0 < rang else 'text-gray-400')) }}">
+                        {% if loop.index0 < rang %}✓ {% endif %}{{ 'Échec de livraison' if loop.index0 == rang and commande.statut == 'echec' else libelle }}
                     </p>
                 </li>
                 {% endfor %}
@@ -50,7 +50,8 @@
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
                         <p class="text-sm text-gray-500">Nom complet</p>
-                        <p class="font-medium">{{ commande.client_nom }}</p>
+                        <p class="font-medium">{{ commande.client_nom }}
+                            <a href="{{ url_for('boutique.fiche_client', cle=(commande.client_telephone|select('in', '0123456789')|join)[-8:]) }}" class="ml-1 text-xs text-purple-600 hover:underline">fiche client</a></p>
                     </div>
                     <div>
                         <p class="text-sm text-gray-500">Téléphone</p>
@@ -128,6 +129,17 @@
                     <i class="fas fa-motorcycle text-purple-500 mr-2"></i> Livraison
                 </h2>
                 {{ alerte_zone(commande) }}
+                {% if commande.statut == 'echec' %}
+                <div class="mb-3 rounded-xl border border-red-200 bg-red-50 p-3 text-sm">
+                    <p class="text-red-800"><i class="fas fa-triangle-exclamation mr-1"></i>
+                        <strong>Échec de livraison</strong>{% if commande.livreur %} signalé par {{ commande.livreur.nom }}{% endif %}{% if commande.date_echec %} le {{ commande.date_echec.strftime('%d/%m à %H:%M') }}{% endif %} :
+                        {{ commande.motif_echec or 'motif non précisé' }}. Tentative(s) : {{ commande.tentatives }}.</p>
+                    <a href="{{ wa_echec }}" target="_blank" class="inline-block mt-2 bg-green-500 text-white px-3 py-1.5 rounded-lg font-semibold hover:bg-green-600">
+                        <i class="fab fa-whatsapp mr-1"></i> Recontacter le client
+                    </a>
+                    <span class="text-gray-600 ml-1">puis relancez la livraison ci-dessous, ou annulez la commande.</span>
+                </div>
+                {% endif %}
                 {% if commande.statut not in ['livree', 'annulee'] %}
                     {% if zones %}
                     <form method="POST" action="{{ url_for('boutique.changer_zone_commande', commande_id=commande.id) }}" class="flex items-center gap-2 mb-2">
@@ -142,8 +154,9 @@
                     {% endif %}
                     {% if livreurs %}
                     {% set en_route = commande.statut == 'en_livraison' %}
+                    {% set relance = commande.statut == 'echec' %}
                     <form method="POST" action="{{ url_for('boutique.attribuer_livreur', commande_id=commande.id) }}" class="flex flex-col sm:flex-row gap-2"
-                          data-question="{{ ('Confier la commande n°' ~ commande.numero ~ ' à un autre livreur ?') if en_route else ('Voulez-vous vraiment confirmer la commande n°' ~ commande.numero ~ ' de ' ~ commande.client_nom ~ ' ?') }}"
+                          data-question="{{ ('Confier la commande n°' ~ commande.numero ~ ' à un autre livreur ?') if en_route else (('Relancer la livraison n°' ~ commande.numero ~ ' ?') if relance else ('Voulez-vous vraiment confirmer la commande n°' ~ commande.numero ~ ' de ' ~ commande.client_nom ~ ' ?')) }}"
                           onsubmit="return confirm(this.dataset.question + '\n\nLivreur : ' + this.livreur_id.selectedOptions[0].dataset.nom)">
                         <select name="livreur_id" required class="flex-1 border border-gray-300 px-3 py-2.5">
                             <option value="" data-nom="">Choisir le livreur…</option>
@@ -155,7 +168,7 @@
                         <button type="submit" class="bg-gray-100 text-gray-700 px-4 py-2.5 rounded-xl font-semibold hover:bg-gray-200">Changer de livreur</button>
                         {% else %}
                         <button type="submit" class="bg-green-600 text-white px-5 py-2.5 rounded-xl font-semibold hover:bg-green-700">
-                            <i class="fas fa-check mr-1"></i> Confirmer et livrer
+                            {% if relance %}<i class="fas fa-rotate-right mr-1"></i> Relancer la livraison{% else %}<i class="fas fa-check mr-1"></i> Confirmer et livrer{% endif %}
                         </button>
                         {% endif %}
                     </form>
@@ -228,7 +241,14 @@
                     <i class="fas fa-arrow-left mr-2"></i> Retour
                 </a>
             </div>
-            {% if commande.statut in ['nouvelle', 'confirmee', 'en_livraison'] %}
+            {% if lien_suivi %}
+            <div class="mt-4 flex items-center gap-2 text-sm">
+                <span class="text-gray-500 whitespace-nowrap"><i class="fas fa-location-crosshairs mr-1"></i> Suivi client :</span>
+                <input type="text" readonly value="{{ lien_suivi }}" onclick="this.select()" class="flex-1 min-w-0 border border-gray-200 px-2 py-1 text-xs">
+                <button type="button" onclick="navigator.clipboard.writeText('{{ lien_suivi }}'); this.textContent='Copié !'" class="text-purple-600 font-semibold">Copier</button>
+            </div>
+            {% endif %}
+            {% if commande.statut in ['nouvelle', 'confirmee', 'en_livraison', 'echec'] %}
             <form method="POST" action="{{ url_for('boutique.changer_statut_commande', commande_id=commande.id) }}" class="mt-4 text-center"
                   data-question="Annuler la commande n°{{ commande.numero }} de {{ commande.client_nom }} ?"
                   onsubmit="return confirm(this.dataset.question)">

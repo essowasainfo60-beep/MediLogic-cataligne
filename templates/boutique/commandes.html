@@ -90,12 +90,17 @@
 
                         <!-- Action selon l'étape : Nouvelle → Confirmer et livrer → En livraison → Livrée -->
                         <div class="mt-4 pt-4 border-t border-gray-100">
-                        {% if commande.statut in ['nouvelle', 'confirmee'] %}
+                        {% if commande.statut in ['nouvelle', 'confirmee', 'echec'] %}
+                            {% if commande.statut == 'echec' %}
+                            <p class="text-sm text-red-700 mb-2"><i class="fas fa-triangle-exclamation mr-1"></i>
+                                Échec{% if commande.livreur %} ({{ commande.livreur.nom }}){% endif %} : <strong>{{ commande.motif_echec or 'non précisé' }}</strong>
+                                {% if commande.date_echec %}<span class="text-gray-500"> · {{ commande.date_echec.strftime('%d/%m %H:%M') }}</span>{% endif %}</p>
+                            {% endif %}
                             {% if livreurs %}
                             {% set propose = commande.zone.livreur_id if commande.zone and commande.zone.livreur and commande.zone.livreur.actif else none %}
                             <form method="POST" action="{{ url_for('boutique.attribuer_livreur', commande_id=commande.id) }}"
                                   class="flex flex-col sm:flex-row gap-2"
-                                  data-question="Voulez-vous vraiment confirmer la commande n°{{ commande.numero }} de {{ commande.client_nom }} ?"
+                                  data-question="{{ ('Relancer la livraison n°' ~ commande.numero ~ ' de ' ~ commande.client_nom ~ ' ?') if commande.statut == 'echec' else ('Voulez-vous vraiment confirmer la commande n°' ~ commande.numero ~ ' de ' ~ commande.client_nom ~ ' ?') }}"
                                   onsubmit="return confirm(this.dataset.question + '\n\nElle partira en livraison avec : ' + this.livreur_id.selectedOptions[0].dataset.nom)">
                                 <select name="livreur_id" required class="flex-1 border border-gray-300 px-3 py-2.5 text-sm">
                                     <option value="" data-nom="">Choisir le livreur…</option>
@@ -104,7 +109,7 @@
                                     {% endfor %}
                                 </select>
                                 <button type="submit" class="bg-green-600 text-white px-5 py-2.5 rounded-xl font-semibold hover:bg-green-700 whitespace-nowrap">
-                                    <i class="fas fa-check mr-1"></i> Confirmer et livrer
+                                    {% if commande.statut == 'echec' %}<i class="fas fa-rotate-right mr-1"></i> Relancer la livraison{% else %}<i class="fas fa-check mr-1"></i> Confirmer et livrer{% endif %}
                                 </button>
                             </form>
                             {% else %}
@@ -139,7 +144,7 @@
                             <div class="flex flex-wrap gap-3 mt-3 text-sm">
                                 <a href="{{ url_for('boutique.commande_details', commande_id=commande.id) }}" class="text-purple-700 hover:underline"><i class="fas fa-eye mr-1"></i> Détails</a>
                                 <a href="{{ url_for('boutique.imprimer_commande', commande_id=commande.id, format='80') }}" target="_blank" class="text-gray-600 hover:underline"><i class="fas fa-print mr-1"></i> Imprimer</a>
-                                {% if commande.statut in ['nouvelle', 'confirmee'] %}
+                                {% if commande.statut in ['nouvelle', 'confirmee', 'echec'] %}
                                 <form method="POST" action="{{ url_for('boutique.changer_statut_commande', commande_id=commande.id) }}"
                                       data-question="Annuler la commande n°{{ commande.numero }} de {{ commande.client_nom }} ?"
                                       onsubmit="return confirm(this.dataset.question)" class="ml-auto">

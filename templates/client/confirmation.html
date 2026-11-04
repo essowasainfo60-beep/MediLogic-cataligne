@@ -21,6 +21,10 @@
         </p>
 
         <!-- Bouton pour envoyer à la boutique -->
+        <a href="{{ url_for('client.suivi', code=commande.code_suivi) }}"
+           class="flex items-center justify-center gap-2 bg-purple-50 text-purple-700 px-6 py-3 rounded-lg w-full mb-3 font-semibold hover:bg-purple-100">
+            <i class="fas fa-location-crosshairs"></i> Suivre ma commande
+        </a>
         <a href="{{ whatsapp_boutique_url }}" target="_blank" 
            class="inline-flex items-center bg-green-500 text-white px-6 py-3 rounded-lg hover:bg-green-600 transition w-full justify-center mb-3">
             <i class="fab fa-whatsapp text-xl mr-2"></i>

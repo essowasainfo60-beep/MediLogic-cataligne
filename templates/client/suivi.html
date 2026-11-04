@@ -1,0 +1,63 @@
+{% extends "base.html" %}
+
+{% block title %}Suivi de ma commande n°{{ commande.numero }}{% endblock %}
+
+{% block content %}
+{% set etapes = [('Reçue', 'fa-receipt'), ('Confirmée', 'fa-circle-check'), ('En route', 'fa-motorcycle'), ('Livrée', 'fa-house-circle-check')] %}
+{% set rang = {'nouvelle': 0, 'confirmee': 1, 'en_livraison': 2, 'echec': 2, 'livree': 3, 'retournee': 3}.get(commande.statut, 0) %}
+<div class="max-w-[640px] mx-auto px-4 space-y-4">
+    <div class="bg-white rounded-2xl shadow-md p-5">
+        <p class="text-sm text-gray-500">{{ boutique.nom_boutique }}</p>
+        <h1 class="text-2xl font-extrabold text-gray-900">Commande n°{{ commande.numero }}</h1>
+        <p class="text-sm text-gray-500">Passée le {{ commande.date_commande.strftime('%d/%m/%Y à %H:%M') }}</p>
+
+        {% if commande.statut == 'annulee' %}
+        <p class="mt-4 bg-red-50 text-red-800 rounded-xl p-3 text-sm font-semibold"><i class="fas fa-ban mr-1"></i> Cette commande a été annulée.</p>
+        {% else %}
+        <ol class="mt-5 space-y-4">
+            {% for libelle, icone in etapes %}
+            {% set fait = loop.index0 < rang or (loop.index0 == rang and commande.statut in ['livree', 'retournee']) %}
+            {% set actuel = loop.index0 == rang and not fait %}
+            <li class="flex items-start gap-3">
+                <span class="h-9 w-9 rounded-full flex items-center justify-center flex-shrink-0
+                    {{ 'bg-green-500 text-white' if fait else ('bg-purple-600 text-white animate-pulse' if actuel else 'bg-gray-100 text-gray-400') }}">
+                    <i class="fas {{ 'fa-check' if fait else icone }} text-sm"></i>
+                </span>
+                <div class="pt-1.5">
+                    <p class="font-semibold {{ 'text-gray-900' if fait or actuel else 'text-gray-400' }}">{{ libelle }}</p>
+                    {% if libelle == 'En route' and commande.livreur and commande.statut == 'en_livraison' %}
+                    <p class="text-sm text-gray-600">Votre livreur <strong>{{ commande.livreur.nom }}</strong> arrive.
+                        <a href="tel:{{ commande.livreur.telephone|replace(' ', '') }}" class="text-purple-600 font-semibold ml-1"><i class="fas fa-phone"></i> L'appeler</a></p>
+                    {% elif libelle == 'En route' and commande.statut == 'echec' %}
+                    <p class="text-sm text-red-700">Le livreur n'a pas pu vous livrer{% if commande.motif_echec %} ({{ commande.motif_echec|lower }}){% endif %}. La boutique va vous recontacter.</p>
+                    {% elif libelle == 'Livrée' and commande.date_livraison %}
+                    <p class="text-sm text-gray-600">Le {{ commande.date_livraison.strftime('%d/%m/%Y à %H:%M') }}. Merci ! 🙏</p>
+                    {% endif %}
+                </div>
+            </li>
+            {% endfor %}
+        </ol>
+        {% endif %}
+    </div>
+
+    <div class="bg-white rounded-2xl shadow-md p-5 text-sm">
+        <h2 class="font-bold text-gray-900 mb-2">Récapitulatif</h2>
+        {% for a in commande.articles_json %}
+        <div class="flex justify-between py-1"><span>{{ a.nom }} × {{ a.quantite }}</span><span>{{ fcfa(a.prix * a.quantite) }}</span></div>
+        {% endfor %}
+        {% if commande.frais_livraison %}<div class="flex justify-between py-1 text-gray-600"><span>Livraison{% if commande.zone %} ({{ commande.zone.nom }}){% endif %}</span><span>{{ fcfa(commande.frais_livraison) }}</span></div>{% endif %}
+        <div class="flex justify-between pt-2 mt-1 border-t font-bold text-base"><span>À payer à la livraison</span><span>{{ fcfa(commande.total) }}</span></div>
+        <p class="text-gray-500 mt-3"><i class="fas fa-location-dot mr-1"></i> {{ commande.client_adresse }}</p>
+    </div>
+
+    {% if boutique.whatsapp %}
+    <a href="https://wa.me/{{ boutique.whatsapp|select('in', '0123456789')|join }}?text={{ ('Bonjour, je vous écris au sujet de ma commande n°' ~ commande.numero)|urlencode }}"
+       target="_blank" class="block text-center bg-green-500 text-white py-3 rounded-xl font-semibold hover:bg-green-600">
+        <i class="fab fa-whatsapp mr-1"></i> Écrire à {{ boutique.nom_boutique }}
+    </a>
+    {% endif %}
+</div>
+{% if commande.statut in ['nouvelle', 'confirmee', 'en_livraison'] %}
+<script>setTimeout(() => location.reload(), 60000);  // mise à jour automatique</script>
+{% endif %}
+{% endblock %}

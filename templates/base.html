@@ -80,10 +80,11 @@
         ('boutique.dashboard', 'fa-house', 'Accueil'),
         ('boutique.commandes', 'fa-receipt', 'Commandes'),
         ('boutique.livreurs', 'fa-motorcycle', 'Livraison'),
+        ('boutique.clients', 'fa-address-book', 'Clients'),
         ('boutique.articles', 'fa-boxes-stacked', 'Articles'),
         ('boutique.inventaire', 'fa-warehouse', 'Stock'),
         ('boutique.page_caisse', 'fa-cash-register', 'Caisse'),
-        ('boutique.historique', 'fa-clock-rotate-left', 'Historique')] %}
+        ('boutique.statistiques', 'fa-chart-line', 'Stats')] %}
 
     <!-- Navigation -->
     <nav class="bg-white/95 backdrop-blur border-b border-gray-200 sticky top-0 z-50">
@@ -117,9 +118,9 @@
                     {% for endpoint, icone, libelle in liens_boutique %}
                     <a href="{{ url_for(endpoint) }}"
                        class="relative px-3 py-2 rounded-lg font-medium transition {{ 'bg-purple-50 text-purple-700' if request.endpoint == endpoint else 'text-gray-600 hover:bg-gray-100' }}">
-                        <i class="fas {{ icone }} mr-1.5 opacity-80"></i><span class="hidden lg:inline">{{ libelle }}</span>
+                        <i class="fas {{ icone }} opacity-80"></i><span class="hidden xl:inline ml-1.5">{{ libelle }}</span>
                         {% if endpoint == 'boutique.commandes' and nouvelles_commandes %}
-                        <span class="absolute -top-1 -right-1 bg-red-500 text-white text-[10px] font-bold rounded-full min-w-[18px] h-[18px] px-1 flex items-center justify-center">{{ nouvelles_commandes }}</span>
+                        <span class="pastille-nouvelles absolute -top-1 -right-1 bg-red-500 text-white text-[10px] font-bold rounded-full min-w-[18px] h-[18px] px-1 flex items-center justify-center">{{ nouvelles_commandes }}</span>
                         {% endif %}
                     </a>
                     {% endfor %}
@@ -154,11 +155,15 @@
                                 {% for endpoint, icone, libelle in liens_boutique %}
                                 <a href="{{ url_for(endpoint) }}" class="flex items-center gap-3 px-4 py-2 hover:bg-gray-50 {{ 'text-purple-700 font-semibold' if request.endpoint == endpoint else 'text-gray-700' }}">
                                     <i class="fas {{ icone }} w-4 text-center"></i> {{ libelle }}
-                                    {% if endpoint == 'boutique.commandes' and nouvelles_commandes %}<span class="ml-auto bg-red-500 text-white text-[10px] font-bold rounded-full px-1.5">{{ nouvelles_commandes }}</span>{% endif %}
+                                    {% if endpoint == 'boutique.commandes' and nouvelles_commandes %}<span class="pastille-nouvelles ml-auto bg-red-500 text-white text-[10px] font-bold rounded-full px-1.5">{{ nouvelles_commandes }}</span>{% endif %}
                                 </a>
                                 {% endfor %}
                             </div>
+                            <a href="{{ url_for('boutique.historique') }}" class="flex items-center gap-3 px-4 py-2 text-gray-700 hover:bg-gray-50"><i class="fas fa-clock-rotate-left w-4 text-center"></i> Historique et export</a>
                             <a href="{{ url_for('boutique.profil') }}" class="flex items-center gap-3 px-4 py-2 text-gray-700 hover:bg-gray-50"><i class="fas fa-store w-4 text-center"></i> Ma boutique</a>
+                            <button type="button" id="btnAlertes" onclick="activerAlertes()" class="w-full flex items-center gap-3 px-4 py-2 text-gray-700 hover:bg-gray-50">
+                                <i class="fas fa-bell w-4 text-center"></i> <span id="libelleAlertes">Activer les alertes de commande</span>
+                            </button>
                             <a href="{{ url_for('boutique.changer_mot_de_passe') }}" class="flex items-center gap-3 px-4 py-2 text-gray-700 hover:bg-gray-50"><i class="fas fa-key w-4 text-center"></i> Changer le mot de passe</a>
                             <a href="{{ url_for('boutique.dashboard') }}#biometrie" class="flex items-center gap-3 px-4 py-2 text-gray-700 hover:bg-gray-50"><i class="fas fa-fingerprint w-4 text-center"></i> Face ID / empreinte</a>
                             <a href="{{ url_for('client.catalogue', code=current_user.lien_public) }}" target="_blank" class="flex items-center gap-3 px-4 py-2 text-gray-700 hover:bg-gray-50"><i class="fas fa-eye w-4 text-center"></i> Voir mon catalogue</a>
@@ -268,6 +273,74 @@
             });
         });
     </script>
+    {% if espace_boutique %}
+    <!-- Alerte « nouvelle commande » : bandeau + son + notification -->
+    <div id="alerteCommande" class="hidden fixed bottom-5 left-1/2 -translate-x-1/2 z-[70] w-[min(92vw,420px)]">
+        <a id="alerteLien" href="{{ url_for('boutique.commandes') }}" class="flex items-center gap-3 bg-[#0b1d35] text-white rounded-2xl shadow-xl px-4 py-3">
+            <span class="h-10 w-10 rounded-xl bg-teal-400 text-[#0b1d35] flex items-center justify-center flex-shrink-0"><i class="fas fa-bell"></i></span>
+            <span class="flex-1 min-w-0"><span class="block font-bold">Nouvelle commande !</span><span id="alerteTexte" class="block text-sm text-white/70 truncate"></span></span>
+            <span class="text-teal-300 text-sm font-semibold">Voir</span>
+        </a>
+    </div>
+    <script>
+    (function () {
+        const URL_API = "{{ url_for('boutique.api_nouvelles') }}";
+        let dernierId = null;
+        function bip() {
+            try {
+                const ctx = new (window.AudioContext || window.webkitAudioContext)();
+                [0, 0.18].forEach((t, i) => {
+                    const o = ctx.createOscillator(), g = ctx.createGain();
+                    o.frequency.value = i ? 1320 : 880; o.connect(g); g.connect(ctx.destination);
+                    g.gain.setValueAtTime(0.25, ctx.currentTime + t); g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + t + 0.16);
+                    o.start(ctx.currentTime + t); o.stop(ctx.currentTime + t + 0.17);
+                });
+            } catch (e) {}
+        }
+        function majPastilles(n) {
+            document.querySelectorAll('nav a[href$="/boutique/commandes"]').forEach((a) => {
+                let p = a.querySelector('.pastille-nouvelles');
+                if (!n) { if (p) p.remove(); return; }
+                if (!p) { p = document.createElement('span'); p.className = 'pastille-nouvelles absolute -top-1 -right-1 bg-red-500 text-white text-[10px] font-bold rounded-full min-w-[18px] h-[18px] px-1 flex items-center justify-center'; a.classList.add('relative'); a.appendChild(p); }
+                p.textContent = n;
+            });
+            document.title = (n ? '(' + n + ') ' : '') + document.title.replace(/^\(\d+\) /, '');
+        }
+        async function verifier() {
+            if (document.hidden && dernierId !== null && !('Notification' in window && Notification.permission === 'granted')) return;
+            try {
+                const d = await (await fetch(URL_API, { headers: { 'Accept': 'application/json' } })).json();
+                majPastilles(d.nombre);
+                if (dernierId !== null && d.dernier_id > dernierId && d.derniere) {
+                    const texte = 'n°' + d.derniere.numero + ' · ' + d.derniere.client + ' · ' + d.derniere.total;
+                    document.getElementById('alerteTexte').textContent = texte;
+                    document.getElementById('alerteLien').href = d.derniere.lien;
+                    document.getElementById('alerteCommande').classList.remove('hidden');
+                    setTimeout(() => document.getElementById('alerteCommande').classList.add('hidden'), 15000);
+                    bip();
+                    if ('Notification' in window && Notification.permission === 'granted') {
+                        const n = new Notification('Nouvelle commande · {{ current_user.nom_boutique|e }}', { body: texte, icon: '/static/icons/icon-192.png', tag: 'commande-' + d.dernier_id });
+                        n.onclick = () => { window.focus(); location.href = d.derniere.lien; };
+                    }
+                }
+                dernierId = Math.max(dernierId || 0, d.dernier_id);
+            } catch (e) {}
+        }
+        window.activerAlertes = async function () {
+            bip();  // autorise le son sur cet appareil
+            if ('Notification' in window && Notification.permission !== 'granted') await Notification.requestPermission();
+            majLibelle();
+        };
+        function majLibelle() {
+            const l = document.getElementById('libelleAlertes');
+            if (l && 'Notification' in window && Notification.permission === 'granted') l.textContent = 'Alertes de commande activées ✓';
+        }
+        majLibelle();
+        verifier();
+        setInterval(verifier, 30000);
+    })();
+    </script>
+    {% endif %}
     {% block extra_js %}{% endblock %}
     <script>
         if ('serviceWorker' in navigator) {

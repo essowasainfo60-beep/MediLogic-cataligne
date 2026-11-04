@@ -2,6 +2,8 @@
 Tous les textes sont ici pour être faciles à relire et à modifier."""
 from urllib.parse import quote
 
+from flask import url_for
+
 TRAIT = "━━━━━━━━━━━━━━━━━━"
 
 
@@ -12,6 +14,15 @@ def fcfa(montant):
 def lien_whatsapp(telephone, message):
     numero = ''.join(c for c in (telephone or '') if c.isdigit())
     return f"https://wa.me/{numero}?text={quote(message)}"
+
+
+def lien_suivi(commande):
+    return url_for('client.suivi', code=commande.code_suivi, _external=True) if commande.code_suivi else ''
+
+
+def _suivi(commande):
+    lien = lien_suivi(commande)
+    return f"\n\n📍 Suivre ma commande : {lien}" if lien else ""
 
 
 def _recap(commande):
@@ -28,7 +39,7 @@ def confirmation_client(commande):
             f"Nous avons bien reçu votre commande.\n\n"
             f"📦 *Récapitulatif :*\n{_recap(commande)}\n\n"
             f"📞 Votre commande est en cours de préparation.\n"
-            f"Merci pour votre confiance !\n{commande.boutique.nom_boutique}")
+            f"Merci pour votre confiance !\n{commande.boutique.nom_boutique}{_suivi(commande)}")
 
 
 def livreur_en_route_client(commande):
@@ -40,7 +51,7 @@ def livreur_en_route_client(commande):
             f"📱 *Son numéro :* {livreur.telephone}\n\n"
             f"📦 *Récapitulatif :*\n{_recap(commande)}\n\n"
             f"💵 Le paiement se fait à la livraison.\n\n"
-            f"Merci beaucoup pour votre confiance ! 🙏\n{commande.boutique.nom_boutique}")
+            f"Merci beaucoup pour votre confiance ! 🙏\n{commande.boutique.nom_boutique}{_suivi(commande)}")
 
 
 def espace_livreur(livreur, lien_espace):
@@ -75,3 +86,13 @@ def livree_client(commande):
             f"Votre commande vous a bien été livrée.\n"
             f"Merci pour votre achat et à très bientôt ! 🙏\n\n"
             f"{commande.boutique.nom_boutique}")
+
+
+def echec_client(commande):
+    """La boutique reprend contact après une livraison ratée."""
+    return (f"Bonjour {commande.client_nom},\n\n"
+            f"Notre livreur n'a pas pu vous remettre votre commande n°{commande.numero}"
+            + (f" ({commande.motif_echec.lower()})" if commande.motif_echec else "") + ".\n"
+            f"Quand êtes-vous disponible pour la recevoir ? Répondez-nous ici et nous la relançons.\n\n"
+            f"{commande.boutique.nom_boutique}{_suivi(commande)}")
+

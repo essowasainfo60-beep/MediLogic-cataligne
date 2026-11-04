@@ -1,0 +1,114 @@
+{% extends "base.html" %}
+
+{% block title %}Statistiques - {{ current_user.nom_boutique }}{% endblock %}
+
+{% macro heures(h) %}{% if h is none %}—{% elif h < 1 %}{{ (h * 60)|round|int }} min{% elif h < 48 %}{{ '%.1f'|format(h)|replace('.', ',') }} h{% else %}{{ (h / 24)|round(1)|string|replace('.', ',') }} j{% endif %}{% endmacro %}
+
+{% block content %}
+<div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-6">
+    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <h1 class="text-2xl md:text-3xl font-extrabold text-gray-900"><i class="fas fa-chart-line text-purple-500 mr-2"></i> Statistiques</h1>
+        <div class="flex gap-1 bg-white rounded-xl shadow-sm p-1 text-sm">
+            {% for j, lib in [(7, '7 jours'), (30, '30 jours'), (90, '3 mois'), (365, '1 an')] %}
+            <a href="{{ url_for('boutique.statistiques', jours=j) }}" class="px-3 py-1.5 rounded-lg {{ 'bg-purple-600 text-white font-semibold' if jours == j else 'text-gray-600 hover:bg-gray-100' }}">{{ lib }}</a>
+            {% endfor %}
+        </div>
+    </div>
+
+    <!-- Indicateurs -->
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+        {% for lib, val, detail in [
+            ('Ventes (articles livrés)', fcfa(resume.ventes), resume.livrees ~ ' commande(s) livrée(s)'),
+            ('Commandes reçues', resume.commandes, resume.clients ~ ' client(s) différent(s)'),
+            ('Taux de livraison réussie', (resume.taux ~ ' %') if resume.taux is not none else '—', resume.echecs ~ ' échec(s) de livraison'),
+            ('Panier moyen', fcfa(resume.panier), 'délai moyen : ' ~ heures(resume.delai)),
+        ] %}
+        <div class="bg-white rounded-2xl shadow-md p-4 md:p-5">
+            <p class="text-xs md:text-sm text-gray-500">{{ lib }}</p>
+            <p class="text-xl md:text-2xl font-extrabold text-gray-900 mt-1">{{ val }}</p>
+            <p class="text-xs text-gray-500 mt-1">{{ detail }}</p>
+        </div>
+        {% endfor %}
+    </div>
+
+    <!-- Graphique des ventes -->
+    <div class="bg-white rounded-2xl shadow-md p-5">
+        <div class="flex items-center justify-between mb-3">
+            <h2 class="font-bold text-gray-900">Ventes par jour (articles livrés)</h2>
+            <span class="text-xs text-gray-500">Frais de livraison sur la période : {{ fcfa(resume.frais) }} (pour les livreurs)</span>
+        </div>
+        <div class="h-64"><canvas id="graphVentes" aria-label="Ventes par jour"></canvas></div>
+    </div>
+
+    <div class="grid grid-cols-1 xl:grid-cols-2 gap-6">
+        <!-- Meilleurs articles -->
+        <div class="bg-white rounded-2xl shadow-md">
+            <h2 class="px-5 py-4 border-b border-gray-100 font-bold text-gray-900">Articles les plus vendus</h2>
+            {% for t in top %}
+            <div class="flex items-center gap-3 px-5 py-2.5 border-b border-gray-100 text-sm">
+                <span class="w-6 text-gray-400 font-bold">{{ loop.index }}</span>
+                <span class="flex-1 min-w-0 truncate">{% if t.numero %}<span class="text-purple-600">n°{{ t.numero }}</span> · {% endif %}{{ t.nom }}</span>
+                <span class="text-gray-500">× {{ t.quantite }}</span>
+                <strong class="w-28 text-right">{{ fcfa(t.montant) }}</strong>
+            </div>
+            {% else %}
+            <p class="px-5 py-8 text-center text-sm text-gray-500">Aucune vente livrée sur la période.</p>
+            {% endfor %}
+        </div>
+
+        {% for titre, groupes in [('Par livreur', par_livreur), ('Par zone', par_zone), ('Par provenance', par_source)] %}
+        <div class="bg-white rounded-2xl shadow-md overflow-x-auto">
+            <h2 class="px-5 py-4 border-b border-gray-100 font-bold text-gray-900">{{ titre }}</h2>
+            {% if groupes %}
+            <table class="w-full text-sm">
+                <thead class="bg-gray-50 text-gray-600 text-left">
+                    <tr><th class="px-5 py-2"></th><th class="px-3 py-2 text-right">Commandes</th><th class="px-3 py-2 text-right">Livrées</th>
+                        <th class="px-3 py-2 text-right">Échecs</th><th class="px-3 py-2 text-right">Délai moyen</th><th class="px-5 py-2 text-right">Ventes</th></tr>
+                </thead>
+                <tbody class="divide-y divide-gray-100">
+                    {% for g in groupes %}
+                    <tr>
+                        <td class="px-5 py-2 font-medium">{{ g.nom }}</td>
+                        <td class="px-3 py-2 text-right">{{ g.commandes }}</td>
+                        <td class="px-3 py-2 text-right text-green-700">{{ g.livrees }}</td>
+                        <td class="px-3 py-2 text-right {{ 'text-red-600' if g.echecs }}">{{ g.echecs }}</td>
+                        <td class="px-3 py-2 text-right">{{ heures(g.delai) }}</td>
+                        <td class="px-5 py-2 text-right font-semibold whitespace-nowrap">{{ fcfa(g.ventes) }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            {% else %}
+            <p class="px-5 py-8 text-center text-sm text-gray-500">Pas de données sur la période.</p>
+            {% endif %}
+        </div>
+        {% endfor %}
+    </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script>
+(function () {
+    if (!window.Chart) return;
+    const nuit = document.documentElement.classList.contains('dark');
+    const couleurTexte = nuit ? '#9fb0c8' : '#6b7280';
+    const grille = nuit ? 'rgba(148,163,184,.15)' : 'rgba(15,23,42,.06)';
+    new Chart(document.getElementById('graphVentes'), {
+        type: 'bar',
+        data: {
+            labels: {{ jours_labels|tojson }},
+            datasets: [{ label: 'Ventes', data: {{ jours_valeurs|tojson }}, backgroundColor: '#8b5cf6', borderRadius: 6, maxBarThickness: 28 }],
+        },
+        options: {
+            responsive: true, maintainAspectRatio: false,
+            plugins: { legend: { display: false },
+                       tooltip: { callbacks: { label: (c) => Math.round(c.parsed.y).toLocaleString('fr-FR') + ' FCFA' } } },
+            scales: {
+                x: { ticks: { color: couleurTexte, maxRotation: 0, autoSkip: true, maxTicksLimit: 12 }, grid: { display: false } },
+                y: { beginAtZero: true, ticks: { color: couleurTexte, callback: (v) => v.toLocaleString('fr-FR') }, grid: { color: grille } },
+            },
+        },
+    });
+})();
+</script>
+{% endblock %}

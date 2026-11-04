@@ -90,7 +90,11 @@ def mettre_a_jour_schema():
                                 ('frais_livraison', 'FLOAT NOT NULL DEFAULT 0'),
                                 ('reglee', 'BOOLEAN NOT NULL DEFAULT FALSE'),
                                 ('date_reglement', 'TIMESTAMP'),
-                                ('frais_payes', 'BOOLEAN NOT NULL DEFAULT FALSE')]:
+                                ('frais_payes', 'BOOLEAN NOT NULL DEFAULT FALSE'),
+                                ('code_suivi', 'VARCHAR(32)'),
+                                ('motif_echec', 'VARCHAR(200)'),
+                                ('date_echec', 'TIMESTAMP'),
+                                ('tentatives', 'INTEGER NOT NULL DEFAULT 0')]:
             if nom not in colonnes_commandes:
                 conn.execute(text(f"ALTER TABLE commandes ADD COLUMN {nom} {definition}"))
         if 'frais' not in {c['name'] for c in inspecteur.get_columns('zones')}:
@@ -116,6 +120,9 @@ def mettre_a_jour_schema():
             conn.execute(text("CREATE UNIQUE INDEX IF NOT EXISTS ix_livreurs_code_acces ON livreurs (code_acces)"))
         for (livreur_id,) in conn.execute(text("SELECT id FROM livreurs WHERE code_acces IS NULL")).fetchall():
             conn.execute(text("UPDATE livreurs SET code_acces = :c WHERE id = :i"), {'c': nouveau_code_lien(), 'i': livreur_id})
+        conn.execute(text("CREATE UNIQUE INDEX IF NOT EXISTS ix_commandes_code_suivi ON commandes (code_suivi)"))
+        for (commande_id,) in conn.execute(text("SELECT id FROM commandes WHERE code_suivi IS NULL")).fetchall():
+            conn.execute(text("UPDATE commandes SET code_suivi = :c WHERE id = :i"), {'c': nouveau_code_lien(), 'i': commande_id})
         colonnes_boutiques = {c['name'] for c in inspecteur.get_columns('boutiques')}
         for nom, definition in [('description', 'TEXT'), ('adresse', 'VARCHAR(255)'),
                                 ('mode_frais', "VARCHAR(20) NOT NULL DEFAULT 'livreur_garde'")]:

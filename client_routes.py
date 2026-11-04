@@ -319,7 +319,7 @@ def espace_livreur(code):
                            livrees_jour=len(du_jour), encaisse_jour=sum(c.total for c in du_jour),
                            a_remettre=a_remettre, mes_frais=mes_frais,
                            garde_frais=livreur.boutique.mode_frais != 'boutique_collecte',
-                           onglet=request.args.get('onglet', 'a_livrer'), fcfa=msg.fcfa)
+                           onglet=request.args.get('onglet', 'a_livrer'), fcfa=msg.fcfa, motifs=Commande.MOTIFS_ECHEC)
 
 @client_bp.route('/l/<code>/livree/<int:commande_id>', methods=['POST'])
 def espace_livreur_livree(code, commande_id):
@@ -350,4 +350,29 @@ def manifest_livreur(code):
             {'src': '/static/icons/icon-512.png', 'sizes': '512x512', 'type': 'image/png', 'purpose': 'any maskable'},
         ],
     })
+
+# ==================== SUIVI DE COMMANDE (client) ====================
+
+@client_bp.route('/suivi/<code>')
+def suivi(code):
+    commande = Commande.query.filter_by(code_suivi=code).first()
+    if not commande:
+        return render_template('client/lien_invalide.html'), 404
+    return render_template('client/suivi.html', commande=commande, boutique=commande.boutique, fcfa=msg.fcfa)
+
+# ==================== ÉCHEC DE LIVRAISON (livreur) ====================
+
+@client_bp.route('/l/<code>/echec/<int:commande_id>', methods=['POST'])
+def espace_livreur_echec(code, commande_id):
+    livreur = livreur_par_code(code)
+    commande = Commande.query.filter_by(id=commande_id, livreur_id=livreur.id).first_or_404()
+    if commande.statut == 'en_livraison':
+        motif = request.form.get('motif') if request.form.get('motif') in Commande.MOTIFS_ECHEC else 'Autre'
+        note = (request.form.get('note') or '').strip()
+        commande.motif_echec = (motif + (f' : {note}' if note else ''))[:200]
+        commande.date_echec = datetime.utcnow()
+        stock.changer_statut(commande, 'echec')
+        db.session.commit()
+        flash(f"Commande n°{commande.numero} signalée « {motif} ». La boutique est prévenue.", 'warning')
+    return redirect(url_for('client.espace_livreur', code=code))
 

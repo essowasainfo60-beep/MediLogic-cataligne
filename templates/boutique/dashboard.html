@@ -21,6 +21,15 @@
         </div>
     </div>
 
+    {% if echecs_count %}
+    <a href="{{ url_for('boutique.commandes', statut='echec') }}"
+       class="flex items-center justify-between gap-3 bg-red-50 border border-red-300 rounded-2xl p-4 hover:bg-red-100 transition">
+        <span class="text-red-800 text-sm"><i class="fas fa-triangle-exclamation mr-2"></i>
+            <strong>{{ echecs_count }} livraison(s) en échec</strong> : recontactez le client puis relancez la livraison.</span>
+        <i class="fas fa-arrow-right text-red-600"></i>
+    </a>
+    {% endif %}
+
     {% if not current_user.zones %}
     <a href="{{ url_for('boutique.zones_modele') }}"
        class="flex items-center justify-between gap-3 bg-teal-50 border border-teal-300 rounded-2xl p-4 hover:bg-teal-100 transition">
