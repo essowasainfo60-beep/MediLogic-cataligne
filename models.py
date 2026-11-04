@@ -507,7 +507,8 @@ class CodePromo(db.Model):
     code = db.Column(db.String(30), nullable=False)
     type = db.Column(db.String(15), nullable=False, default='pourcentage')   # 'pourcentage' ou 'montant'
     valeur = db.Column(db.Float, nullable=False)
-    minimum = db.Column(db.Float, nullable=True)            # achat minimum (articles)
+    minimum = db.Column(db.Float, nullable=True)            # achat minimum en FCFA (articles)
+    min_articles = db.Column(db.Integer, nullable=True)     # nombre minimum d'articles dans la commande
     date_fin = db.Column(db.Date, nullable=True)
     utilisations_max = db.Column(db.Integer, nullable=True)
     utilisations = db.Column(db.Integer, nullable=False, default=0)
@@ -522,4 +523,14 @@ class CodePromo(db.Model):
         if self.type == 'pourcentage':
             return f"-{self.valeur:g} %"
         return f"-{self.valeur:,.0f} FCFA".replace(',', ' ')
+
+    @property
+    def conditions(self):
+        """Ex. « dès 2 articles et 10 000 FCFA d'achat »."""
+        morceaux = []
+        if self.min_articles and self.min_articles > 1:
+            morceaux.append(f"{self.min_articles} articles")
+        if self.minimum:
+            morceaux.append(f"{self.minimum:,.0f} FCFA d'achat".replace(',', ' '))
+        return ('dès ' + ' et '.join(morceaux)) if morceaux else ''
 

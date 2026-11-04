@@ -9,7 +9,7 @@ def normaliser_code(code):
     return ''.join(c for c in (code or '').upper() if c.isalnum() or c in '-_')[:30]
 
 
-def verifier(boutique_id, code, sous_total):
+def verifier(boutique_id, code, sous_total, nb_articles=None):
     """(code_promo, remise, erreur) : erreur est un message lisible si le code ne s'applique pas."""
     code = normaliser_code(code)
     if not code:
@@ -21,6 +21,8 @@ def verifier(boutique_id, code, sous_total):
         return None, 0, 'Ce code promo a expiré.'
     if promo.utilisations_max and promo.utilisations >= promo.utilisations_max:
         return None, 0, "Ce code promo a atteint son nombre maximum d'utilisations."
+    if promo.min_articles and nb_articles is not None and nb_articles < promo.min_articles:
+        return None, 0, f"Ce code est valable dès {promo.min_articles} articles dans la commande."
     if promo.minimum and sous_total < promo.minimum:
         return None, 0, f"Ce code est valable dès {promo.minimum:,.0f} FCFA d'achat.".replace(',', ' ')
     if promo.type == 'pourcentage':

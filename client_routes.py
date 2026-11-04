@@ -227,7 +227,8 @@ def valider_commande():
     zone = Zone.query.filter_by(id=request.form.get('zone_id', type=int), boutique_id=boutique.id, active=True).first()
     # Le quartier écrit dans l'adresse fait foi : « Agoè Télessou » est livré en zone Agoè,
     # même si une autre zone (moins chère) a été choisie dans la liste.
-    promo, remise, _ = promos.verifier(boutique.id, request.form.get('code_promo'), total)
+    promo, remise, _ = promos.verifier(boutique.id, request.form.get('code_promo'), total,
+                                     sum(int(i['quantite']) for i in panier.values()))
     zone_adresse, _ = zone_pour_adresse(client_adresse, zones_actives)
     if zone_adresse:
         zone = zone_adresse
@@ -421,7 +422,8 @@ def api_promo():
     if not boutique:
         return jsonify(ok=False, message='Panier vide')
     total = sum(item['prix'] * item['quantite'] for item in panier.values())
-    promo, remise, erreur = promos.verifier(boutique.id, request.args.get('code'), total)
+    promo, remise, erreur = promos.verifier(boutique.id, request.args.get('code'), total,
+                                          sum(int(i['quantite']) for i in panier.values()))
     if not promo:
         return jsonify(ok=False, message=erreur or 'Code invalide')
     return jsonify(ok=True, code=promo.code, remise=remise, libelle=promo.libelle,

@@ -74,7 +74,7 @@
         <div class="mt-4 flex items-center gap-3 bg-white/15 rounded-xl px-4 py-2 text-sm">
             <i class="fas fa-ticket text-lg"></i>
             <span>Code <strong class="font-mono bg-white text-purple-700 rounded px-2 py-0.5">{{ p.code }}</strong> : {{ p.libelle }}
-                {% if p.minimum %}dès {{ '{:,.0f}'.format(p.minimum).replace(',', ' ') }} FCFA{% endif %}
+                {{ p.conditions }}
                 {% if p.date_fin %}· jusqu'au {{ p.date_fin.strftime('%d/%m') }}{% endif %}</span>
         </div>
         {% endfor %}
@@ -84,9 +84,18 @@
             <summary class="cursor-pointer font-semibold">
                 🛵 Livraison {% if zones_livraison[0].frais %}à partir de {{ '{:,.0f}'.format(zones_livraison[0].frais).replace(',', ' ') }} FCFA{% else %}· retrait gratuit possible{% endif %} — voir les tarifs par zone
             </summary>
-            <ul class="mt-2 space-y-1">
+            {% if zones_livraison|length > 4 %}
+            <div class="recherche mt-2 text-gray-800">
+                <i class="fas fa-magnifying-glass"></i>
+                <input type="search" data-filtre="#tarifsZones" data-vide="#aucuneZone" autocomplete="off"
+                       placeholder="Chercher votre quartier ou zone (ex : Agoè, Bè, Tokoin…)" class="rounded-lg">
+                <span class="compte"></span>
+            </div>
+            <p id="aucuneZone" class="hidden mt-2 text-blue-100">Aucune zone trouvée : précisez votre quartier dans l'adresse, la boutique vous indiquera le tarif.</p>
+            {% endif %}
+            <ul id="tarifsZones" class="mt-2 space-y-1">
                 {% for z in zones_livraison %}
-                <li class="flex justify-between gap-3 border-t border-white/10 pt-1">
+                <li data-item="{{ z.nom }} {{ z.quartiers or '' }}" class="flex justify-between gap-3 border-t border-white/10 pt-1">
                     <span><strong>{{ z.nom }}</strong>{% if z.quartiers %} <span class="text-blue-100">· {{ z.quartiers }}</span>{% endif %}</span>
                     <span class="whitespace-nowrap font-semibold">{{ 'Gratuit' if not z.frais else '{:,.0f}'.format(z.frais).replace(',', ' ') ~ ' FCFA' }}</span>
                 </li>
@@ -324,10 +333,11 @@
     const conteneur = document.getElementById('articles');
     const cartes = Array.from(conteneur.querySelectorAll('.carte'));
     function filtrer() {
-        const q = document.getElementById('recherche').value.trim().toLowerCase();
+        const sansAcc = (t) => (t || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+        const q = sansAcc(document.getElementById('recherche').value.trim());
         const tri = document.getElementById('tri').value;
         let visibles = 0;
-        cartes.forEach((c) => { const ok = !q || c.dataset.nom.includes(q); c.style.display = ok ? '' : 'none'; visibles += ok; });
+        cartes.forEach((c) => { const ok = !q || sansAcc(c.dataset.nom).includes(q); c.style.display = ok ? '' : 'none'; visibles += ok; });
         const triees = cartes.slice().sort((a, b) =>
             tri === 'asc' ? a.dataset.prix - b.dataset.prix :
             tri === 'desc' ? b.dataset.prix - a.dataset.prix : a.dataset.ordre - b.dataset.ordre);

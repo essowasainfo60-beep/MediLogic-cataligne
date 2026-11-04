@@ -712,7 +712,8 @@ def nouvelle_commande():
                                    livreurs=Livreur.query.filter_by(boutique_id=current_user.id, actif=True).order_by(Livreur.nom).all())
 
         sous_total_lignes = sum(l['prix'] * l['quantite'] for l in lignes)
-        promo, remise, erreur_promo = promos.verifier(current_user.id, f.get('code_promo'), sous_total_lignes)
+        promo, remise, erreur_promo = promos.verifier(current_user.id, f.get('code_promo'), sous_total_lignes,
+                                                   sum(l['quantite'] for l in lignes))
         if erreur_promo:
             flash(erreur_promo + ' La commande a été enregistrée sans réduction.', 'warning')
         zone = Zone.query.filter_by(id=f.get('zone_id', type=int), boutique_id=current_user.id).first()
@@ -1506,6 +1507,7 @@ def codes_promo():
             db.session.add(CodePromo(
                 boutique_id=current_user.id, code=code, type=type_promo, valeur=valeur,
                 minimum=lire_prix(request.form.get('minimum')) or None,
+                min_articles=request.form.get('min_articles', type=int) or None,
                 date_fin=date_fin.date() if date_fin else None,
                 utilisations_max=request.form.get('utilisations_max', type=int) or None,
                 affiche=bool(request.form.get('affiche')),

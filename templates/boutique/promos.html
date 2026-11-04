@@ -23,8 +23,9 @@
                 <input type="number" name="valeur" required min="1" placeholder="Ex : 10" class="border border-gray-300 px-3 py-2">
             </div>
             <div class="grid grid-cols-2 gap-2 text-sm">
-                <label class="text-gray-500">Achat minimum<input type="number" name="minimum" min="0" placeholder="Aucun" class="mt-1 w-full border border-gray-300 px-3 py-2"></label>
-                <label class="text-gray-500">Utilisations max<input type="number" name="utilisations_max" min="1" placeholder="Illimité" class="mt-1 w-full border border-gray-300 px-3 py-2"></label>
+                <label class="text-gray-500">Dès combien d'articles<input type="number" name="min_articles" min="1" placeholder="Ex : 2" class="mt-1 w-full border border-gray-300 px-3 py-2"></label>
+                <label class="text-gray-500">Achat minimum (FCFA)<input type="number" name="minimum" min="0" step="100" placeholder="Ex : 10000" class="mt-1 w-full border border-gray-300 px-3 py-2"></label>
+                <label class="text-gray-500 col-span-2">Utilisations max<input type="number" name="utilisations_max" min="1" placeholder="Illimité" class="mt-1 w-full border border-gray-300 px-3 py-2"></label>
             </div>
             <label class="block text-sm text-gray-500">Valable jusqu'au (inclus)
                 <input type="date" name="date_fin" min="{{ aujourdhui }}" class="mt-1 w-full border border-gray-300 px-3 py-2">
@@ -43,7 +44,7 @@
                 <div class="flex items-center gap-3 flex-1 min-w-0">
                     <span class="font-mono font-bold text-lg bg-purple-50 text-purple-700 border border-dashed border-purple-300 rounded-lg px-3 py-1">{{ p.code }}</span>
                     <div class="text-sm min-w-0">
-                        <p class="font-semibold text-gray-900">{{ p.libelle }}{% if p.minimum %} <span class="text-gray-500 font-normal">dès {{ fcfa(p.minimum) }}</span>{% endif %}</p>
+                        <p class="font-semibold text-gray-900">{{ p.libelle }}{% if p.conditions %} <span class="text-gray-500 font-normal">{{ p.conditions }}</span>{% endif %}</p>
                         <p class="text-xs text-gray-500">
                             {{ p.utilisations }}{% if p.utilisations_max %}/{{ p.utilisations_max }}{% endif %} utilisation(s)
                             · {{ fcfa(remises.get(p.code, 0)) }} offerts
