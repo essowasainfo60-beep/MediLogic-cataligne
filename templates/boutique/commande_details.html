@@ -15,7 +15,9 @@
                 <h1 class="text-2xl font-bold text-white">
                     <i class="fas fa-receipt mr-2"></i> Commande n°{{ numero }}
                 </h1>
-                <p class="text-purple-100">{{ commande.date_commande.strftime('%d/%m/%Y à %H:%M') }} · {{ commande.source_libelle }}</p>
+                <p class="text-purple-100">{{ commande.date_commande.strftime('%d/%m/%Y à %H:%M') }} · {{ commande.source_libelle }}
+                    {% if commande.saisie_par %} · saisie par {{ commande.saisie_par }}{% endif %}
+                    {% if commande.confirmee_par %} · confirmée par {{ commande.confirmee_par }}{% endif %}</p>
             </div>
             <span class="px-3 py-1 rounded-full text-sm font-semibold {{ commande.statut_classe }}">{{ commande.statut_libelle }}</span>
         </div>

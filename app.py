@@ -5,7 +5,7 @@ from sqlalchemy import inspect, text
 from werkzeug.exceptions import RequestEntityTooLarge
 from werkzeug.middleware.proxy_fix import ProxyFix
 
-from models import db, Boutique, Vendeur, nouveau_code_lien
+from models import db, Boutique, Vendeur, EspaceVendeur, nouveau_code_lien
 
 app = Flask(__name__)
 app.config.from_object('config.Config')
@@ -25,7 +25,11 @@ login_manager.login_message = 'Veuillez vous connecter pour accéder à cette pa
 @login_manager.user_loader
 def load_user(user_id):
     if user_id.startswith('vendeur_'):
-        return db.session.get(Vendeur, int(user_id.split('_')[1]))
+        vendeur = db.session.get(Vendeur, int(user_id.split('_')[1]))
+        # Vendeur désactivé ou boutique suspendue : déconnecté à la page suivante
+        if vendeur and vendeur.actif and vendeur.boutique.active:
+            return EspaceVendeur(vendeur)
+        return None
     return db.session.get(Boutique, int(user_id))
 
 
@@ -96,7 +100,9 @@ def mettre_a_jour_schema():
                                 ('date_echec', 'TIMESTAMP'),
                                 ('tentatives', 'INTEGER NOT NULL DEFAULT 0'),
                                 ('photo_preuve', 'VARCHAR(300)'),
-                                ('creneau', 'VARCHAR(80)')]:
+                                ('creneau', 'VARCHAR(80)'),
+                                ('saisie_par', 'VARCHAR(120)'),
+                                ('confirmee_par', 'VARCHAR(120)')]:
             if nom not in colonnes_commandes:
                 conn.execute(text(f"ALTER TABLE commandes ADD COLUMN {nom} {definition}"))
         if 'frais' not in {c['name'] for c in inspecteur.get_columns('zones')}:
@@ -117,6 +123,10 @@ def mettre_a_jour_schema():
                 for i, (ligne_id,) in enumerate(ids, start=dernier + 1):
                     conn.execute(text(f"UPDATE {table} SET {champ} = :n WHERE id = :i"), {'n': i, 'i': ligne_id})
             conn.execute(text(f"CREATE UNIQUE INDEX IF NOT EXISTS ux_{table}_boutique_{champ} ON {table} (boutique_id, {champ})"))
+        if 'role' not in {c['name'] for c in inspecteur.get_columns('vendeurs')}:
+            conn.execute(text("ALTER TABLE vendeurs ADD COLUMN role VARCHAR(20) NOT NULL DEFAULT 'vendeur'"))
+        if 'par' not in {c['name'] for c in inspecteur.get_columns('mouvements_caisse')}:
+            conn.execute(text("ALTER TABLE mouvements_caisse ADD COLUMN par VARCHAR(120)"))
         if 'code_acces' not in {c['name'] for c in inspecteur.get_columns('livreurs')}:
             conn.execute(text("ALTER TABLE livreurs ADD COLUMN code_acces VARCHAR(32)"))
             conn.execute(text("CREATE UNIQUE INDEX IF NOT EXISTS ix_livreurs_code_acces ON livreurs (code_acces)"))

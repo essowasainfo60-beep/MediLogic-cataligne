@@ -118,7 +118,8 @@
                             <tr data-item="{{ m.type_libelle }} {{ m.categorie or '' }} {{ m.libelle }} {{ m.date.strftime('%d/%m/%Y') }}">
                                 <td class="px-4 py-2 whitespace-nowrap text-gray-500">{{ m.date.strftime('%d/%m %H:%M') }}</td>
                                 <td class="px-4 py-2"><span class="px-2 py-0.5 rounded-full text-xs font-semibold {{ m.type_classe }}">{{ m.type_libelle }}</span></td>
-                                <td class="px-4 py-2">{% if m.categorie %}<span class="text-gray-500">{{ m.categorie }} · </span>{% endif %}{{ m.libelle }}</td>
+                                <td class="px-4 py-2">{% if m.categorie %}<span class="text-gray-500">{{ m.categorie }} · </span>{% endif %}{{ m.libelle }}
+                                    {% if m.par %}<span class="block text-[11px] text-gray-400">par {{ m.par }}</span>{% endif %}</td>
                                 <td class="px-4 py-2 text-right font-bold whitespace-nowrap {{ 'text-green-600' if m.montant > 0 else 'text-red-600' }}">{{ '+' if m.montant > 0 }}{{ fcfa(m.montant) }}</td>
                                 <td class="px-2 py-2 text-right">
                                     {% if m.type in ['charge', 'apport', 'retrait'] %}

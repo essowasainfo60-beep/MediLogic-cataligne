@@ -14,7 +14,7 @@ def nouveau_code_lien():
 
 class Boutique(UserMixin, db.Model):
     __tablename__ = 'boutiques'
-    
+
     id = db.Column(db.Integer, primary_key=True)
     nom_boutique = db.Column(db.String(100), nullable=False)
     proprietaire_nom = db.Column(db.String(50), nullable=False)
@@ -38,26 +38,34 @@ class Boutique(UserMixin, db.Model):
 
     def set_mot_de_passe(self, mot_de_passe):
         self.mot_de_passe_hash = generate_password_hash(mot_de_passe)
-    
+
     def verifier_mot_de_passe(self, mot_de_passe):
         return check_password_hash(self.mot_de_passe_hash, mot_de_passe)
-    
+
     def set_reponse_secrete(self, reponse):
         self.reponse_secrete_hash = generate_password_hash(reponse.lower().strip())
-    
+
     def verifier_reponse_secrete(self, reponse):
         return check_password_hash(self.reponse_secrete_hash, reponse.lower().strip())
-    
+
     @property
     def lien_carte(self):
         return f'https://www.google.com/maps/search/?api=1&query={quote(self.adresse)}' if self.adresse else None
+
+    est_vendeur = False
+    role = 'gerant'
+    role_libelle = 'Gérant·e'
+
+    @property
+    def nom_utilisateur(self):
+        return f'{self.proprietaire_prenom} {self.proprietaire_nom} (gérant)'
 
     def get_id(self):
         return str(self.id)
 
 class Vendeur(UserMixin, db.Model):
     __tablename__ = 'vendeurs'
-    
+
     id = db.Column(db.Integer, primary_key=True)
     boutique_id = db.Column(db.Integer, db.ForeignKey('boutiques.id'), nullable=False)
     nom = db.Column(db.String(50), nullable=False)
@@ -66,21 +74,82 @@ class Vendeur(UserMixin, db.Model):
     mot_de_passe_hash = db.Column(db.String(200), nullable=False)
     actif = db.Column(db.Boolean, default=True)
     date_creation = db.Column(db.DateTime, default=datetime.utcnow)
-    
+    role = db.Column(db.String(20), nullable=False, default='vendeur', server_default='vendeur')
+
     boutique = db.relationship('Boutique', backref=db.backref('vendeurs', cascade='all, delete-orphan'))
-    
+
+    ROLES = {
+        'vendeur': ('Vendeur', 'Commandes, clients, impression'),
+        'caissier': ('Caissier', 'Comme vendeur + la caisse'),
+        'gestionnaire': ('Gestionnaire', 'Tout sauf le compte du gérant'),
+    }
+
+    @property
+    def role_libelle(self):
+        return self.ROLES.get(self.role, (self.role, ''))[0]
+
     def set_mot_de_passe(self, mot_de_passe):
         self.mot_de_passe_hash = generate_password_hash(mot_de_passe)
-    
+
     def verifier_mot_de_passe(self, mot_de_passe):
         return check_password_hash(self.mot_de_passe_hash, mot_de_passe)
-    
+
     def get_id(self):
         return f"vendeur_{self.id}"
 
+
+class EspaceVendeur(UserMixin):
+    """Utilisateur connecté en tant que vendeur : il travaille sur les données de
+    SA boutique (current_user.id = id de la boutique), avec un rôle limité
+    (voir boutique_routes.PERMISSIONS)."""
+    est_vendeur = True
+
+    def __init__(self, vendeur):
+        self.vendeur = vendeur
+
+    def __getattr__(self, nom):          # tout le reste vient de la boutique
+        return getattr(self.vendeur.boutique, nom)
+
+    def get_id(self):
+        return f'vendeur_{self.vendeur.id}'
+
+    @property
+    def id(self):
+        return self.vendeur.boutique_id
+
+    @property
+    def role(self):
+        return self.vendeur.role
+
+    @property
+    def role_libelle(self):
+        return self.vendeur.role_libelle
+
+    @property
+    def proprietaire_prenom(self):
+        return self.vendeur.prenom
+
+    @property
+    def proprietaire_nom(self):
+        return self.vendeur.nom
+
+    @property
+    def email(self):
+        return self.vendeur.email
+
+    @property
+    def nom_utilisateur(self):
+        return f'{self.vendeur.prenom} {self.vendeur.nom} ({self.vendeur.role_libelle.lower()})'
+
+    def verifier_mot_de_passe(self, mot_de_passe):
+        return self.vendeur.verifier_mot_de_passe(mot_de_passe)
+
+    def set_mot_de_passe(self, mot_de_passe):
+        self.vendeur.set_mot_de_passe(mot_de_passe)
+
 class Article(db.Model):
     __tablename__ = 'articles'
-    
+
     id = db.Column(db.Integer, primary_key=True)
     boutique_id = db.Column(db.Integer, db.ForeignKey('boutiques.id'), nullable=False)
     nom = db.Column(db.String(100), nullable=False)
@@ -96,12 +165,12 @@ class Article(db.Model):
         return (dernier or 0) + 1
     archive = db.Column(db.Boolean, default=False)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    
+
     boutique = db.relationship('Boutique', backref=db.backref('articles', cascade='all, delete-orphan'))
 
 class Commande(db.Model):
     __tablename__ = 'commandes'
-    
+
     id = db.Column(db.Integer, primary_key=True)
     boutique_id = db.Column(db.Integer, db.ForeignKey('boutiques.id'), nullable=False)
     client_nom = db.Column(db.String(100), nullable=False)
@@ -141,6 +210,9 @@ class Commande(db.Model):
     photo_preuve = db.Column(db.String(300), nullable=True)
     # Moment de livraison souhaité par le client (« Demain 05/11 · Soir (16h-20h) »)
     creneau = db.Column(db.String(80), nullable=True)
+    # Qui a fait quoi (gérant ou vendeur)
+    saisie_par = db.Column(db.String(120), nullable=True)
+    confirmee_par = db.Column(db.String(120), nullable=True)
 
     boutique = db.relationship('Boutique', backref=db.backref('commandes', cascade='all, delete-orphan'))
     livreur = db.relationship('Livreur', backref='commandes')
@@ -389,6 +461,7 @@ class MouvementCaisse(db.Model):
     montant = db.Column(db.Float, nullable=False)
     livreur_id = db.Column(db.Integer, db.ForeignKey('livreurs.id'), nullable=True)
     commande_id = db.Column(db.Integer, db.ForeignKey('commandes.id'), nullable=True)
+    par = db.Column(db.String(120), nullable=True)   # qui a enregistré le mouvement
 
     boutique = db.relationship('Boutique', backref=db.backref('mouvements_caisse', cascade='all, delete-orphan', lazy='dynamic'))
     livreur = db.relationship('Livreur')

@@ -115,7 +115,7 @@
                 {% if espace_boutique %}
                 <!-- Liens principaux (ordinateur / tablette) -->
                 <div class="hidden md:flex items-center gap-1 text-sm">
-                    {% for endpoint, icone, libelle in liens_boutique %}
+                    {% for endpoint, icone, libelle in liens_boutique if peut(endpoint) %}
                     <a href="{{ url_for(endpoint) }}"
                        class="relative px-3 py-2 rounded-lg font-medium transition {{ 'bg-purple-50 text-purple-700' if request.endpoint == endpoint else 'text-gray-600 hover:bg-gray-100' }}">
                         <i class="fas {{ icone }} opacity-80"></i><span class="hidden xl:inline ml-1.5">{{ libelle }}</span>
@@ -141,7 +141,7 @@
                             </span>
                             <span class="hidden sm:block text-left leading-tight">
                                 <span class="block text-sm font-semibold text-gray-800">{{ current_user.proprietaire_prenom }}</span>
-                                <span class="block text-[11px] text-gray-400">Gérant·e</span>
+                                <span class="block text-[11px] text-gray-400">{{ current_user.role_libelle }}</span>
                             </span>
                             <i class="fas fa-chevron-down text-xs text-gray-400"></i>
                         </summary>
@@ -152,20 +152,27 @@
                             </div>
                             <!-- Liens principaux (téléphone) -->
                             <div class="md:hidden border-b border-gray-100 pb-1 mb-1">
-                                {% for endpoint, icone, libelle in liens_boutique %}
+                                {% for endpoint, icone, libelle in liens_boutique if peut(endpoint) %}
                                 <a href="{{ url_for(endpoint) }}" class="flex items-center gap-3 px-4 py-2 hover:bg-gray-50 {{ 'text-purple-700 font-semibold' if request.endpoint == endpoint else 'text-gray-700' }}">
                                     <i class="fas {{ icone }} w-4 text-center"></i> {{ libelle }}
                                     {% if endpoint == 'boutique.commandes' and nouvelles_commandes %}<span class="pastille-nouvelles ml-auto bg-red-500 text-white text-[10px] font-bold rounded-full px-1.5">{{ nouvelles_commandes }}</span>{% endif %}
                                 </a>
                                 {% endfor %}
                             </div>
+                            {% if peut('boutique.historique') %}
                             <a href="{{ url_for('boutique.historique') }}" class="flex items-center gap-3 px-4 py-2 text-gray-700 hover:bg-gray-50"><i class="fas fa-clock-rotate-left w-4 text-center"></i> Historique et export</a>
+                            {% endif %}
+                            {% if peut('boutique.profil') %}
                             <a href="{{ url_for('boutique.profil') }}" class="flex items-center gap-3 px-4 py-2 text-gray-700 hover:bg-gray-50"><i class="fas fa-store w-4 text-center"></i> Ma boutique</a>
+                            <a href="{{ url_for('boutique.vendeurs') }}" class="flex items-center gap-3 px-4 py-2 text-gray-700 hover:bg-gray-50"><i class="fas fa-users w-4 text-center"></i> Équipe et accès</a>
+                            {% endif %}
                             <button type="button" id="btnAlertes" onclick="activerAlertes()" class="w-full flex items-center gap-3 px-4 py-2 text-gray-700 hover:bg-gray-50">
                                 <i class="fas fa-bell w-4 text-center"></i> <span id="libelleAlertes">Activer les alertes de commande</span>
                             </button>
                             <a href="{{ url_for('boutique.changer_mot_de_passe') }}" class="flex items-center gap-3 px-4 py-2 text-gray-700 hover:bg-gray-50"><i class="fas fa-key w-4 text-center"></i> Changer le mot de passe</a>
+                            {% if not current_user.est_vendeur %}
                             <a href="{{ url_for('boutique.dashboard') }}#biometrie" class="flex items-center gap-3 px-4 py-2 text-gray-700 hover:bg-gray-50"><i class="fas fa-fingerprint w-4 text-center"></i> Face ID / empreinte</a>
+                            {% endif %}
                             <a href="{{ url_for('client.catalogue', code=current_user.lien_public) }}" target="_blank" class="flex items-center gap-3 px-4 py-2 text-gray-700 hover:bg-gray-50"><i class="fas fa-eye w-4 text-center"></i> Voir mon catalogue</a>
                             <button type="button" onclick="basculerTheme()" class="w-full flex items-center gap-3 px-4 py-2 text-gray-700 hover:bg-gray-50">
                                 <i class="fas fa-moon w-4 text-center icone-theme"></i> <span class="libelle-theme">Mode nuit</span>

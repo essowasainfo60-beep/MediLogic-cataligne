@@ -30,7 +30,7 @@
     </a>
     {% endif %}
 
-    {% if not current_user.zones %}
+    {% if not current_user.zones and peut('boutique.zones_modele') %}
     <a href="{{ url_for('boutique.zones_modele') }}"
        class="flex items-center justify-between gap-3 bg-teal-50 border border-teal-300 rounded-2xl p-4 hover:bg-teal-100 transition">
         <span class="text-teal-900 text-sm">
@@ -61,6 +61,7 @@
     </div>
 
     <!-- Caisse -->
+    {% if peut('boutique.page_caisse') %}
     <a href="{{ url_for('boutique.page_caisse') }}" class="grid grid-cols-1 sm:grid-cols-2 gap-4 bg-white rounded-2xl shadow-md p-5 hover:-translate-y-0.5 transition">
         <div class="flex items-center gap-3">
             <span class="h-11 w-11 rounded-xl bg-green-50 text-green-600 flex items-center justify-center"><i class="fas fa-cash-register"></i></span>
@@ -71,6 +72,7 @@
             <div><p class="text-sm text-gray-500">Encore chez les livreurs</p><p class="text-2xl font-extrabold text-gray-900">{{ fcfa(chez_livreurs) }}</p></div>
         </div>
     </a>
+    {% endif %}
 
     <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <!-- Dernières commandes -->
@@ -123,24 +125,28 @@
                         <i class="fab fa-whatsapp mr-1"></i> Partager
                     </a>
                 </div>
+                {% if peut('boutique.regenerer_lien') %}
                 <form method="POST" action="{{ url_for('boutique.regenerer_lien') }}" class="mt-2 text-right"
                       onsubmit="return confirm('Créer un nouveau lien ? L\'ancien lien ne fonctionnera plus pour personne.')">
                     <button type="submit" data-no-loading class="text-xs text-white/60 hover:text-white">Lien partagé par erreur ? En créer un nouveau</button>
                 </form>
+                {% endif %}
             </div>
 
             <!-- Raccourcis -->
             <div class="bg-white rounded-2xl shadow-md p-5">
                 <h2 class="font-bold text-gray-900 mb-3">Raccourcis</h2>
                 <div class="grid grid-cols-2 gap-2 text-sm">
-                    {% for lien, icone, libelle, info in [
-                        (url_for('boutique.articles'), 'fa-boxes-stacked', 'Articles', articles_count ~ ' en ligne'),
-                        (url_for('boutique.inventaire'), 'fa-warehouse', 'Stock', (ruptures ~ ' en rupture') if ruptures else 'Inventaire'),
-                        (url_for('boutique.livreurs'), 'fa-motorcycle', 'Livreurs', 'et zones'),
-                        (url_for('boutique.historique'), 'fa-clock-rotate-left', 'Historique', 'et export'),
-                        (url_for('boutique.vendeurs'), 'fa-users', 'Vendeurs', vendeurs_count ~ ' actif(s)'),
-                        (url_for('boutique.profil'), 'fa-store', 'Ma boutique', 'logo, adresse'),
-                    ] %}
+                    {% for endpoint, icone, libelle, info in [
+                        ('boutique.articles', 'fa-boxes-stacked', 'Articles', articles_count ~ ' en ligne'),
+                        ('boutique.inventaire', 'fa-warehouse', 'Stock', (ruptures ~ ' en rupture') if ruptures else 'Inventaire'),
+                        ('boutique.livreurs', 'fa-motorcycle', 'Livreurs', 'et zones'),
+                        ('boutique.historique', 'fa-clock-rotate-left', 'Historique', 'et export'),
+                        ('boutique.vendeurs', 'fa-users', 'Équipe', vendeurs_count ~ ' membre(s)'),
+                        ('boutique.clients', 'fa-address-book', 'Clients', 'fichier clients'),
+                        ('boutique.profil', 'fa-store', 'Ma boutique', 'logo, adresse'),
+                    ] if peut(endpoint) %}
+                    {% set lien = url_for(endpoint) %}
                     <a href="{{ lien }}" class="flex items-center gap-2 p-3 rounded-xl border border-gray-100 hover:bg-gray-50">
                         <i class="fas {{ icone }} text-purple-500 w-5 text-center"></i>
                         <span class="min-w-0"><span class="block font-semibold text-gray-800">{{ libelle }}</span><span class="block text-xs {{ 'text-red-600' if 'rupture' in info else 'text-gray-500' }} truncate">{{ info }}</span></span>
@@ -151,6 +157,7 @@
         </div>
     </div>
 
+    {% if not current_user.est_vendeur %}
     <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
         <!-- Face ID / empreinte -->
         <div id="biometrie" class="bg-white rounded-2xl shadow-md p-5 scroll-mt-24">
@@ -190,6 +197,7 @@
             </form>
         </div>
     </div>
+    {% endif %}
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/@simplewebauthn/browser@10.0.0/dist/bundle/index.umd.min.js"></script>

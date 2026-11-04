@@ -14,6 +14,8 @@ Commande livrée sans livreur (retrait en boutique) : l'argent entre directement
 """
 from datetime import datetime
 
+from flask_login import current_user
+
 from models import db, MouvementCaisse
 
 
@@ -21,6 +23,7 @@ def ajouter(boutique_id, type_mouvement, montant, libelle, categorie=None, livre
     db.session.add(MouvementCaisse(
         boutique_id=boutique_id, type=type_mouvement, montant=round(montant, 2), libelle=(libelle or '')[:200],
         categorie=categorie, livreur_id=livreur_id, commande_id=commande_id, date=date or datetime.utcnow(),
+        par=getattr(current_user, 'nom_utilisateur', None) if current_user and current_user.is_authenticated else None,
     ))
 
 

@@ -13,7 +13,7 @@ import securite
 import messages_whatsapp as msg
 import stock
 import webauthn_service
-from models import (db, Boutique, Vendeur, Article, Commande, CleBiometrique, Livreur, Zone,
+from models import (db, Boutique, Vendeur, EspaceVendeur, Article, Commande, CleBiometrique, Livreur, Zone,
                     MouvementStock, MouvementCaisse, Retour, nouveau_code_lien, enregistrer_avec_numero)
 from utils import enregistrer_photo, enregistrer_photos, supprimer_photo_stockee, TAILLE_LOGO_PX
 from zones_modele import ZONES_LOME
@@ -21,6 +21,53 @@ from zones_detection import zone_pour_adresse, index_quartiers
 from creneaux import creneaux_disponibles
 
 boutique_bp = Blueprint('boutique', __name__)
+
+# Pages réservées selon le rôle (le gérant a accès à tout). Tout ce qui n'est pas
+# listé ici est ouvert à tous les membres de l'équipe : commandes, clients, impression…
+GERANT_SEUL = {
+    'profil', 'gerer_logo', 'vendeurs', 'ajouter_vendeur', 'desactiver_vendeur', 'modifier_vendeur',
+    'regenerer_lien', 'modifier_whatsapp', 'biometrie_inscription_options', 'biometrie_inscription_verifier',
+    'biometrie_retirer',
+}
+CAISSE = {'page_caisse', 'caisse_versement', 'caisse_paiement_livreur', 'caisse_mouvement', 'caisse_supprimer'}
+GESTION = {
+    'inventaire', 'entree_stock', 'mouvements_stock', 'ajouter_article', 'modifier_article', 'supprimer_photo',
+    'photo_principale', 'archiver_article', 'restaurer_article', 'articles_archives', 'livreurs', 'basculer_livreur',
+    'ajouter_zone', 'modifier_zone', 'zones_modele', 'envoyer_espace_livreur', 'nouveau_lien_livreur',
+    'statistiques', 'historique', 'historique_csv', 'retour_commande',
+}
+ROLES_AUTORISES = {'vendeur': set(), 'caissier': CAISSE, 'gestionnaire': CAISSE | GESTION}
+
+
+def peut(endpoint):
+    """L'utilisateur connecté peut-il ouvrir cette page ? (utilisé aussi pour masquer les liens)"""
+    if not getattr(current_user, 'est_vendeur', False):
+        return True
+    nom = endpoint.split('.')[-1]
+    if nom in GERANT_SEUL:
+        return False
+    if nom in CAISSE or nom in GESTION:
+        return nom in ROLES_AUTORISES.get(current_user.role, set())
+    return True
+
+
+def qui():
+    return getattr(current_user, 'nom_utilisateur', None)
+
+
+@boutique_bp.before_request
+def verifier_droits():
+    if current_user.is_authenticated and request.endpoint and not peut(request.endpoint):
+        if request.accept_mimetypes.best == 'application/json' or request.is_json:
+            return jsonify(success=False, message='Accès réservé'), 403
+        flash(f"Cette page est réservée{' au gérant' if request.endpoint.split('.')[-1] in GERANT_SEUL else ''}. "
+              "Demandez l'accès au gérant de la boutique.", 'warning')
+        return redirect(url_for('boutique.dashboard'))
+
+
+@boutique_bp.app_context_processor
+def injecter_droits():
+    return {'peut': peut}
 
 MDP_FORT = re.compile(r'^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$')
 MSG_MDP_FAIBLE = 'Le mot de passe doit contenir au moins 8 caractères, une majuscule, une minuscule, un chiffre et un symbole'
@@ -108,7 +155,7 @@ def inscription():
 
 @boutique_bp.route('/connexion', methods=['GET', 'POST'])
 def connexion():
-    if current_user.is_authenticated and isinstance(current_user, Boutique):
+    if current_user.is_authenticated and hasattr(current_user, 'nom_boutique'):
         return redirect(url_for('boutique.dashboard'))
     if request.method == 'POST':
         email = (request.form.get('email') or '').strip().lower()
@@ -126,6 +173,17 @@ def connexion():
             securite.succes(request, email)
             login_user(boutique, remember=True)
             flash(f'Bonjour {boutique.proprietaire_prenom} !', 'success')
+            return redirect(url_for('boutique.dashboard'))
+
+        # Membre de l'équipe (vendeur, caissier, gestionnaire)
+        vendeur = Vendeur.query.filter(db.func.lower(Vendeur.email) == email).first()
+        if not boutique and vendeur and vendeur.verifier_mot_de_passe(request.form.get('mot_de_passe') or ''):
+            if not vendeur.actif or not vendeur.boutique.active:
+                flash("Votre compte est désactivé. Contactez le gérant de la boutique.", 'warning')
+                return redirect(url_for('boutique.connexion'))
+            securite.succes(request, email)
+            login_user(EspaceVendeur(vendeur), remember=True)
+            flash(f'Bonjour {vendeur.prenom} ! ({vendeur.role_libelle} · {vendeur.boutique.nom_boutique})', 'success')
             return redirect(url_for('boutique.dashboard'))
         securite.echec(request, email)
         flash('Email ou mot de passe incorrect', 'danger')
@@ -453,23 +511,29 @@ def restaurer_article(article_id):
 @boutique_bp.route('/vendeurs')
 @login_required
 def vendeurs():
-    vendeurs_list = Vendeur.query.filter_by(boutique_id=current_user.id).all()
-    return render_template('boutique/vendeurs.html', vendeurs=vendeurs_list)
+    vendeurs_list = Vendeur.query.filter_by(boutique_id=current_user.id).order_by(Vendeur.actif.desc(), Vendeur.prenom).all()
+    return render_template('boutique/vendeurs.html', vendeurs=vendeurs_list, roles=Vendeur.ROLES)
 
 @boutique_bp.route('/ajouter_vendeur', methods=['GET', 'POST'])
 @login_required
 def ajouter_vendeur():
     if request.method == 'POST':
-        nom = request.form.get('nom')
-        prenom = request.form.get('prenom')
+        nom = (request.form.get('nom') or '').strip()
+        prenom = (request.form.get('prenom') or '').strip()
         email = (request.form.get('email') or '').strip().lower()
+        mot_de_passe = request.form.get('mot_de_passe') or ''
+        role = request.form.get('role') if request.form.get('role') in Vendeur.ROLES else 'vendeur'
 
-        if Vendeur.query.filter(db.func.lower(Vendeur.email) == email).first():
+        if (Vendeur.query.filter(db.func.lower(Vendeur.email) == email).first()
+                or Boutique.query.filter(db.func.lower(Boutique.email) == email).first()):
             flash('Cet email est déjà utilisé', 'danger')
             return redirect(url_for('boutique.ajouter_vendeur'))
+        if not MDP_FORT.match(mot_de_passe):
+            flash(MSG_MDP_FAIBLE, 'danger')
+            return redirect(url_for('boutique.ajouter_vendeur'))
 
-        nouveau_vendeur = Vendeur(boutique_id=current_user.id, nom=nom, prenom=prenom, email=email)
-        nouveau_vendeur.set_mot_de_passe(request.form.get('mot_de_passe') or '')
+        nouveau_vendeur = Vendeur(boutique_id=current_user.id, nom=nom, prenom=prenom, email=email, role=role)
+        nouveau_vendeur.set_mot_de_passe(mot_de_passe)
 
         db.session.add(nouveau_vendeur)
         db.session.commit()
@@ -477,7 +541,7 @@ def ajouter_vendeur():
         flash(f'Vendeur {prenom} {nom} ajouté avec succès !', 'success')
         return redirect(url_for('boutique.vendeurs'))
 
-    return render_template('boutique/ajouter_vendeur.html')
+    return render_template('boutique/ajouter_vendeur.html', roles=Vendeur.ROLES)
 
 @boutique_bp.route('/desactiver_vendeur/<int:vendeur_id>', methods=['POST'])
 @login_required
@@ -488,9 +552,27 @@ def desactiver_vendeur(vendeur_id):
         flash('Accès non autorisé', 'danger')
         return redirect(url_for('boutique.vendeurs'))
 
-    vendeur.actif = False
+    vendeur.actif = not vendeur.actif
     db.session.commit()
-    flash(f'Vendeur {vendeur.prenom} {vendeur.nom} désactivé', 'warning')
+    flash(f"{vendeur.prenom} {vendeur.nom} {'réactivé' if vendeur.actif else 'désactivé : il ne peut plus se connecter'}", 'warning')
+    return redirect(url_for('boutique.vendeurs'))
+
+@boutique_bp.route('/vendeurs/<int:vendeur_id>', methods=['POST'])
+@login_required
+def modifier_vendeur(vendeur_id):
+    """Changer le rôle, ou définir un nouveau mot de passe (oublié)."""
+    vendeur = Vendeur.query.filter_by(id=vendeur_id, boutique_id=current_user.id).first_or_404()
+    if request.form.get('role') in Vendeur.ROLES:
+        vendeur.role = request.form['role']
+        flash(f'{vendeur.prenom} est maintenant {vendeur.role_libelle.lower()}', 'success')
+    mot_de_passe = request.form.get('mot_de_passe') or ''
+    if mot_de_passe:
+        if not MDP_FORT.match(mot_de_passe):
+            flash(MSG_MDP_FAIBLE, 'danger')
+            return redirect(url_for('boutique.vendeurs'))
+        vendeur.set_mot_de_passe(mot_de_passe)
+        flash(f'Nouveau mot de passe enregistré pour {vendeur.prenom}. Communiquez-le-lui de vive voix.', 'success')
+    db.session.commit()
     return redirect(url_for('boutique.vendeurs'))
 
 # ==================== GESTION DES COMMANDES ====================
@@ -622,12 +704,14 @@ def nouvelle_commande():
             source=f.get('source') if f.get('source') in Commande.SOURCES else 'autre',
             zone=zone,
             creneau=f.get('creneau') if f.get('creneau') in creneaux_disponibles() else None,
+            saisie_par=qui(),
             lu=True,
         )
         enregistrer_avec_numero(commande, 'numero_commande', Commande.prochain_numero)
         livreur = Livreur.query.filter_by(id=f.get('livreur_id', type=int), boutique_id=current_user.id, actif=True).first()
         if livreur:
             confier_au_livreur(commande, livreur)
+            commande.confirmee_par = qui()
             db.session.commit()
             flash(f'Commande n°{commande.numero} enregistrée et en livraison avec {livreur.nom}. '
                   'Prévenez le client et le livreur, puis imprimez la facture.', 'success')
@@ -656,6 +740,8 @@ def attribuer_livreur(commande_id):
     deja_en_route = commande.statut == 'en_livraison'
     relance = commande.statut == 'echec'
     confier_au_livreur(commande, livreur)
+    if not deja_en_route and not relance:
+        commande.confirmee_par = qui()
     db.session.commit()
     flash((f'Commande n°{commande.numero} confiée à {livreur.nom}.' if deja_en_route
            else f'Livraison n°{commande.numero} relancée avec {livreur.nom} (tentative {commande.tentatives}).' if relance
@@ -999,7 +1085,7 @@ def zones_modele():
 @boutique_bp.app_context_processor
 def injecter_compteurs():
     """Pastille « nouvelles commandes » dans la barre du haut."""
-    if current_user.is_authenticated and isinstance(current_user, Boutique):
+    if current_user.is_authenticated and hasattr(current_user, 'nom_boutique'):
         return {'nouvelles_commandes': Commande.query.filter_by(boutique_id=current_user.id, statut='nouvelle').count()}
     return {'nouvelles_commandes': 0}
 
