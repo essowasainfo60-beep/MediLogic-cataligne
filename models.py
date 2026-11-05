@@ -29,6 +29,7 @@ class Boutique(UserMixin, db.Model):
     description = db.Column(db.Text, nullable=True)       # présentation affichée aux clients
     adresse = db.Column(db.String(255), nullable=True)    # où se trouve la boutique (point de départ des livraisons)
     latitude = db.Column(db.Float, nullable=True)         # position exacte du point de départ
+    message_statut = db.Column(db.Text, nullable=True)    # message pour le statut WhatsApp (sinon message proposé)
     longitude = db.Column(db.Float, nullable=True)
     # Frais de livraison : 'livreur_garde' (il garde ses frais et ne remet que les articles)
     # ou 'boutique_collecte' (il remet tout, la boutique le paie ensuite). Voir caisse.py.

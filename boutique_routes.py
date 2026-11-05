@@ -39,7 +39,7 @@ GESTION = {
     'inventaire', 'entree_stock', 'mouvements_stock', 'ajouter_article', 'modifier_article', 'supprimer_photo',
     'photo_principale', 'archiver_article', 'restaurer_article', 'articles_archives', 'livreurs', 'basculer_livreur',
     'ajouter_zone', 'modifier_zone', 'zones_modele', 'envoyer_espace_livreur', 'nouveau_lien_livreur',
-    'statistiques', 'historique', 'historique_csv', 'retour_commande', 'codes_promo', 'modifier_code_promo',
+    'statistiques', 'historique', 'message_statut', 'historique_csv', 'retour_commande', 'codes_promo', 'modifier_code_promo',
 }
 ROLES_AUTORISES = {'vendeur': set(), 'caissier': CAISSE, 'gestionnaire': CAISSE | GESTION}
 
@@ -341,6 +341,7 @@ def logout():
 @boutique_bp.route('/dashboard')
 @login_required
 def dashboard():
+    lien_catalogue = url_for('client.catalogue', code=current_user.lien_public, _external=True)
     articles_count = Article.query.filter_by(boutique_id=current_user.id, archive=False).count()
     vendeurs_count = Vendeur.query.filter_by(boutique_id=current_user.id, actif=True).count()
     commandes_count = Commande.query.filter_by(boutique_id=current_user.id).count()
@@ -361,7 +362,9 @@ def dashboard():
         MouvementCaisse.boutique_id == current_user.id).scalar()
     chez_livreurs = sum(caisse.a_remettre(c) for c in _livrees_non_reglees())
 
-    return render_template('boutique/dashboard.html',
+    return render_template('boutique/dashboard.html', message_statut=msg.message_statut(boutique_connectee(), lien_catalogue),
+                           message_statut_brut=(boutique_connectee().message_statut or msg.message_statut_defaut(boutique_connectee())),
+                           message_statut_perso=bool(boutique_connectee().message_statut),
                            en_livraison_count=en_livraison_count,
                            confirmees_count=confirmees_count,
                            echecs_count=echecs_count,
@@ -1363,6 +1366,19 @@ def api_trajet_commande(commande_id):
     return jsonify(points=suivi_gps.trajet(commande),
                    destination={'lat': commande.latitude, 'lng': commande.longitude} if commande.latitude is not None else None,
                    situation=suivi_gps.situation(commande))
+
+# ==================== MESSAGE POUR LE STATUT WHATSAPP ====================
+
+@boutique_bp.route('/message-statut', methods=['POST'])
+@login_required
+def message_statut():
+    """Enregistre le message du statut WhatsApp (vide ou « proposé » = message proposé par LivraPlus)."""
+    boutique = boutique_connectee()
+    texte = (request.form.get('texte') or '').strip()[:1500]
+    boutique.message_statut = None if request.form.get('reinitialiser') or not texte else texte
+    db.session.commit()
+    flash('Message du statut enregistré' if boutique.message_statut else 'Message proposé rétabli', 'success')
+    return redirect(url_for('boutique.dashboard') + '#statut')
 
 # ==================== ABONNEMENT LIVRAPLUS ====================
 

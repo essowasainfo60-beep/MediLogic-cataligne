@@ -182,7 +182,8 @@ def mettre_a_jour_schema():
         for nom, definition in [('description', 'TEXT'), ('adresse', 'VARCHAR(255)'),
                                 ('mode_frais', "VARCHAR(20) NOT NULL DEFAULT 'livreur_garde'"),
                                 ('abonnement_prix', 'FLOAT'), ('abonnement_debut', 'VARCHAR(7)'),
-                                ('derniere_activite', 'TIMESTAMP'), ('latitude', 'FLOAT'), ('longitude', 'FLOAT')]:
+                                ('derniere_activite', 'TIMESTAMP'), ('latitude', 'FLOAT'), ('longitude', 'FLOAT'),
+                                ('message_statut', 'TEXT')]:
             if nom not in colonnes_boutiques:
                 conn.execute(text(f"ALTER TABLE boutiques ADD COLUMN {nom} {definition}"))
         if 'lien_public' not in colonnes_boutiques:

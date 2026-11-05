@@ -121,3 +121,33 @@ def arrivee_client(commande):
             f"🏠 {commande.client_adresse}\n\n"
             f"💰 *À payer : {fcfa(commande.total)}*\n\n"
             f"Je vous attends, merci de sortir 🙏")
+
+
+def message_statut_defaut(boutique):
+    """Message proposé pour le statut WhatsApp de la boutique ({lien} = lien du catalogue)."""
+    lignes = [f"🛍️ *{boutique.nom_boutique.strip()}*"]
+    if boutique.description:
+        lignes.append(boutique.description.strip()[:250])
+    nb = sum(1 for a in boutique.articles if not a.archive) if hasattr(boutique, 'articles') else 0
+    lignes.append("")
+    lignes.append(f"✨ {nb} articles à découvrir en photos" if nb > 1 else "✨ Découvrez nos articles en photos")
+    zones = [z for z in boutique.zones if z.active and not z.est_retrait]
+    if zones:
+        moins_cher = min(z.frais or 0 for z in zones)
+        lignes.append("🛵 Livraison à domicile" + (f" dès {fcfa(moins_cher)}" if moins_cher else ""))
+    if boutique.zone_retrait:
+        lignes.append("🏁 Retrait gratuit à la boutique" + (f" : {boutique.adresse}" if boutique.adresse else ""))
+    elif boutique.adresse:
+        lignes.append(f"📍 {boutique.adresse}")
+    lignes.append("💵 Paiement à la livraison")
+    lignes.append("")
+    lignes.append("👉 Commandez ici en 1 minute : {lien}")
+    return "\n".join(lignes)
+
+
+def message_statut(boutique, lien):
+    """Message du statut : celui de la boutique s'il existe, sinon celui proposé. Le lien y est toujours."""
+    texte = (boutique.message_statut or '').strip() or message_statut_defaut(boutique)
+    if '{lien}' in texte:
+        return texte.replace('{lien}', lien)
+    return texte if lien in texte else f"{texte}\n\n👉 {lien}"
