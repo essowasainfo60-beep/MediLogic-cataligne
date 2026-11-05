@@ -280,6 +280,46 @@
     </script>
     {% endif %}
 
+    <!-- Samsung Internet : l'application installée depuis ce navigateur est bloquée par
+         Google Play Protect. On propose d'ouvrir la page dans Chrome pour l'installer. -->
+    <div id="conseilChrome" class="hidden max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 mt-4">
+        <div class="rounded-xl border-2 border-blue-300 bg-blue-50 text-blue-900 px-4 py-3 text-sm">
+            <div class="flex items-start gap-3">
+                <i class="fab fa-chrome text-2xl text-blue-600 mt-0.5"></i>
+                <div class="flex-1">
+                    <p class="font-semibold">Pour installer LivraPlus sur ce téléphone, utilisez Google Chrome</p>
+                    <p class="mt-0.5">Installée depuis Samsung Internet, l'application est bloquée par Google Play Protect.
+                        Dans Chrome : menu ⋮ → « Installer l'application ». Le suivi GPS des livreurs y fonctionne aussi mieux.</p>
+                    <div class="mt-2 flex flex-wrap gap-2">
+                        <a id="lienChrome" href="#" class="inline-flex items-center gap-1.5 bg-blue-600 text-white font-semibold px-4 py-2 rounded-lg">
+                            <i class="fab fa-chrome"></i> Ouvrir dans Chrome</a>
+                        <button type="button" id="fermerConseilChrome" class="px-3 py-2 rounded-lg text-blue-800 hover:bg-blue-100">Plus tard</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <script>
+    (function () {
+        var ua = navigator.userAgent;
+        var installee = window.matchMedia('(display-mode: standalone)').matches;
+        if (!/SamsungBrowser/i.test(ua) || !/Android/i.test(ua) || installee) return;
+        var masque = null;
+        try { masque = localStorage.getItem('lp_conseil_chrome'); } catch (e) {}
+        if (masque && Date.now() - Number(masque) < 7 * 24 * 3600 * 1000) return;     // revient au bout d'une semaine
+        var bloc = document.getElementById('conseilChrome');
+        bloc.classList.remove('hidden');
+        // Lien Android qui ouvre la même page dans Chrome (ou le Play Store s'il n'est pas installé)
+        document.getElementById('lienChrome').href = 'intent://' + location.host + location.pathname + location.search
+            + '#Intent;scheme=https;package=com.android.chrome;S.browser_fallback_url='
+            + encodeURIComponent('https://play.google.com/store/apps/details?id=com.android.chrome') + ';end';
+        document.getElementById('fermerConseilChrome').addEventListener('click', function () {
+            bloc.classList.add('hidden');
+            try { localStorage.setItem('lp_conseil_chrome', String(Date.now())); } catch (e) {}
+        });
+    })();
+    </script>
+
     <!-- Messages -->
     <div class="max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 mt-4">
         {% if espace_boutique and etat_abonnement and etat_abonnement.niveau in ['jaune', 'orange', 'rouge', 'bloque'] and request.endpoint != 'boutique.abonnement_page' %}
