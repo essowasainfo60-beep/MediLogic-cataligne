@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+{# Page de discussion commune (boutique, livreur, client).
+   Variables : titre, sous_titre, retour (url), retour_libelle, url_messages, url_envoyer, rapides, secours_wa (lien), aide #}
+{% block title %}{{ titre }}{% endblock %}
+{% block content %}
+<div class="max-w-3xl mx-auto px-4 space-y-3">
+    <div class="flex items-center gap-3">
+        {% if retour %}<a href="{{ retour }}" class="h-10 w-10 flex-shrink-0 rounded-xl bg-white shadow-sm flex items-center justify-center text-gray-600" title="{{ retour_libelle or 'Retour' }}"><i class="fas fa-arrow-left"></i></a>{% endif %}
+        <div class="flex-1 min-w-0">
+            <h1 class="text-xl font-extrabold text-gray-900 truncate"><i class="fas fa-comments text-purple-500 mr-1"></i> {{ titre }}</h1>
+            {% if sous_titre %}<p class="text-sm text-gray-500 truncate">{{ sous_titre }}</p>{% endif %}
+        </div>
+        {% if secours_wa %}
+        <a href="{{ secours_wa }}" target="_blank" rel="noopener" class="flex-shrink-0 text-xs text-green-700 bg-green-50 border border-green-200 rounded-lg px-2.5 py-2" title="Si on ne vous répond pas ici">
+            <i class="fab fa-whatsapp"></i> <span class="hidden sm:inline">Pas de réponse ? </span>WhatsApp</a>
+        {% endif %}
+    </div>
+    {% include '_discussion.html' %}
+    <p class="text-xs text-gray-500 text-center">
+        <i class="fas fa-bell mr-1"></i> Activez les alertes pour que votre téléphone sonne à chaque nouveau message.
+        Le message vocal : touchez <i class="fas fa-microphone"></i>, parlez, puis « Envoyer ».</p>
+</div>
+{% endblock %}

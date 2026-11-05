@@ -10,6 +10,7 @@ from flask_login import login_user, logout_user, login_required, current_user
 
 import abonnement
 import caisse
+import discussions
 import notifications
 import suivi_gps
 import promos
@@ -681,6 +682,7 @@ def commande_details(commande_id):
     # Livreur proposé : celui déjà choisi, sinon le livreur attitré de la zone
     livreur_propose = commande.livreur_id or (commande.zone.livreur_id if commande.zone else None)
     return render_template('boutique/commande_details.html', commande=commande, statuts=Commande.STATUTS,
+                           discussion_non_lus=discussions.non_lus(commande.discussion, 'boutique') if commande.discussion else 0,
                            livreurs=livreurs, zones=zones_actives(), livreur_propose=livreur_propose,
                            wa_client=wa_client, wa_livreur=wa_livreur, wa_echec=wa_echec,
                            lien_suivi=msg.lien_suivi(commande),
@@ -827,6 +829,9 @@ def attribuer_livreur(commande_id):
     if not deja_en_route and not relance:
         commande.confirmee_par = qui()
     db.session.commit()
+    notifications.envoyer_livreur(livreur, f'🛵 Nouvelle course n°{commande.numero}',
+                                  f'{commande.client_nom} · {commande.client_adresse} · {msg.fcfa(commande.total)}',
+                                  url_for('client.espace_livreur', code=livreur.code_acces), tag=f'course-{commande.id}')
     flash((f'Commande n°{commande.numero} confiée à {livreur.nom}.' if deja_en_route
            else f'Livraison n°{commande.numero} relancée avec {livreur.nom} (tentative {commande.tentatives}).' if relance
            else f'Commande n°{commande.numero} confirmée et en livraison avec {livreur.nom}.')
@@ -1169,9 +1174,10 @@ def zones_modele():
 @boutique_bp.app_context_processor
 def injecter_compteurs():
     """Pastille « nouvelles commandes » dans la barre du haut."""
-    if current_user.is_authenticated and hasattr(current_user, 'nom_boutique'):
-        return {'nouvelles_commandes': Commande.query.filter_by(boutique_id=current_user.id, statut='nouvelle').count()}
-    return {'nouvelles_commandes': 0}
+    if current_user.is_authenticated and hasattr(current_user, 'nom_boutique') and request.blueprint == 'boutique':
+        return {'nouvelles_commandes': Commande.query.filter_by(boutique_id=current_user.id, statut='nouvelle').count(),
+                'messages_non_lus': discussions.non_lus_boutique(current_user.id)}
+    return {'nouvelles_commandes': 0, 'messages_non_lus': 0}
 
 @boutique_bp.route('/mot_de_passe', methods=['GET', 'POST'])
 @login_required
@@ -1367,6 +1373,82 @@ def api_trajet_commande(commande_id):
                    destination={'lat': commande.latitude, 'lng': commande.longitude} if commande.latitude is not None else None,
                    situation=suivi_gps.situation(commande))
 
+# ==================== DISCUSSIONS ====================
+
+def _discussion_de_la_boutique(discussion_id):
+    from models import Discussion
+    return Discussion.query.filter_by(id=discussion_id, boutique_id=current_user.id).first_or_404()
+
+
+@boutique_bp.route('/discussions')
+@login_required
+def discussions_liste():
+    """Toutes les discussions : générale (livreurs) + une par commande, les plus récentes d'abord."""
+    from models import Discussion
+    generale = discussions.discussion_generale(current_user.id)
+    fils = (Discussion.query.filter(Discussion.boutique_id == current_user.id, Discussion.commande_id.isnot(None),
+                                    Discussion.dernier_message_at.isnot(None))
+            .order_by(Discussion.dernier_message_at.desc()).limit(100).all())
+    lignes = []
+    for d in [generale] + fils:
+        dernier = discussions.dernier_message(d)
+        lignes.append({'d': d, 'dernier': dernier, 'apercu': discussions.apercu(dernier) if dernier else '',
+                       'non_lus': discussions.non_lus(d, 'boutique')})
+    return render_template('boutique/discussions.html', lignes=lignes)
+
+
+@boutique_bp.route('/discussions/<int:discussion_id>')
+@login_required
+def discussion(discussion_id):
+    d = _discussion_de_la_boutique(discussion_id)
+    c = d.commande
+    if c:
+        titre = f'Commande n°{c.numero} · {c.client_nom}'
+        sous_titre = 'Vous, le client' + (f' et le livreur {c.livreur.nom}' if c.livreur else ' (pas encore de livreur)')
+        secours = msg.lien_whatsapp(c.client_telephone, f"Bonjour {c.client_nom}, nous vous avons écrit au sujet de votre commande n°{c.numero} : "
+                                    + url_for('client.discussion_client', code=c.code_suivi, _external=True))
+    else:
+        titre, sous_titre, secours = 'Discussion avec mes livreurs', 'Consignes, versements, organisation de la journée', None
+    return render_template('discussion.html', titre=titre, sous_titre=sous_titre, secours_wa=secours,
+                           retour=url_for('boutique.commande_details', commande_id=c.id) if c else url_for('boutique.discussions_liste'),
+                           url_messages=url_for('boutique.api_discussion_messages', discussion_id=d.id),
+                           url_envoyer=url_for('boutique.api_discussion_messages', discussion_id=d.id),
+                           rapides=discussions.MESSAGES_RAPIDES['boutique'] if c else ['Bonjour à tous 👋', 'Pensez à faire vos versements',
+                                                                                        'Nouvelles courses disponibles'])
+
+
+@boutique_bp.route('/commande/<int:commande_id>/discussion')
+@login_required
+def discussion_commande_boutique(commande_id):
+    commande = Commande.query.filter_by(id=commande_id, boutique_id=current_user.id).first_or_404()
+    return redirect(url_for('boutique.discussion', discussion_id=discussions.discussion_commande(commande).id))
+
+
+@boutique_bp.route('/api/discussions/<int:discussion_id>/messages', methods=['GET', 'POST'])
+@login_required
+def api_discussion_messages(discussion_id):
+    d = _discussion_de_la_boutique(discussion_id)
+    return _api_discussion(d, 'boutique', getattr(current_user, 'nom_utilisateur', None) or current_user.nom_boutique)
+
+
+def _api_discussion(d, qui, nom):
+    """Lecture (GET ?apres=<id>) et envoi (POST) des messages, pour tous les participants."""
+    if request.method == 'POST':
+        message, erreur = discussions.poster(d, qui, nom, request.form, request.files)
+        if erreur:
+            return jsonify(ok=False, erreur=erreur), 400
+        return jsonify(ok=True, message=discussions.en_dict(message, qui, discussions.lectures(d)))
+    liste = discussions.messages(d, qui, request.args.get('apres', 0, type=int))
+    discussions.marquer_lu(d, qui)
+    autres = [n for q, n in discussions.lectures(d).items() if q != qui]
+    return jsonify(messages=liste, lu_jusqu_a=max(autres) if autres else 0)
+
+
+@boutique_bp.route('/api/discussions/non-lus')
+@login_required
+def api_discussions_non_lus():
+    return jsonify(non_lus=discussions.non_lus_boutique(current_user.id))
+
 # ==================== MESSAGE POUR LE STATUT WHATSAPP ====================
 
 @boutique_bp.route('/message-statut', methods=['POST'])
@@ -1425,6 +1507,7 @@ def api_nouvelles():
                  .order_by(Commande.id.desc()).all())
     derniere = nouvelles[0] if nouvelles else None
     return jsonify(nombre=len(nouvelles), dernier_id=derniere.id if derniere else 0,
+                   messages_non_lus=discussions.non_lus_boutique(current_user.id),
                    derniere=None if not derniere else {
                        'numero': derniere.numero, 'client': derniere.client_nom, 'total': msg.fcfa(derniere.total),
                        'lien': url_for('boutique.commande_details', commande_id=derniere.id)})

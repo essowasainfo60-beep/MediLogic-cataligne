@@ -11,6 +11,7 @@ from zones_detection import zone_pour_adresse, index_quartiers
 from creneaux import creneaux_disponibles
 import promos
 import notifications
+import discussions
 import suivi_gps
 from utils import enregistrer_photo
 import stock
@@ -389,7 +390,10 @@ def espace_livreur(code):
                            garde_frais=livreur.boutique.mode_frais != 'boutique_collecte',
                            onglet=request.args.get('onglet', 'a_livrer'), fcfa=msg.fcfa, motifs=Commande.MOTIFS_ECHEC,
                            lien_arrivee=lambda c: msg.lien_whatsapp(c.client_telephone, msg.arrivee_client(c)),
-                           suivi_actif=livreur.position_at and (datetime.utcnow() - livreur.position_at).total_seconds() < 120)
+                           suivi_actif=livreur.position_at and (datetime.utcnow() - livreur.position_at).total_seconds() < 120,
+                           non_lus={c.id: discussions.non_lus(c.discussion, f'livreur:{livreur.id}') for c in a_livrer if c.discussion},
+                           non_lus_total=sum(discussions.non_lus(d, f'livreur:{livreur.id}') for d in discussions.discussions_livreur(livreur)),
+                           cle_push=notifications.cles_vapid()[0])
 
 @client_bp.route('/l/<code>/livree/<int:commande_id>', methods=['POST'])
 def espace_livreur_livree(code, commande_id):
@@ -435,6 +439,110 @@ def espace_livreur_position(code):
     actif, message = suivi_gps.enregistrer(livreur, request.get_json(silent=True) or {})
     return jsonify(actif=actif, message=message)
 
+@client_bp.route('/m/<cle>')
+def media_message(cle):
+    """Photo ou message vocal d'une discussion (lien secret)."""
+    from models import MediaMessage
+    m = MediaMessage.query.filter_by(cle=cle).first_or_404()
+    reponse = Response(m.donnees, mimetype=m.mime)
+    reponse.headers['Cache-Control'] = 'private, max-age=31536000, immutable'
+    return reponse
+
+
+def _api_discussion(d, qui, nom):
+    if request.method == 'POST':
+        message, erreur = discussions.poster(d, qui, nom, request.form, request.files)
+        if erreur:
+            return jsonify(ok=False, erreur=erreur), 400
+        return jsonify(ok=True, message=discussions.en_dict(message, qui, discussions.lectures(d)))
+    liste = discussions.messages(d, qui, request.args.get('apres', 0, type=int))
+    discussions.marquer_lu(d, qui)
+    autres = [n for q, n in discussions.lectures(d).items() if q != qui]
+    return jsonify(messages=liste, lu_jusqu_a=max(autres) if autres else 0)
+
+
+def _discussion_du_livreur(livreur, discussion_id):
+    from models import Discussion
+    d = db.session.get(Discussion, discussion_id)
+    if not d or not discussions.peut_lire(d, f'livreur:{livreur.id}', livreur):
+        abort(404)
+    return d
+
+
+@client_bp.route('/l/<code>/discussions')
+def discussions_livreur(code):
+    livreur = livreur_par_code(code)
+    qui = f'livreur:{livreur.id}'
+    lignes = []
+    for d in discussions.discussions_livreur(livreur):
+        dernier = discussions.dernier_message(d)
+        lignes.append({'d': d, 'dernier': dernier, 'apercu': discussions.apercu(dernier) if dernier else '',
+                       'non_lus': discussions.non_lus(d, qui)})
+    return render_template('client/discussions_livreur.html', livreur=livreur, lignes=lignes)
+
+
+@client_bp.route('/l/<code>/discussions/<int:discussion_id>')
+def discussion_livreur(code, discussion_id):
+    livreur = livreur_par_code(code)
+    d = _discussion_du_livreur(livreur, discussion_id)
+    c = d.commande
+    return render_template('discussion.html',
+                           titre=f'Commande n°{c.numero} · {c.client_nom}' if c else f'Discussion {livreur.boutique.nom_boutique}',
+                           sous_titre=(c.client_adresse if c else 'La boutique et tous les livreurs'),
+                           secours_wa=msg.lien_whatsapp(c.client_telephone, f'Bonjour {c.client_nom}, je suis votre livreur ({livreur.boutique.nom_boutique}).') if c else None,
+                           retour=url_for('client.discussions_livreur', code=code), retour_libelle='Mes discussions',
+                           url_messages=url_for('client.api_discussion_livreur', code=code, discussion_id=d.id),
+                           url_envoyer=url_for('client.api_discussion_livreur', code=code, discussion_id=d.id),
+                           rapides=discussions.MESSAGES_RAPIDES['livreur'] if c else ['Bonjour 👋', 'Je suis disponible pour une course',
+                                                                                       'Je passe faire mon versement'])
+
+
+@client_bp.route('/l/<code>/api/discussions/<int:discussion_id>/messages', methods=['GET', 'POST'])
+def api_discussion_livreur(code, discussion_id):
+    livreur = livreur_par_code(code)
+    d = _discussion_du_livreur(livreur, discussion_id)
+    return _api_discussion(d, f'livreur:{livreur.id}', livreur.nom)
+
+
+@client_bp.route('/l/<code>/commande/<int:commande_id>/discussion')
+def discussion_commande_livreur(code, commande_id):
+    livreur = livreur_par_code(code)
+    commande = Commande.query.filter_by(id=commande_id, livreur_id=livreur.id).first_or_404()
+    return redirect(url_for('client.discussion_livreur', code=code, discussion_id=discussions.discussion_commande(commande).id))
+
+
+@client_bp.route('/l/<code>/alertes/abonner', methods=['POST'])
+def alertes_livreur(code):
+    livreur = livreur_par_code(code)
+    ok = notifications.abonner_livreur(livreur, request.get_json(silent=True))
+    return jsonify(ok=ok), (200 if ok else 400)
+
+
+@client_bp.route('/suivi/<code>/discussion')
+def discussion_client(code):
+    commande = Commande.query.filter_by(code_suivi=code).first()
+    if not commande:
+        return render_template('client/lien_invalide.html'), 404
+    memoriser_commande(commande)
+    d = discussions.discussion_commande(commande)
+    b = commande.boutique
+    return render_template('discussion.html', boutique=b,
+                           titre=f'Commande n°{commande.numero}',
+                           sous_titre=f'{b.nom_boutique}' + (f' et votre livreur {commande.livreur.nom}' if commande.livreur else ''),
+                           secours_wa=msg.lien_whatsapp(b.whatsapp, f'Bonjour, je vous ai écrit au sujet de ma commande n°{commande.numero}.') if b.whatsapp else None,
+                           retour=url_for('client.suivi', code=code), retour_libelle='Suivi de ma commande',
+                           url_messages=url_for('client.api_discussion_client', code=code),
+                           url_envoyer=url_for('client.api_discussion_client', code=code),
+                           rapides=discussions.MESSAGES_RAPIDES['client'],
+                           aide='Posez vos questions à la boutique et au livreur : texte, photo ou message vocal.')
+
+
+@client_bp.route('/suivi/<code>/api/messages', methods=['GET', 'POST'])
+def api_discussion_client(code):
+    commande = Commande.query.filter_by(code_suivi=code).first_or_404()
+    return _api_discussion(discussions.discussion_commande(commande), 'client', commande.client_nom)
+
+
 @client_bp.route('/l/<code>/manifest.json')
 def manifest_livreur(code):
     """Manifeste propre au livreur : l'application installée s'ouvre sur SON espace."""
@@ -465,6 +573,7 @@ def suivi(code):
     memoriser_commande(commande)
     cle_push = notifications.cles_vapid()[0] if commande.statut in ('nouvelle', 'confirmee', 'en_livraison') else None
     return render_template('client/suivi.html', commande=commande, boutique=commande.boutique, fcfa=msg.fcfa,
+                           messages_non_lus=discussions.non_lus(commande.discussion, 'client') if commande.discussion else 0,
                            cle_push=cle_push, position=suivi_gps.situation(commande))
 
 @client_bp.route('/suivi/<code>/etat')

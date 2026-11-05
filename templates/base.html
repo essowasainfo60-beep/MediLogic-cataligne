@@ -80,6 +80,7 @@
         ('boutique.dashboard', 'fa-house', 'Accueil'),
         ('boutique.commandes', 'fa-receipt', 'Commandes'),
         ('boutique.livraisons', 'fa-motorcycle', 'Livraisons'),
+        ('boutique.discussions_liste', 'fa-comments', 'Discussions'),
         ('boutique.clients', 'fa-address-book', 'Clients'),
         ('boutique.articles', 'fa-boxes-stacked', 'Articles'),
         ('boutique.inventaire', 'fa-warehouse', 'Stock'),
@@ -126,6 +127,9 @@
                     <a href="{{ url_for(endpoint) }}"
                        class="relative px-3 py-2 rounded-lg font-medium transition {{ 'bg-purple-50 text-purple-700' if request.endpoint == endpoint else 'text-gray-600 hover:bg-gray-100' }}">
                         <i class="fas {{ icone }} opacity-80"></i><span class="hidden xl:inline ml-1.5">{{ libelle }}</span>
+                        {% if endpoint == 'boutique.discussions_liste' %}
+                        <span class="pastille-messages {{ '' if messages_non_lus else 'hidden' }} absolute -top-1 -right-1 bg-green-600 text-white text-[10px] font-bold rounded-full min-w-[18px] h-[18px] px-1 flex items-center justify-center">{{ messages_non_lus or '' }}</span>
+                        {% endif %}
                         {% if endpoint == 'boutique.commandes' and nouvelles_commandes %}
                         <span class="pastille-nouvelles absolute -top-1 -right-1 bg-red-500 text-white text-[10px] font-bold rounded-full min-w-[18px] h-[18px] px-1 flex items-center justify-center">{{ nouvelles_commandes }}</span>
                         {% endif %}
@@ -225,6 +229,7 @@
                class="flex items-center gap-3 mx-2 px-3 py-3 rounded-xl {{ 'bg-purple-50 text-purple-700 font-semibold' if request.endpoint == endpoint else 'text-gray-700 hover:bg-gray-50' }}">
                 <i class="fas {{ icone }} w-5 text-center"></i> {{ 'Statistiques' if libelle == 'Stats' else libelle }}
                 {% if endpoint == 'boutique.commandes' and nouvelles_commandes %}<span class="pastille-nouvelles ml-auto bg-red-500 text-white text-[11px] font-bold rounded-full px-2 py-0.5">{{ nouvelles_commandes }}</span>{% endif %}
+                {% if endpoint == 'boutique.discussions_liste' %}<span class="pastille-messages {{ '' if messages_non_lus else 'hidden' }} ml-auto bg-green-600 text-white text-[11px] font-bold rounded-full px-2 py-0.5">{{ messages_non_lus or '' }}</span>{% endif %}
             </a>
             {% endfor %}
             <div class="border-t border-gray-100 my-2 mx-4"></div>
@@ -470,6 +475,9 @@
             try {
                 const d = await (await fetch(URL_API, { headers: { 'Accept': 'application/json' } })).json();
                 majPastilles(d.nombre);
+                document.querySelectorAll('.pastille-messages').forEach((p) => {
+                    p.textContent = d.messages_non_lus || ''; p.classList.toggle('hidden', !d.messages_non_lus);
+                });
                 if (dernierId !== null && d.dernier_id > dernierId && d.derniere) {
                     const texte = 'n°' + d.derniere.numero + ' · ' + d.derniere.client + ' · ' + d.derniere.total;
                     document.getElementById('alerteTexte').textContent = texte;

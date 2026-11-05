@@ -672,3 +672,86 @@ class AbonnementPushBoutique(db.Model):
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
     boutique = db.relationship('Boutique', backref=db.backref('abonnements_push', cascade='all, delete-orphan'))
+
+
+# ==================== DISCUSSIONS (boutique, livreurs, clients) ====================
+
+class Discussion(db.Model):
+    """Fil de discussion : soit une commande (boutique + livreur + client),
+    soit la discussion générale de la boutique avec ses livreurs (commande_id vide)."""
+    __tablename__ = 'discussions'
+    __table_args__ = (db.UniqueConstraint('commande_id', name='uq_discussion_commande'),)
+
+    id = db.Column(db.Integer, primary_key=True)
+    boutique_id = db.Column(db.Integer, db.ForeignKey('boutiques.id', ondelete='CASCADE'), nullable=False, index=True)
+    commande_id = db.Column(db.Integer, db.ForeignKey('commandes.id', ondelete='CASCADE'), nullable=True)
+    dernier_message_at = db.Column(db.DateTime, nullable=True, index=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    boutique = db.relationship('Boutique', backref=db.backref('discussions', cascade='all, delete-orphan', lazy='dynamic'))
+    commande = db.relationship('Commande', backref=db.backref('discussion', uselist=False, cascade='all, delete-orphan'))
+
+    @property
+    def est_generale(self):
+        return self.commande_id is None
+
+
+class MediaMessage(db.Model):
+    """Photo ou message vocal envoyé dans une discussion (lien secret, jamais devinable)."""
+    __tablename__ = 'medias_messages'
+
+    id = db.Column(db.Integer, primary_key=True)
+    cle = db.Column(db.String(32), unique=True, nullable=False, index=True, default=lambda: secrets.token_urlsafe(16))
+    boutique_id = db.Column(db.Integer, db.ForeignKey('boutiques.id', ondelete='CASCADE'), nullable=False, index=True)
+    mime = db.Column(db.String(60), nullable=False)
+    donnees = db.Column(db.LargeBinary, nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+
+class Message(db.Model):
+    __tablename__ = 'messages'
+    TYPES = ('texte', 'photo', 'audio', 'position')
+
+    id = db.Column(db.Integer, primary_key=True)
+    discussion_id = db.Column(db.Integer, db.ForeignKey('discussions.id', ondelete='CASCADE'), nullable=False, index=True)
+    auteur = db.Column(db.String(30), nullable=False)        # 'boutique', 'client' ou 'livreur:<id>'
+    auteur_nom = db.Column(db.String(120), nullable=False)
+    type = db.Column(db.String(10), nullable=False, default='texte')
+    texte = db.Column(db.Text, nullable=True)
+    media_id = db.Column(db.Integer, db.ForeignKey('medias_messages.id', ondelete='SET NULL'), nullable=True)
+    duree = db.Column(db.Integer, nullable=True)             # secondes (audio)
+    lat = db.Column(db.Float, nullable=True)
+    lng = db.Column(db.Float, nullable=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, index=True)
+
+    discussion = db.relationship('Discussion', backref=db.backref('messages', cascade='all, delete-orphan',
+                                                                  lazy='dynamic', order_by='Message.id'))
+    media = db.relationship('MediaMessage')
+
+
+class LectureDiscussion(db.Model):
+    """Jusqu'où chaque participant a lu (« boutique », « client », « livreur:<id> »)."""
+    __tablename__ = 'lectures_discussions'
+    __table_args__ = (db.UniqueConstraint('discussion_id', 'qui', name='uq_lecture_qui'),)
+
+    id = db.Column(db.Integer, primary_key=True)
+    discussion_id = db.Column(db.Integer, db.ForeignKey('discussions.id', ondelete='CASCADE'), nullable=False, index=True)
+    qui = db.Column(db.String(30), nullable=False)
+    dernier_lu_id = db.Column(db.Integer, nullable=False, default=0)
+    lu_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    discussion = db.relationship('Discussion', backref=db.backref('lectures', cascade='all, delete-orphan'))
+
+
+class AbonnementPushLivreur(db.Model):
+    """Téléphone du livreur qui sonne (nouvelle course, nouveau message)."""
+    __tablename__ = 'abonnements_push_livreur'
+
+    id = db.Column(db.Integer, primary_key=True)
+    livreur_id = db.Column(db.Integer, db.ForeignKey('livreurs.id', ondelete='CASCADE'), nullable=False, index=True)
+    endpoint = db.Column(db.String(1000), nullable=False, unique=True)
+    cle_p256dh = db.Column(db.String(200), nullable=False)
+    cle_auth = db.Column(db.String(100), nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    livreur = db.relationship('Livreur', backref=db.backref('abonnements_push', cascade='all, delete-orphan'))

@@ -11,7 +11,7 @@ import os
 
 from sqlalchemy.exc import IntegrityError
 
-from models import db, AbonnementPush, AbonnementPushBoutique, Parametre
+from models import db, AbonnementPush, AbonnementPushBoutique, AbonnementPushLivreur, Parametre
 
 log = logging.getLogger(__name__)
 CONTACT = 'mailto:' + os.environ.get('VAPID_CONTACT', 'contact@livraplus.app')
@@ -95,6 +95,31 @@ def envoyer_boutique(boutique_id, titre, corps, url, tag='boutique'):
     """Prévient tous les téléphones de la boutique (nouvelle commande, échec de livraison…)."""
     abonnements = AbonnementPushBoutique.query.filter_by(boutique_id=boutique_id).all()
     return _envoyer(abonnements, titre, corps, url, tag)
+
+
+def abonner_livreur(livreur, donnees):
+    """Téléphone du livreur : il sonnera pour une nouvelle course ou un nouveau message."""
+    try:
+        endpoint = donnees['endpoint']
+        p256dh, auth = donnees['keys']['p256dh'], donnees['keys']['auth']
+    except (KeyError, TypeError):
+        return False
+    if not str(endpoint).startswith('https://') or len(endpoint) > 1000:
+        return False
+    existant = AbonnementPushLivreur.query.filter_by(endpoint=endpoint).first()
+    if existant:
+        existant.livreur_id, existant.cle_p256dh, existant.cle_auth = livreur.id, p256dh, auth
+    else:
+        tous = AbonnementPushLivreur.query.filter_by(livreur_id=livreur.id).order_by(AbonnementPushLivreur.id).all()
+        if len(tous) >= 5:
+            db.session.delete(tous[0])
+        db.session.add(AbonnementPushLivreur(livreur_id=livreur.id, endpoint=endpoint, cle_p256dh=p256dh, cle_auth=auth))
+    db.session.commit()
+    return True
+
+
+def envoyer_livreur(livreur, titre, corps, url, tag='livreur'):
+    return _envoyer(list(livreur.abonnements_push), titre, corps, url, tag)
 
 
 def _envoyer(abonnements, titre, corps, url, tag):

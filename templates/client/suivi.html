@@ -97,6 +97,11 @@
         <p class="text-gray-500 mt-3"><i class="fas fa-location-dot mr-1"></i> {{ commande.client_adresse }}</p>
     </div>
 
+    <a href="{{ url_for('client.discussion_client', code=commande.code_suivi) }}"
+       class="flex items-center justify-center gap-2 bg-purple-600 text-white py-3 rounded-xl font-semibold hover:bg-purple-700">
+        <i class="fas fa-comments"></i> Discuter avec la boutique{{ ' et le livreur' if commande.livreur }}
+        {% if messages_non_lus %}<span class="bg-green-500 text-white text-xs font-bold rounded-full px-2 py-0.5">{{ messages_non_lus }} nouveau{{ 'x' if messages_non_lus > 1 }}</span>{% endif %}
+    </a>
     <div class="grid grid-cols-2 gap-2">
         <a href="{{ url_for('client.catalogue', code=boutique.lien_public) }}" class="text-center bg-white border border-gray-200 py-3 rounded-xl font-semibold text-gray-700 hover:bg-gray-50">
             <i class="fas fa-store mr-1"></i> Catalogue

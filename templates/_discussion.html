@@ -1,0 +1,35 @@
+{# Fenêtre de discussion. Variables : url_messages, url_envoyer, rapides (liste), aide (texte facultatif) #}
+<div id="discussion" class="bg-[#efeae2] rounded-2xl shadow-md overflow-hidden flex flex-col" style="height: min(72vh, 680px)">
+    <div data-liste class="flex-1 overflow-y-auto p-3 space-y-2">
+        <p data-vide class="text-center text-sm text-gray-500 mt-10">
+            <i class="fas fa-comments text-3xl text-gray-300 block mb-2"></i>
+            {{ aide or "Aucun message pour l'instant. Écrivez, envoyez une photo ou un message vocal." }}</p>
+    </div>
+    {% if rapides %}
+    <div class="flex gap-1.5 overflow-x-auto px-2 pt-2 bg-white/60 whitespace-nowrap">
+        {% for r in rapides %}<button type="button" data-rapide="{{ r }}" class="text-xs bg-white border border-gray-200 rounded-full px-3 py-1.5 text-gray-700 hover:bg-purple-50">{{ r }}</button>{% endfor %}
+    </div>
+    {% endif %}
+    <div data-barre-vocal class="hidden flex items-center gap-3 px-3 py-2 bg-red-50 border-t border-red-100">
+        <span class="h-3 w-3 rounded-full bg-red-600 animate-pulse"></span>
+        <span class="text-sm font-semibold text-red-700">Enregistrement <span data-minuterie>0:00</span></span>
+        <button type="button" data-vocal-annuler class="ml-auto text-sm text-gray-600 px-3 py-1.5 rounded-lg hover:bg-white">Annuler</button>
+        <button type="button" data-vocal-envoyer class="text-sm bg-red-600 text-white font-semibold px-4 py-1.5 rounded-lg"><i class="fas fa-paper-plane mr-1"></i> Envoyer</button>
+    </div>
+    <p data-etat class="text-xs px-3"></p>
+    <div class="flex items-end gap-1.5 p-2 bg-white border-t border-gray-100">
+        <button type="button" data-photo class="h-10 w-10 flex-shrink-0 rounded-full text-gray-500 hover:bg-gray-100" title="Envoyer une photo"><i class="fas fa-camera"></i></button>
+        <input type="file" data-fichier-photo accept="image/*" class="hidden">
+        <button type="button" data-position class="h-10 w-10 flex-shrink-0 rounded-full text-gray-500 hover:bg-gray-100" title="Envoyer ma position"><i class="fas fa-location-dot"></i></button>
+        <textarea data-champ rows="1" maxlength="2000" placeholder="Votre message…" class="flex-1 resize-none border border-gray-200 rounded-2xl px-3 py-2 text-sm max-h-[120px]"></textarea>
+        <button type="button" data-envoyer class="hidden h-10 w-10 flex-shrink-0 rounded-full bg-purple-600 text-white" title="Envoyer"><i class="fas fa-paper-plane"></i></button>
+        <button type="button" data-micro class="h-10 w-10 flex-shrink-0 rounded-full bg-green-600 text-white" title="Message vocal : touchez pour enregistrer"><i class="fas fa-microphone"></i></button>
+    </div>
+</div>
+<script src="{{ url_for('static', filename='discussion.js') }}"></script>
+<script>
+Discussion.demarrer(document.getElementById('discussion'), {
+    urlMessages: {{ url_messages|tojson }},
+    urlEnvoyer: {{ url_envoyer|tojson }},
+});
+</script>
