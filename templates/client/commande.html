@@ -69,7 +69,25 @@
                         <p class="text-xs text-gray-500 mt-1">Format international recommandé</p>
                     </div>
 
-                    <div>
+                    {% set retrait = boutique.zone_retrait %}
+                    {% if retrait %}
+                    <div class="grid grid-cols-2 gap-2">
+                        <label class="cursor-pointer">
+                            <input type="radio" name="mode_reception" value="livraison" checked class="peer hidden" onchange="choisirReception()">
+                            <span class="block text-center border-2 border-gray-200 rounded-xl px-2 py-3 font-semibold peer-checked:border-green-600 peer-checked:bg-green-50 peer-checked:text-green-800">🛵 Me faire livrer</span>
+                        </label>
+                        <label class="cursor-pointer">
+                            <input type="radio" name="mode_reception" value="retrait" class="peer hidden" onchange="choisirReception()">
+                            <span class="block text-center border-2 border-gray-200 rounded-xl px-2 py-3 font-semibold peer-checked:border-green-600 peer-checked:bg-green-50 peer-checked:text-green-800">🛍 Je viens récupérer<span class="block text-xs font-normal">gratuit</span></span>
+                        </label>
+                    </div>
+                    <div id="blocRetrait" class="hidden rounded-xl border border-green-200 bg-green-50 p-3 text-sm text-green-900">
+                        <p class="font-semibold">🏁 À récupérer à : {{ boutique.adresse or boutique.nom_boutique }}</p>
+                        {% if boutique.lien_itineraire %}<a href="{{ boutique.lien_itineraire }}" target="_blank" rel="noopener" class="inline-block mt-1 text-green-700 font-semibold underline"><i class="fas fa-route mr-1"></i> Itinéraire jusqu'à la boutique</a>{% endif %}
+                        <p class="text-xs mt-1">La boutique vous prévient quand votre commande est prête.</p>
+                    </div>
+                    {% endif %}
+                    <div id="blocLivraison">
                         <label class="block text-gray-700 text-sm font-bold mb-2">Adresse de livraison *</label>
                         <textarea name="client_adresse" id="adresseClient" rows="2" required oninput="detecterZone()" 
                                   class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 transition"
@@ -94,7 +112,7 @@
                     </div>
 
 <div>
-                        <label class="block text-gray-700 text-sm font-bold mb-2"><i class="fas fa-clock mr-1"></i> Quand souhaitez-vous être livré ?</label>
+                        <label class="block text-gray-700 text-sm font-bold mb-2"><i class="fas fa-clock mr-1"></i> <span id="libelleCreneau">Quand souhaitez-vous être livré ?</span></label>
                         <select name="creneau" class="w-full px-3 py-2 border border-gray-300 rounded-lg">
                             {% for c in creneaux %}<option {{ 'selected' if loop.first }}>{{ c }}</option>{% endfor %}
                         </select>
@@ -138,6 +156,21 @@ function zoneDeLAdresse() {
     }
     return trouve;
 }
+function choisirReception() {
+    const retrait = (document.querySelector('input[name="mode_reception"]:checked') || {}).value === 'retrait';
+    document.getElementById('blocRetrait').classList.toggle('hidden', !retrait);
+    document.getElementById('blocLivraison').classList.toggle('hidden', retrait);
+    document.getElementById('adresseClient').required = !retrait;
+    const creneau = document.getElementById('libelleCreneau');
+    if (creneau) creneau.textContent = retrait ? 'Quand passerez-vous récupérer votre commande ?' : 'Quand souhaitez-vous être livré ?';
+    const select = document.getElementById('zoneClient');
+    if (select) select.required = !retrait;
+    if (retrait) {
+        document.getElementById('fraisAffiches').textContent = '0 FCFA (retrait)';
+        const total = document.getElementById('totalAffiche');
+        if (total) total.textContent = Math.round(+total.dataset.sousTotal - (+total.dataset.remise || 0)).toLocaleString('fr-FR') + ' FCFA';
+    } else if (select) { majFrais(); }
+}
 function detecterZone() {
     const select = document.getElementById('zoneClient');
     if (!select) return;
@@ -164,6 +197,7 @@ function verifierZone() {
 }
 
 function majFrais() {
+    if ((document.querySelector('input[name="mode_reception"]:checked') || {}).value === 'retrait') { choisirReception(); return; }
     const choix = document.getElementById('zoneClient').selectedOptions[0];
     const frais = choix && choix.dataset.frais ? +choix.dataset.frais : 0;
     const total = document.getElementById('totalAffiche');

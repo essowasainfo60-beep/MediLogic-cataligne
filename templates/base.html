@@ -482,16 +482,44 @@
                 dernierId = Math.max(dernierId || 0, d.dernier_id);
             } catch (e) {}
         }
+        const CLE_PUSH = {{ (cle_push_boutique or '')|tojson }};
+        function cleOctets(b64) {
+            const s = (b64 + '='.repeat((4 - b64.length % 4) % 4)).replace(/-/g, '+').replace(/_/g, '/');
+            return Uint8Array.from(atob(s), (c) => c.charCodeAt(0));
+        }
+        // Abonne ce téléphone : il sonnera à chaque nouvelle commande, même application fermée
+        async function abonnerTelephone() {
+            if (!CLE_PUSH || !('serviceWorker' in navigator) || !('PushManager' in window)
+                || !('Notification' in window) || Notification.permission !== 'granted') return false;
+            try {
+                const reg = await navigator.serviceWorker.register('/sw.js');
+                await navigator.serviceWorker.ready;
+                let abo = await reg.pushManager.getSubscription();
+                const k = abo && abo.options && abo.options.applicationServerKey;
+                if (abo && k && Array.from(new Uint8Array(k)).join() !== Array.from(cleOctets(CLE_PUSH)).join()) { await abo.unsubscribe(); abo = null; }
+                if (!abo) abo = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: cleOctets(CLE_PUSH) });
+                const r = await fetch({{ url_for('boutique.alertes_abonner')|tojson }}, {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(abo) });
+                return r.ok;
+            } catch (e) { return false; }
+        }
         window.activerAlertes = async function () {
             bip();  // autorise le son sur cet appareil
             if ('Notification' in window && Notification.permission !== 'granted') await Notification.requestPermission();
+            const ok = await abonnerTelephone();
             majLibelle();
+            if ('Notification' in window && Notification.permission !== 'granted') {
+                alert("Les notifications sont bloquées pour ce site. Autorisez-les dans les réglages du navigateur (cadenas à côté de l'adresse).");
+            } else if (ok) {
+                alert('Alertes activées : ce téléphone sonnera à chaque nouvelle commande, même application fermée.');
+            }
         };
         function majLibelle() {
             const l = document.getElementById('libelleAlertes');
             if (l && 'Notification' in window && Notification.permission === 'granted') l.textContent = 'Alertes de commande activées ✓';
         }
         majLibelle();
+        abonnerTelephone();          // déjà autorisé : on réabonne en silence (clé à jour, nouveau téléphone…)
         verifier();
         setInterval(verifier, 30000);
     })();

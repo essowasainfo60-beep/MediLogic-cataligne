@@ -25,6 +25,7 @@
                             {% endif %}
                             <div class="flex-1">
                                 <p class="font-semibold text-gray-800">{{ item.nom }}</p>
+                                {% if item.photo_num %}<p class="text-xs text-purple-700">Photo choisie {{ item.photo_num }}/{{ item.photos_total }}</p>{% endif %}
                                 <form method="POST" action="{{ url_for('client.modifier_quantite', cle=id) }}"
                                       class="flex items-center gap-2 text-sm text-gray-500 mt-1">
                                     <span>{{ "%.0f"|format(item.prix) }} FCFA ×</span>

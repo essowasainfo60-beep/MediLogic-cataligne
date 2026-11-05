@@ -10,6 +10,7 @@ from flask_login import login_user, logout_user, login_required, current_user
 
 import abonnement
 import caisse
+import notifications
 import suivi_gps
 import promos
 import securite
@@ -60,7 +61,8 @@ def qui():
 
 
 # Abonnement non payé après le 8 : seules ces pages restent ouvertes
-OUVERT_SI_BLOQUE = {'dashboard', 'logout', 'abonnement_page', 'abonnement_payer', 'changer_mot_de_passe', 'api_nouvelles'}
+OUVERT_SI_BLOQUE = {'dashboard', 'logout', 'abonnement_page', 'abonnement_payer', 'changer_mot_de_passe', 'api_nouvelles',
+                    'alertes_abonner'}
 
 
 def boutique_connectee():
@@ -105,7 +107,8 @@ def verifier_droits():
 @boutique_bp.app_context_processor
 def injecter_droits():
     boutique = boutique_connectee() if request.blueprint == 'boutique' else None
-    return {'peut': peut, 'etat_abonnement': abonnement.etat(boutique) if boutique else None}
+    return {'peut': peut, 'etat_abonnement': abonnement.etat(boutique) if boutique else None,
+            'cle_push_boutique': notifications.cles_vapid()[0] if boutique else None}
 
 MDP_FORT = re.compile(r'^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$')
 MSG_MDP_FAIBLE = 'Le mot de passe doit contenir au moins 8 caractères, une majuscule, une minuscule, un chiffre et un symbole'
@@ -393,6 +396,11 @@ def profil():
         current_user.nom_boutique = nom[:100]
         current_user.description = (request.form.get('description') or '').strip() or None
         current_user.adresse = (request.form.get('adresse') or '').strip()[:255] or None
+        try:
+            lat, lng = float(request.form.get('latitude') or ''), float(request.form.get('longitude') or '')
+            current_user.latitude, current_user.longitude = (lat, lng) if -90 <= lat <= 90 and -180 <= lng <= 180 else (None, None)
+        except ValueError:
+            current_user.latitude = current_user.longitude = None
         whatsapp = (request.form.get('whatsapp') or '').strip()
         if whatsapp:
             current_user.whatsapp = whatsapp
@@ -1384,6 +1392,14 @@ def abonnement_payer():
                     else url_for('boutique.abonnement_page'))
 
 # ==================== ALERTES : NOUVELLES COMMANDES ====================
+
+@boutique_bp.route('/alertes/abonner', methods=['POST'])
+@login_required
+def alertes_abonner():
+    """Ce téléphone sonnera à chaque nouvelle commande, même application fermée."""
+    ok = notifications.abonner_boutique(current_user.id, request.get_json(silent=True),
+                                        qui=getattr(current_user, 'nom_utilisateur', None))
+    return jsonify(ok=ok), (200 if ok else 400)
 
 @boutique_bp.route('/api/nouvelles')
 @login_required

@@ -69,6 +69,17 @@ def erreur_serveur(e):
                            message="L'opération n'a pas abouti. Réessayez dans un instant ; rien n'a été enregistré à moitié."), 500
 
 
+@app.before_request
+def vers_domaine_principal():
+    """Ouvert par l'adresse Render (…onrender.com) : on bascule sur le domaine officiel,
+    pour que les liens envoyés aux clients et aux livreurs portent ce domaine."""
+    domaine = app.config.get('DOMAINE_PRINCIPAL')
+    hote = request.host.split(':')[0].lower()
+    if domaine and hote.endswith('.onrender.com') and request.path != '/sante':
+        cible = f"https://{domaine}{request.full_path if request.query_string else request.path}"
+        return redirect(cible, code=301 if request.method in ('GET', 'HEAD') else 308)
+
+
 @app.route('/sante')
 def sante():
     """Vérification de bon fonctionnement (Render, surveillance)."""
@@ -164,7 +175,7 @@ def mettre_a_jour_schema():
         for nom, definition in [('description', 'TEXT'), ('adresse', 'VARCHAR(255)'),
                                 ('mode_frais', "VARCHAR(20) NOT NULL DEFAULT 'livreur_garde'"),
                                 ('abonnement_prix', 'FLOAT'), ('abonnement_debut', 'VARCHAR(7)'),
-                                ('derniere_activite', 'TIMESTAMP')]:
+                                ('derniere_activite', 'TIMESTAMP'), ('latitude', 'FLOAT'), ('longitude', 'FLOAT')]:
             if nom not in colonnes_boutiques:
                 conn.execute(text(f"ALTER TABLE boutiques ADD COLUMN {nom} {definition}"))
         if 'lien_public' not in colonnes_boutiques:

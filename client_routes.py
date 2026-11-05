@@ -96,6 +96,18 @@ def catalogue(code):
                            articles=articles,
                            panier=session.get('panier', {}))
 
+@client_bp.route('/c/<code>/article/<int:numero>')
+def voir_article(code, numero):
+    """Toutes les photos d'un article, celle choisie par le client mise en avant (?photo=2)."""
+    boutique = Boutique.query.filter_by(lien_public=code).first()
+    if not boutique or not boutique.active:
+        return render_template('client/lien_invalide.html'), 404
+    article = Article.query.filter_by(boutique_id=boutique.id, numero=numero).first_or_404()
+    photos = [p for p in (article.photos_urls or []) if p]
+    choisie = request.args.get('photo', type=int)
+    choisie = choisie if choisie and 1 <= choisie <= len(photos) else None
+    return render_template('client/article.html', boutique=boutique, article=article, photos=photos, choisie=choisie)
+
 # ==================== GESTION DU PANIER ====================
 
 @client_bp.route('/ajouter_panier', methods=['POST'])
@@ -126,7 +138,12 @@ def ajouter_panier():
             return jsonify(success=False, message=str(e)), 400
         flash(str(e), 'danger')
         return redirect(url_for('client.catalogue', code=visitee.lien_public))
-    cle = str(article.id) + (('-' + hashlib.md5(choix.encode()).hexdigest()[:8]) if choix else '')
+    # Photo affichée quand le client a ajouté l'article (ex. le modèle rouge parmi 4 photos)
+    photos = [p for p in (article.photos_urls or []) if p]
+    index_photo = request.form.get('photo_index', 0, type=int) or 0
+    index_photo = index_photo if 0 <= index_photo < len(photos) else 0
+    cle = str(article.id) + (('-' + hashlib.md5(choix.encode()).hexdigest()[:8]) if choix else '') \
+        + (f'-p{index_photo}' if index_photo else '')
     if cle in panier:
         panier[cle]['quantite'] += quantite
     else:
@@ -138,7 +155,9 @@ def ajouter_panier():
             'boutique_id': article.boutique_id,
             'article_id': article.id,
             'numero': article.numero,
-            'photo': (article.photos_urls or [None])[0],
+            'photo': photos[index_photo] if photos else None,
+            'photo_num': index_photo + 1 if len(photos) > 1 else None,   # n° de la photo choisie (sur plusieurs)
+            'photos_total': len(photos),
         }
 
     session['panier'] = panier
@@ -211,30 +230,34 @@ def valider_commande():
 
     if request.method == 'GET':
         return render_template('client/commande.html', panier=panier, total=total, boutique=boutique,
-                               zones=[z for z in boutique.zones if z.active],
-                               index_quartiers=index_quartiers([z for z in boutique.zones if z.active]),
+                               zones=[z for z in boutique.zones if z.active and not z.est_retrait],
+                               index_quartiers=index_quartiers([z for z in boutique.zones if z.active and not z.est_retrait]),
                                creneaux=creneaux_disponibles())
 
     client_nom = (request.form.get('client_nom') or '').strip()
     client_telephone = (request.form.get('client_telephone') or '').strip()
     client_adresse = (request.form.get('client_adresse') or '').strip()
     instructions = (request.form.get('instructions') or '').strip()
+    # Le client vient lui-même chercher sa commande à la boutique
+    retrait = boutique.zone_retrait if request.form.get('mode_reception') == 'retrait' else None
+    if retrait:
+        client_adresse = 'Retrait en boutique' + (f' ({boutique.adresse})' if boutique.adresse else '')
 
     if not client_nom or not client_telephone or not client_adresse:
         flash('Nom, téléphone et adresse sont obligatoires', 'danger')
         return render_template('client/commande.html', panier=panier, total=total, boutique=boutique,
-                               zones=[z for z in boutique.zones if z.active],
-                               index_quartiers=index_quartiers([z for z in boutique.zones if z.active]),
+                               zones=[z for z in boutique.zones if z.active and not z.est_retrait],
+                               index_quartiers=index_quartiers([z for z in boutique.zones if z.active and not z.est_retrait]),
                                creneaux=creneaux_disponibles())
 
 
-    zones_actives = [z for z in boutique.zones if z.active]
-    zone = Zone.query.filter_by(id=request.form.get('zone_id', type=int), boutique_id=boutique.id, active=True).first()
+    zones_actives = [z for z in boutique.zones if z.active and not z.est_retrait]
+    zone = retrait or Zone.query.filter_by(id=request.form.get('zone_id', type=int), boutique_id=boutique.id, active=True).first()
     # Le quartier écrit dans l'adresse fait foi : « Agoè Télessou » est livré en zone Agoè,
     # même si une autre zone (moins chère) a été choisie dans la liste.
     promo, remise, _ = promos.verifier(boutique.id, request.form.get('code_promo'), total,
                                      sum(int(i['quantite']) for i in panier.values()))
-    zone_adresse, _ = zone_pour_adresse(client_adresse, zones_actives)
+    zone_adresse, _ = zone_pour_adresse(client_adresse, zones_actives) if not retrait else (None, None)
     if zone_adresse:
         zone = zone_adresse
     frais = zone.frais if zone else 0
@@ -263,6 +286,10 @@ def valider_commande():
         commande.latitude = commande.longitude = None
     enregistrer_avec_numero(commande, 'numero_commande', Commande.prochain_numero)
     numero_commande = commande.numero
+    notifications.envoyer_boutique(
+        boutique.id, f'🛒 Nouvelle commande n°{commande.numero}',
+        f'{commande.client_nom} · {msg.fcfa(commande.total)}' + (f' · {commande.zone.nom}' if commande.zone else ''),
+        url_for('boutique.commande_details', commande_id=commande.id), tag=f'nouvelle-{commande.id}')
     memoriser_commande(commande)
     if promo:
         promo.utilisations += 1
@@ -290,7 +317,11 @@ def valider_commande():
         message += f"   Quantité: {item['quantite']}\n"
         message += f"   Prix unitaire: {item['prix']:,.0f} FCFA\n"
         message += f"   Sous-total: {item['prix'] * item['quantite']:,.0f} FCFA\n"
-        if item.get('photo'):
+        if item.get('numero') and item.get('photo_num'):
+            lien = url_for('client.voir_article', code=boutique.lien_public, numero=item['numero'],
+                           photo=item['photo_num'], _external=True)
+            message += f"   🖼️ *Photo choisie : {item['photo_num']}/{item['photos_total']}* → {lien}\n"
+        elif item.get('photo'):
             photo_url = item['photo']
             if photo_url.startswith('/'):
                 photo_url = request.url_root.rstrip('/') + photo_url
@@ -493,6 +524,10 @@ def espace_livreur_echec(code, commande_id):
         commande.date_echec = datetime.utcnow()
         stock.changer_statut(commande, 'echec')
         db.session.commit()
+        notifications.envoyer_boutique(
+            commande.boutique_id, f'⚠️ Échec de livraison n°{commande.numero}',
+            f'{livreur.nom} : {commande.motif_echec} ({commande.client_nom})',
+            url_for('boutique.commande_details', commande_id=commande.id), tag=f'echec-{commande.id}')
         flash(f"Commande n°{commande.numero} signalée « {motif} ». La boutique est prévenue.", 'warning')
     return redirect(url_for('client.espace_livreur', code=code))
 

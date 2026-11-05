@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+
+{% block title %}n°{{ article.numero }} {{ article.nom }} - {{ boutique.nom_boutique }}{% endblock %}
+
+{% block content %}
+<div class="max-w-3xl mx-auto px-4 space-y-4">
+    <div>
+        <p class="text-sm text-gray-500">{{ boutique.nom_boutique }}</p>
+        <h1 class="text-2xl font-extrabold text-gray-900"><span class="text-purple-600">n°{{ article.numero }}</span> · {{ article.nom }}</h1>
+        <p class="text-xl font-bold text-purple-700">{{ "{:,.0f}".format(article.prix).replace(',', ' ') }} FCFA</p>
+    </div>
+
+    {% if choisie %}
+    <!-- Photo choisie par le client -->
+    <div class="bg-white rounded-2xl shadow-md overflow-hidden border-4 border-green-500">
+        <p class="bg-green-500 text-white font-bold px-4 py-2"><i class="fas fa-circle-check mr-1"></i> Photo choisie par le client ({{ choisie }}/{{ photos|length }})</p>
+        <img src="{{ photos[choisie - 1] }}" alt="Photo choisie" class="w-full max-h-[70vh] object-contain bg-gray-50">
+    </div>
+    {% endif %}
+
+    {% if photos %}
+    <div>
+        <h2 class="font-bold text-gray-900 mb-2">{{ 'Toutes les photos de l\'article' if choisie else 'Photos de l\'article' }}</h2>
+        <div class="grid grid-cols-2 sm:grid-cols-3 gap-3">
+            {% for url in photos %}
+            <a href="{{ url }}" target="_blank" class="relative block rounded-xl overflow-hidden bg-gray-50 {{ 'ring-4 ring-green-500' if choisie == loop.index else 'border border-gray-200' }}">
+                <img src="{{ url }}" alt="Photo {{ loop.index }}" loading="lazy" class="w-full aspect-square object-cover">
+                <span class="absolute top-2 left-2 text-xs font-bold rounded-full px-2 py-0.5 {{ 'bg-green-500 text-white' if choisie == loop.index else 'bg-white/90 text-gray-700' }}">
+                    {{ '✓ Choisie' if choisie == loop.index else loop.index ~ '/' ~ photos|length }}</span>
+            </a>
+            {% endfor %}
+        </div>
+    </div>
+    {% else %}
+    <p class="text-gray-500">Cet article n'a pas de photo.</p>
+    {% endif %}
+
+    {% if article.description %}<p class="text-gray-700 whitespace-pre-line">{{ article.description }}</p>{% endif %}
+    <a href="{{ url_for('client.catalogue', code=boutique.lien_public) }}" class="block text-center bg-purple-600 text-white py-3 rounded-xl font-semibold">
+        <i class="fas fa-store mr-1"></i> Voir le catalogue</a>
+</div>
+{% endblock %}

@@ -39,4 +39,6 @@ class Config:
     ADMIN_PASSWORD = os.environ.get('ADMIN_PASSWORD') or 'Admin@2025MediLogic!'
 
     # Boutique MB (GBoutik-MediLogic) : encaissement des ventes, complémentaire des commandes livrées
+    # Domaine officiel : l'adresse Render y redirige, et tous les liens envoyés le portent
+    DOMAINE_PRINCIPAL = (os.environ.get('DOMAINE_PRINCIPAL') or 'cataligne.medilogicghp.com').strip().lower()
     GBOUTIK_URL = os.environ.get('GBOUTIK_URL') or 'https://gbutik-medilogic.onrender.com/login_page'

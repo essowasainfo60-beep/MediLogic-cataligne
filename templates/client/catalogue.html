@@ -107,11 +107,23 @@
                 {% if p.date_fin %}· jusqu'au {{ p.date_fin.strftime('%d/%m') }}{% endif %}</span>
         </div>
         {% endfor %}
-        {% set zones_livraison = boutique.zones|selectattr('active')|sort(attribute='frais')|list %}
+        {% set zones_livraison = boutique.zones|selectattr('active')|rejectattr('est_retrait')|sort(attribute='frais')|list %}
+        {% set retrait = boutique.zone_retrait %}
+        {% if boutique.adresse or boutique.latitude is not none %}
+        <div class="mt-4 bg-white/10 rounded-xl px-4 py-3 text-sm flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4">
+            <div class="flex-1 min-w-0">
+                <p class="font-semibold">🏁 Point de départ des livraisons</p>
+                <p class="text-blue-50">{{ boutique.adresse or 'Voir sur la carte' }}{% if retrait %} · <strong class="text-white">retrait gratuit sur place possible</strong>{% endif %}</p>
+            </div>
+            <a href="{{ boutique.lien_itineraire }}" target="_blank" rel="noopener"
+               class="text-center whitespace-nowrap bg-white text-purple-700 font-semibold px-4 py-2 rounded-lg">
+                <i class="fas fa-route mr-1"></i> Itinéraire</a>
+        </div>
+        {% endif %}
         {% if zones_livraison %}
         <details class="mt-4 bg-white/10 rounded-xl px-4 py-2 text-sm">
             <summary class="cursor-pointer font-semibold">
-                🛵 Livraison {% if zones_livraison[0].frais %}à partir de {{ '{:,.0f}'.format(zones_livraison[0].frais).replace(',', ' ') }} FCFA{% else %}· retrait gratuit possible{% endif %} — voir les tarifs par zone
+                🛵 Livraison {% if zones_livraison[0].frais %}à partir de {{ '{:,.0f}'.format(zones_livraison[0].frais).replace(',', ' ') }} FCFA{% else %}gratuite dans certaines zones{% endif %}{% if retrait %} · retrait gratuit en boutique{% endif %} — voir les tarifs par zone
             </summary>
             {% if zones_livraison|length > 4 %}
             <div class="recherche mt-2 text-gray-800">
@@ -132,14 +144,9 @@
             </ul>
         </details>
         {% endif %}
-        {% if boutique.description or boutique.adresse %}
+        {% if boutique.description %}
         <div class="mt-4 pt-4 border-t border-white/20 text-sm md:text-base text-blue-50 space-y-1">
-            {% if boutique.description %}<p class="whitespace-pre-line">{{ boutique.description }}</p>{% endif %}
-            {% if boutique.adresse %}
-            <a href="{{ boutique.lien_carte }}" target="_blank" class="inline-flex items-center gap-1 text-white/90 hover:text-white">
-                <i class="fas fa-location-dot"></i> {{ boutique.adresse }}
-            </a>
-            {% endif %}
+            <p class="whitespace-pre-line">{{ boutique.description }}</p>
         </div>
         {% endif %}
     </div>
@@ -206,6 +213,11 @@
                 {% else %}
                 <form method="POST" action="{{ url_for('client.ajouter_panier') }}" class="ajout-panier mt-auto pt-4 space-y-2">
                     <input type="hidden" name="article_id" value="{{ article.id }}">
+                    <input type="hidden" name="photo_index" value="0">
+                    {% if photos|length > 1 %}
+                    <p class="photo-choisie text-xs text-purple-700 bg-purple-50 rounded-lg px-2 py-1.5">
+                        <i class="fas fa-hand-pointer mr-1"></i> Faites défiler les photos : celle affichée (<span class="num-photo">1</span>/{{ photos|length }}) sera indiquée à la boutique.</p>
+                    {% endif %}
                     {% if article.options %}
                     <div class="grid grid-cols-{{ 2 if article.options|length > 1 else 1 }} gap-2">
                         {% for option, valeurs in article.options.items() %}
@@ -283,6 +295,14 @@
                 const i = indexCourant();
                 points.forEach((p, j) => p.classList.toggle('actif', i === j));
                 if (compteur) compteur.textContent = (i + 1) + '/' + total();
+                // La photo affichée est celle que le client choisit (couleur, modèle…)
+                const carte = galerie.closest('.carte');
+                if (carte) {
+                    const champ = carte.querySelector('input[name="photo_index"]');
+                    if (champ) champ.value = i;
+                    const num = carte.querySelector('.num-photo');
+                    if (num) num.textContent = i + 1;
+                }
             }, 60);
         }, { passive: true });
 

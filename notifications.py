@@ -11,7 +11,7 @@ import os
 
 from sqlalchemy.exc import IntegrityError
 
-from models import db, AbonnementPush, Parametre
+from models import db, AbonnementPush, AbonnementPushBoutique, Parametre
 
 log = logging.getLogger(__name__)
 CONTACT = 'mailto:' + os.environ.get('VAPID_CONTACT', 'contact@livraplus.app')
@@ -64,9 +64,41 @@ def abonner(commande, donnees):
 
 
 def envoyer(commande, titre, corps, url):
-    """Envoie la notification à tous les téléphones abonnés à cette commande.
+    """Envoie la notification à tous les téléphones abonnés à cette commande (client).
     Renvoie le nombre de téléphones prévenus (0 si personne n'est abonné)."""
-    if not commande.abonnements_push:
+    return _envoyer(list(commande.abonnements_push), titre, corps, url, f'commande-{commande.id}')
+
+
+def abonner_boutique(boutique_id, donnees, qui=None):
+    """Téléphone de la boutique (gérant ou équipe) qui veut être prévenu des nouvelles commandes."""
+    try:
+        endpoint = donnees['endpoint']
+        p256dh, auth = donnees['keys']['p256dh'], donnees['keys']['auth']
+    except (KeyError, TypeError):
+        return False
+    if not str(endpoint).startswith('https://') or len(endpoint) > 1000:
+        return False
+    existant = AbonnementPushBoutique.query.filter_by(endpoint=endpoint).first()
+    if existant:
+        existant.boutique_id, existant.cle_p256dh, existant.cle_auth, existant.qui = boutique_id, p256dh, auth, qui
+    else:
+        tous = AbonnementPushBoutique.query.filter_by(boutique_id=boutique_id).order_by(AbonnementPushBoutique.id).all()
+        if len(tous) >= 20:
+            db.session.delete(tous[0])
+        db.session.add(AbonnementPushBoutique(boutique_id=boutique_id, endpoint=endpoint, cle_p256dh=p256dh,
+                                              cle_auth=auth, qui=qui))
+    db.session.commit()
+    return True
+
+
+def envoyer_boutique(boutique_id, titre, corps, url, tag='boutique'):
+    """Prévient tous les téléphones de la boutique (nouvelle commande, échec de livraison…)."""
+    abonnements = AbonnementPushBoutique.query.filter_by(boutique_id=boutique_id).all()
+    return _envoyer(abonnements, titre, corps, url, tag)
+
+
+def _envoyer(abonnements, titre, corps, url, tag):
+    if not abonnements:
         return 0
     try:
         from pywebpush import webpush, WebPushException
@@ -74,9 +106,9 @@ def envoyer(commande, titre, corps, url):
         log.warning('pywebpush absent : notification non envoyée')
         return 0
     _, cle_privee = cles_vapid()
-    message = json.dumps({'titre': titre, 'corps': corps, 'url': url, 'tag': f'commande-{commande.id}'})
+    message = json.dumps({'titre': titre, 'corps': corps, 'url': url, 'tag': tag})
     envoyes = 0
-    for abonnement in list(commande.abonnements_push):
+    for abonnement in abonnements:
         try:
             webpush(subscription_info={'endpoint': abonnement.endpoint,
                                        'keys': {'p256dh': abonnement.cle_p256dh, 'auth': abonnement.cle_auth}},

@@ -100,6 +100,10 @@
                                 <div>
                                     <p class="font-medium">{% if article.numero %}<span class="text-purple-600">n°{{ article.numero }}</span> · {% endif %}{{ article.nom }}</p>
                                     <p class="text-sm text-gray-500">{{ fcfa(article.prix) }} × {{ article.quantite }}</p>
+                                    {% if article.photo_num and article.numero %}
+                                    <a href="{{ url_for('client.voir_article', code=commande.boutique.lien_public, numero=article.numero, photo=article.photo_num) }}" target="_blank"
+                                       class="text-xs font-semibold text-purple-700 hover:underline"><i class="fas fa-image mr-1"></i>Photo choisie {{ article.photo_num }}/{{ article.photos_total }} — voir</a>
+                                    {% endif %}
                                 </div>
                             </div>
                             <p class="font-semibold text-primary">{{ fcfa(article.prix * article.quantite) }}</p>
@@ -160,6 +164,18 @@
                             {% endfor %}
                         </select>
                     </form>
+                    {% endif %}
+                    {% if commande.zone and commande.zone.est_retrait and commande.statut in ['nouvelle', 'confirmee'] %}
+                    <div class="mb-3 rounded-xl border border-green-300 bg-green-50 p-3 text-sm">
+                        <p class="font-semibold text-green-900">🛍 Le client vient récupérer sa commande à la boutique</p>
+                        <form method="POST" action="{{ url_for('boutique.changer_statut_commande', commande_id=commande.id) }}" class="mt-2"
+                              data-question="Confirmer : la commande n°{{ commande.numero }} est remise à {{ commande.client_nom }} et {{ fcfa(commande.total) if fcfa is defined else commande.total }} encaissés ?"
+                              onsubmit="return confirm(this.dataset.question)">
+                            <button type="submit" name="statut" value="livree" class="w-full bg-green-600 text-white py-2.5 rounded-lg font-bold hover:bg-green-700">
+                                ✅ Remise au client (payée)</button>
+                        </form>
+                        <p class="text-xs text-green-800 mt-1">Ou confiez-la à un livreur ci-dessous si le client préfère finalement être livré.</p>
+                    </div>
                     {% endif %}
                     {% if livreurs %}
                     {% set en_route = commande.statut == 'en_livraison' %}

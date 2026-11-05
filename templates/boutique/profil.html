@@ -45,15 +45,56 @@
                           class="w-full px-3 py-2 border border-gray-300 rounded-lg">{{ current_user.description or '' }}</textarea>
             </div>
             <div>
-                <label class="block text-sm font-bold text-gray-700 mb-1">Où se trouve la boutique</label>
+                <label class="block text-sm font-bold text-gray-700 mb-1">🏁 Point de départ des livraisons (adresse de la boutique)</label>
                 <input type="text" name="adresse" maxlength="255" value="{{ current_user.adresse or '' }}"
-                       placeholder="Ex : Grand marché de Lomé, allée des tissus, stand 12"
+                       placeholder="Ex : Bè Kpota, en face de la pharmacie, 1er étage"
                        class="w-full px-3 py-2 border border-gray-300 rounded-lg">
-                {% if current_user.lien_carte %}
-                <a href="{{ current_user.lien_carte }}" target="_blank" class="text-xs text-primary hover:underline mt-1 inline-block">
-                    <i class="fas fa-map-location-dot mr-1"></i> Vérifier sur la carte
-                </a>
-                {% endif %}
+                <p class="text-xs text-gray-500 mt-1">Affiché aux clients dans le catalogue : ils savent d'où part leur commande et peuvent venir la récupérer.</p>
+                <input type="hidden" name="latitude" id="departLat" value="{{ current_user.latitude if current_user.latitude is not none else '' }}">
+                <input type="hidden" name="longitude" id="departLng" value="{{ current_user.longitude if current_user.longitude is not none else '' }}">
+                <div class="mt-2 flex flex-wrap gap-2">
+                    <button type="button" id="btnDepartGps" class="text-sm border-2 border-dashed border-green-400 text-green-700 px-3 py-2 rounded-lg font-semibold hover:bg-green-50">
+                        📍 Utiliser ma position actuelle (à faire dans la boutique)</button>
+                    <button type="button" id="btnDepartEffacer" class="text-sm text-gray-500 px-3 py-2 rounded-lg hover:bg-gray-100 {{ '' if current_user.latitude is not none else 'hidden' }}">Retirer la position</button>
+                </div>
+                <p id="departInfo" class="text-xs mt-1 {{ 'text-green-700' if current_user.latitude is not none else 'text-gray-500' }}">
+                    {% if current_user.latitude is not none %}✓ Position enregistrée : déplacez le repère sur la carte si besoin.{% else %}Sans position exacte, seule l'adresse écrite est affichée.{% endif %}</p>
+                <div id="carteDepart" class="h-56 rounded-xl border mt-2 {{ '' if current_user.latitude is not none else 'hidden' }}"></div>
+                {% include '_carte.html' %}
+                <script>
+                (function () {
+                    const lat = document.getElementById('departLat'), lng = document.getElementById('departLng'),
+                          info = document.getElementById('departInfo'), bloc = document.getElementById('carteDepart'),
+                          effacer = document.getElementById('btnDepartEffacer');
+                    let carte = null, repere = null;
+                    function montrer(a, b) {
+                        lat.value = a.toFixed(6); lng.value = b.toFixed(6);
+                        bloc.classList.remove('hidden'); effacer.classList.remove('hidden');
+                        if (!window.L) return;
+                        if (!carte) carte = Carte.creer(bloc, [a, b], 17);
+                        carte.invalidateSize(); carte.setView([a, b], 17);
+                        if (!repere) {
+                            repere = L.marker([a, b], { draggable: true, icon: Carte.depart() }).addTo(carte);
+                            repere.on('dragend', () => { const p = repere.getLatLng(); lat.value = p.lat.toFixed(6); lng.value = p.lng.toFixed(6); });
+                        } else repere.setLatLng([a, b]);
+                    }
+                    if (lat.value && lng.value) montrer(+lat.value, +lng.value);
+                    document.getElementById('btnDepartGps').addEventListener('click', () => {
+                        if (!navigator.geolocation) { info.textContent = 'Localisation impossible sur cet appareil.'; return; }
+                        info.className = 'text-xs mt-1 text-gray-500'; info.textContent = 'Recherche de votre position…';
+                        navigator.geolocation.getCurrentPosition((p) => {
+                            montrer(p.coords.latitude, p.coords.longitude);
+                            info.className = 'text-xs mt-1 text-green-700';
+                            info.textContent = '✓ Position trouvée (précision ' + Math.round(p.coords.accuracy) + ' m). Ajustez le repère si besoin, puis enregistrez.';
+                        }, () => { info.className = 'text-xs mt-1 text-red-600'; info.textContent = 'Localisation refusée ou indisponible.'; },
+                        { enableHighAccuracy: true, timeout: 20000 });
+                    });
+                    effacer.addEventListener('click', () => {
+                        lat.value = lng.value = ''; bloc.classList.add('hidden'); effacer.classList.add('hidden');
+                        info.className = 'text-xs mt-1 text-gray-500'; info.textContent = 'Position retirée (pensez à enregistrer).';
+                    });
+                })();
+                </script>
             </div>
             <div>
                 <label class="block text-sm font-bold text-gray-700 mb-1">Numéro WhatsApp (reçoit les commandes)</label>

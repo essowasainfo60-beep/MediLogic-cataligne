@@ -27,7 +27,9 @@ class Boutique(UserMixin, db.Model):
     logo_url = db.Column(db.String(500), nullable=True)
     whatsapp = db.Column(db.String(50), nullable=True)  # Numéro WhatsApp de la boutique
     description = db.Column(db.Text, nullable=True)       # présentation affichée aux clients
-    adresse = db.Column(db.String(255), nullable=True)    # où se trouve la boutique
+    adresse = db.Column(db.String(255), nullable=True)    # où se trouve la boutique (point de départ des livraisons)
+    latitude = db.Column(db.Float, nullable=True)         # position exacte du point de départ
+    longitude = db.Column(db.Float, nullable=True)
     # Frais de livraison : 'livreur_garde' (il garde ses frais et ne remet que les articles)
     # ou 'boutique_collecte' (il remet tout, la boutique le paie ensuite). Voir caisse.py.
     mode_frais = db.Column(db.String(20), nullable=False, default='livreur_garde', server_default='livreur_garde')
@@ -54,7 +56,21 @@ class Boutique(UserMixin, db.Model):
 
     @property
     def lien_carte(self):
+        if self.latitude is not None and self.longitude is not None:
+            return f'https://www.google.com/maps/search/?api=1&query={self.latitude},{self.longitude}'
         return f'https://www.google.com/maps/search/?api=1&query={quote(self.adresse)}' if self.adresse else None
+
+    @property
+    def lien_itineraire(self):
+        """Itinéraire Google Maps jusqu'à la boutique (pour venir récupérer sa commande)."""
+        if self.latitude is not None and self.longitude is not None:
+            return f'https://www.google.com/maps/dir/?api=1&destination={self.latitude},{self.longitude}'
+        return f'https://www.google.com/maps/dir/?api=1&destination={quote(self.adresse)}' if self.adresse else None
+
+    @property
+    def zone_retrait(self):
+        """Zone « Retrait en boutique » (le client vient chercher sa commande), si elle est active."""
+        return next((z for z in self.zones if z.active and z.est_retrait), None)
 
     est_vendeur = False
     role = 'gerant'
@@ -414,6 +430,11 @@ class Zone(db.Model):
     boutique = db.relationship('Boutique', backref=db.backref('zones', cascade='all, delete-orphan'))
     livreur = db.relationship('Livreur', backref='zones')
 
+    @property
+    def est_retrait(self):
+        """Zone où le client vient lui-même chercher sa commande (« Retrait en boutique »)."""
+        return 'retrait' in (self.nom or '').lower()
+
 
 class MouvementStock(db.Model):
     """Journal de chaque entrée / sortie de stock : rien ne change sans trace."""
@@ -634,3 +655,18 @@ class PositionLivreur(db.Model):
     created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
 
     livreur = db.relationship('Livreur', backref=db.backref('positions', cascade='all, delete-orphan', lazy='dynamic'))
+
+
+class AbonnementPushBoutique(db.Model):
+    """Téléphone de la boutique qui sonne à chaque nouvelle commande (notification)."""
+    __tablename__ = 'abonnements_push_boutique'
+
+    id = db.Column(db.Integer, primary_key=True)
+    boutique_id = db.Column(db.Integer, db.ForeignKey('boutiques.id', ondelete='CASCADE'), nullable=False, index=True)
+    endpoint = db.Column(db.String(1000), nullable=False, unique=True)
+    cle_p256dh = db.Column(db.String(200), nullable=False)
+    cle_auth = db.Column(db.String(100), nullable=False)
+    qui = db.Column(db.String(120), nullable=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    boutique = db.relationship('Boutique', backref=db.backref('abonnements_push', cascade='all, delete-orphan'))
