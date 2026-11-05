@@ -18,6 +18,27 @@
         {% endif %}
     </div>
 
+    {% if commande.statut == 'en_livraison' %}
+    {% include '_carte.html' %}
+    <!-- Où est mon livreur ? -->
+    <div class="bg-white rounded-2xl shadow-md overflow-hidden">
+        <div id="carteSuivi" class="h-64 {{ '' if position else 'hidden' }}"></div>
+        <div class="p-4 text-sm">
+            <p id="infoLivreur" class="font-bold text-gray-900">
+                {% if position and position.distance_km is not none %}🛵 Votre livreur est à {{ position.distance_km|string|replace('.', ',') }} km · arrivée dans environ {{ position.arrivee_min }} min
+                {% elif position %}🛵 Votre livreur est en route
+                {% else %}🛵 Votre commande est en route{% endif %}</p>
+            <p id="detailLivreur" class="text-gray-500 mt-0.5">
+                {% if position %}Position de {{ position.heure }}{% else %}La carte apparaîtra dès que le livreur active son GPS.{% endif %}</p>
+            {% if commande.latitude is none %}
+            <button type="button" id="btnMaPosition" class="mt-3 w-full border-2 border-green-500 text-green-700 py-2.5 rounded-xl font-semibold hover:bg-green-50">
+                📍 Partager ma position pour voir la distance
+            </button>
+            {% endif %}
+        </div>
+    </div>
+    {% endif %}
+
     {% if cle_push %}
     <div id="carteAlerte" class="bg-purple-50 border border-purple-200 rounded-2xl p-4 text-sm">
         <p class="font-semibold text-purple-900"><i class="fas fa-bell mr-1"></i> Être prévenu quand le livreur arrive</p>
@@ -91,6 +112,43 @@
     </a>
     {% endif %}
 </div>
+{% if commande.statut == 'en_livraison' %}
+<script>
+(function () {
+    if (!window.L || !window.Carte) return;
+    const URL_MA_POSITION = {{ url_for('client.suivi_ma_position', code=commande.code_suivi)|tojson }};
+    let carte = null, marqueurLivreur = null, marqueurClient = null, cadree = false;
+    window.majPositionLivreur = function (s) {
+        if (!s) return;
+        const bloc = document.getElementById('carteSuivi');
+        bloc.classList.remove('hidden');
+        if (!carte) carte = Carte.creer(bloc, [s.lat, s.lng], 14);
+        if (!marqueurLivreur) marqueurLivreur = L.marker([s.lat, s.lng], { icon: Carte.livreur() }).addTo(carte).bindPopup(Carte.echapper(s.nom));
+        else marqueurLivreur.setLatLng([s.lat, s.lng]);
+        if (s.destination && !marqueurClient) { marqueurClient = L.marker([s.destination.lat, s.destination.lng], { icon: Carte.client() }).addTo(carte).bindPopup('Vous'); cadree = false; }
+        if (!cadree) { Carte.cadrer(carte, [[s.lat, s.lng], s.destination ? [s.destination.lat, s.destination.lng] : null]); cadree = true; }
+        document.getElementById('infoLivreur').textContent = s.distance_km != null
+            ? '🛵 Votre livreur est à ' + String(s.distance_km).replace('.', ',') + ' km · arrivée dans environ ' + s.arrivee_min + ' min'
+            : '🛵 Votre livreur est en route';
+        document.getElementById('detailLivreur').textContent = 'Position de ' + s.heure + ' (' + Carte.ilYa(s.il_y_a_s) + ')'
+            + (s.il_y_a_s > 180 ? ' — signal du livreur interrompu, la carte se mettra à jour dès son retour.' : '');
+    };
+    window.majPositionLivreur({{ position|tojson }});
+    const bouton = document.getElementById('btnMaPosition');
+    if (bouton) bouton.addEventListener('click', () => {
+        if (!navigator.geolocation) { bouton.textContent = 'Position indisponible sur ce téléphone'; return; }
+        bouton.textContent = 'Recherche de votre position…';
+        navigator.geolocation.getCurrentPosition((p) => {
+            fetch(URL_MA_POSITION, { method: 'POST', headers: { 'Content-Type': 'application/json' },
+                                     body: JSON.stringify({ lat: p.coords.latitude, lng: p.coords.longitude, precision: p.coords.accuracy }) })
+                .then((r) => { if (!r.ok) throw 0; bouton.remove(); return fetch({{ url_for('client.suivi_etat', code=commande.code_suivi)|tojson }}); })
+                .then((r) => r.json()).then((d) => window.majPositionLivreur(d.livreur))
+                .catch(() => { bouton.textContent = 'Position trop imprécise : réessayez dehors'; });
+        }, () => { bouton.textContent = 'Localisation refusée'; }, { enableHighAccuracy: true, timeout: 20000 });
+    });
+})();
+</script>
+{% endif %}
 {% if commande.statut in ['nouvelle', 'confirmee', 'en_livraison'] %}
 <script>
 (function () {
@@ -124,6 +182,7 @@
     // ---------- Page ouverte : elle sonne à l'arrivée du livreur ----------
     setInterval(() => {
         fetch(URL_ETAT, { cache: 'no-store' }).then((r) => r.json()).then((d) => {
+            if (window.majPositionLivreur) window.majPositionLivreur(d.livreur);
             if (d.arrivee && d.arrivee !== arriveeConnue) {
                 arriveeConnue = d.arrivee;
                 document.getElementById('banniereArrivee').classList.remove('hidden');

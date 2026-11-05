@@ -1,0 +1,5 @@
+{# Inclure une fois par page avant d'utiliser une carte (Leaflet + OpenStreetMap). #}
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script src="{{ url_for('static', filename='carte.js') }}"></script>
+<style>.leaflet-container { z-index: 0; font: inherit; } .dark .leaflet-tile-pane { filter: brightness(.75) contrast(1.1); }</style>

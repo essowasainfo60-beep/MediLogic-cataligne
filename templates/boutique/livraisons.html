@@ -17,6 +17,50 @@
     {% if onglet == 'en_cours' %}
     <!-- ===== EN COURS ===== -->
     {% if en_cours %}
+    {% include '_carte.html' %}
+    <div class="bg-white rounded-2xl shadow-md overflow-hidden">
+        <div id="carteEnRoute" class="h-80"></div>
+        <p id="legendeEnRoute" class="px-4 py-2 text-xs text-gray-500">Chargement des positions…</p>
+    </div>
+    <script>
+    (function () {
+        if (!window.L || !window.Carte) return;
+        const carte = Carte.creer('carteEnRoute');
+        const couche = L.layerGroup().addTo(carte);
+        let cadree = false;
+        function charger() {
+            fetch({{ url_for('boutique.api_livreurs_en_route')|tojson }}, { cache: 'no-store' }).then((r) => r.json()).then((d) => {
+                couche.clearLayers();
+                const points = [], sansGps = [];
+                d.livreurs.forEach((l) => {
+                    l.commandes.forEach((c) => {
+                        if (c.lat != null) {
+                            L.marker([c.lat, c.lng], { icon: Carte.client() }).addTo(couche)
+                             .bindPopup('<b>n°' + c.numero + ' · ' + Carte.echapper(c.client) + '</b><br>' + Carte.echapper(c.adresse)
+                                        + '<br><a href="' + c.lien + '">Voir la commande</a>');
+                            points.push([c.lat, c.lng]);
+                        }
+                    });
+                    if (l.lat == null) { sansGps.push(l.nom); return; }
+                    const recent = l.il_y_a_s != null && l.il_y_a_s < 180;
+                    const lignes = l.commandes.map((c) => 'n°' + c.numero + ' ' + Carte.echapper(c.client)
+                        + (c.distance_km != null ? ' — ' + String(c.distance_km).replace('.', ',') + ' km, ~' + c.arrivee_min + ' min' : ''));
+                    L.marker([l.lat, l.lng], { icon: Carte.livreur(), opacity: recent ? 1 : 0.55 }).addTo(couche)
+                     .bindPopup('<b>🛵 ' + Carte.echapper(l.nom) + '</b> · ' + Carte.echapper(l.telephone) + '<br>Position de ' + l.heure
+                                + ' (' + Carte.ilYa(l.il_y_a_s) + ')<br>' + lignes.join('<br>'))
+                     .bindTooltip(Carte.echapper(l.nom), { permanent: true, direction: 'top', offset: [0, -18] });
+                    points.push([l.lat, l.lng]);
+                });
+                if (!cadree && points.length) { Carte.cadrer(carte, points); cadree = true; }
+                document.getElementById('legendeEnRoute').textContent =
+                    (d.livreurs.length - sansGps.length) + ' livreur(s) localisé(s) · mise à jour toutes les 20 s'
+                    + (sansGps.length ? ' · GPS non activé : ' + sansGps.join(', ') : '');
+            }).catch(() => {});
+        }
+        charger();
+        setInterval(() => { if (!document.hidden) charger(); }, 20000);
+    })();
+    </script>
     {{ recherche('#listeEnCours', 'Rechercher : client, livreur, zone, n°…') }}
     <div id="listeEnCours" class="grid grid-cols-1 lg:grid-cols-2 2xl:grid-cols-3 gap-4">
         {% for c in en_cours %}
@@ -145,5 +189,5 @@
     </div>
     {% endif %}
 </div>
-{% if onglet == 'en_cours' %}<script>setTimeout(() => { if (!document.hidden) location.reload(); }, 120000);</script>{% endif %}
+{% if onglet == 'en_cours' %}<script>setTimeout(() => { if (!document.hidden) location.reload(); }, 300000);</script>{% endif %}
 {% endblock %}

@@ -10,6 +10,7 @@ from flask_login import login_user, logout_user, login_required, current_user
 
 import abonnement
 import caisse
+import suivi_gps
 import promos
 import securite
 import messages_whatsapp as msg
@@ -1322,6 +1323,38 @@ def caisse_supprimer(mouvement_id):
         db.session.commit()
         flash('Mouvement supprimé', 'warning')
     return redirect(url_for('boutique.page_caisse'))
+
+# ==================== SUIVI GPS DES LIVREURS ====================
+
+@boutique_bp.route('/api/livreurs-en-route')
+@login_required
+def api_livreurs_en_route():
+    """Carte « En cours » : position de chaque livreur et ses commandes en route."""
+    en_cours = Commande.query.filter_by(boutique_id=current_user.id, statut='en_livraison').all()
+    livreurs = {}
+    for c in en_cours:
+        if not c.livreur:
+            continue
+        l = livreurs.setdefault(c.livreur_id, {
+            'nom': c.livreur.nom, 'telephone': c.livreur.telephone, 'commandes': [],
+            'lat': c.livreur.position_lat, 'lng': c.livreur.position_lng,
+            'heure': c.livreur.position_at.strftime('%H:%M') if c.livreur.position_at else None,
+            'il_y_a_s': int((datetime.utcnow() - c.livreur.position_at).total_seconds()) if c.livreur.position_at else None})
+        s = suivi_gps.situation(c)
+        l['commandes'].append({'numero': c.numero, 'client': c.client_nom, 'adresse': c.client_adresse,
+                               'lat': c.latitude, 'lng': c.longitude,
+                               'distance_km': s['distance_km'] if s else None, 'arrivee_min': s['arrivee_min'] if s else None,
+                               'lien': url_for('boutique.commande_details', commande_id=c.id)})
+    return jsonify(livreurs=list(livreurs.values()))
+
+
+@boutique_bp.route('/api/commande/<int:commande_id>/trajet')
+@login_required
+def api_trajet_commande(commande_id):
+    commande = Commande.query.filter_by(id=commande_id, boutique_id=current_user.id).first_or_404()
+    return jsonify(points=suivi_gps.trajet(commande),
+                   destination={'lat': commande.latitude, 'lng': commande.longitude} if commande.latitude is not None else None,
+                   situation=suivi_gps.situation(commande))
 
 # ==================== ABONNEMENT LIVRAPLUS ====================
 

@@ -48,6 +48,21 @@
     </div>
 
     {% if onglet != 'livrees' %}
+        {% if a_livrer %}
+        <!-- Suivi GPS pendant les courses -->
+        <div id="carteGps" class="bg-white rounded-2xl shadow-md p-4 mb-4 border-2 {{ 'border-green-400' if suivi_actif else 'border-purple-200' }}">
+            <div class="flex items-center gap-3">
+                <span id="voyantGps" class="h-3 w-3 rounded-full flex-shrink-0 {{ 'bg-green-500 animate-pulse' if suivi_actif else 'bg-gray-300' }}"></span>
+                <div class="flex-1 min-w-0">
+                    <p class="font-bold text-gray-900">📡 Suivi GPS de la course</p>
+                    <p id="etatGps" class="text-xs text-gray-500">Le client et la boutique voient où vous êtes et dans combien de temps vous arrivez.</p>
+                </div>
+            </div>
+            <button type="button" id="btnGps" class="mt-3 w-full bg-purple-600 text-white py-3 rounded-xl font-bold hover:bg-purple-700">▶ Démarrer le suivi GPS</button>
+            <p class="mt-2 text-[11px] text-gray-500">Gardez cette page ouverte pendant la course (téléphone sur le support) : l'écran reste allumé.
+                Le suivi s'arrête tout seul quand toutes vos courses sont livrées.</p>
+        </div>
+        {% endif %}
         {% for c in a_livrer %}
         {% set tel = c.client_telephone|select('in', '0123456789')|join %}
         <div class="bg-white rounded-2xl shadow-md mb-4 overflow-hidden">
@@ -171,6 +186,78 @@ document.querySelectorAll('.btn-arrive').forEach((bouton) => {
             .catch(() => { etat.textContent = 'Pas de connexion : envoyez le message WhatsApp ou appelez le client.'; });
     });
 });
+
+// ---------- Suivi GPS pendant les courses ----------
+(function () {
+    const bouton = document.getElementById('btnGps');
+    if (!bouton) { try { localStorage.removeItem('lp_suivi_gps'); } catch (e) {} return; }
+    const URL_POS = {{ url_for('client.espace_livreur_position', code=livreur.code_acces)|tojson }};
+    const etat = document.getElementById('etatGps'), voyant = document.getElementById('voyantGps'), carte = document.getElementById('carteGps');
+    let surveillance = null, verrou = null, dernierEnvoi = 0, battement = null, derniere = null;
+
+    function afficher(texte, ok) {
+        etat.textContent = texte;
+        voyant.className = 'h-3 w-3 rounded-full flex-shrink-0 ' + (ok ? 'bg-green-500 animate-pulse' : 'bg-orange-400');
+        carte.classList.toggle('border-green-400', !!ok); carte.classList.toggle('border-purple-200', !ok);
+    }
+    async function garderEcranAllume() {
+        try { if ('wakeLock' in navigator && document.visibilityState === 'visible') verrou = await navigator.wakeLock.request('screen'); } catch (e) {}
+    }
+    function envoyer(pos, force) {
+        derniere = pos;
+        const maintenant = Date.now();
+        if (!force && maintenant - dernierEnvoi < 12000) return;
+        dernierEnvoi = maintenant;
+        const c = pos.coords;
+        fetch(URL_POS, { method: 'POST', headers: { 'Content-Type': 'application/json' },
+                         body: JSON.stringify({ lat: c.latitude, lng: c.longitude, precision: c.accuracy, vitesse: c.speed }) })
+            .then((r) => r.json())
+            .then((d) => {
+                if (!d.actif) { arreter('Plus de course en cours : suivi arrêté.'); return; }
+                const h = new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+                afficher('✓ Position envoyée à ' + h + ' (précision ' + Math.round(c.accuracy) + ' m)', true);
+            })
+            .catch(() => afficher('Pas de réseau : la position sera renvoyée dès que possible…', false));
+    }
+    function erreur(e) {
+        if (e.code === 1) { arreter("GPS refusé : autorisez la localisation pour ce site dans les réglages du navigateur."); return; }
+        afficher('Recherche du signal GPS…', false);
+    }
+    function demarrer() {
+        if (!navigator.geolocation) { afficher("Ce téléphone ne permet pas le GPS dans le navigateur.", false); return; }
+        if (surveillance !== null) return;
+        surveillance = navigator.geolocation.watchPosition(envoyer, erreur, { enableHighAccuracy: true, maximumAge: 10000, timeout: 30000 });
+        // À l'arrêt (feu rouge, attente du client) le GPS ne bouge pas : on renvoie quand même toutes les 20 s
+        battement = setInterval(() => {
+            if (Date.now() - dernierEnvoi < 20000) return;
+            if (derniere) envoyer(derniere, true);
+            navigator.geolocation.getCurrentPosition((p) => envoyer(p, true), () => {}, { enableHighAccuracy: true, maximumAge: 15000, timeout: 20000 });
+        }, 20000);
+        garderEcranAllume();
+        try { localStorage.setItem('lp_suivi_gps', '1'); } catch (e) {}
+        bouton.textContent = '■ Arrêter le suivi GPS';
+        bouton.className = 'mt-3 w-full bg-gray-100 text-gray-700 py-3 rounded-xl font-bold hover:bg-gray-200';
+        afficher('Recherche du signal GPS…', false);
+    }
+    function arreter(message) {
+        if (surveillance !== null) navigator.geolocation.clearWatch(surveillance);
+        surveillance = null; clearInterval(battement);
+        if (verrou) { verrou.release().catch(() => {}); verrou = null; }
+        try { localStorage.removeItem('lp_suivi_gps'); } catch (e) {}
+        bouton.textContent = '▶ Démarrer le suivi GPS';
+        bouton.className = 'mt-3 w-full bg-purple-600 text-white py-3 rounded-xl font-bold hover:bg-purple-700';
+        etat.textContent = message || 'Suivi arrêté.';
+        voyant.className = 'h-3 w-3 rounded-full flex-shrink-0 bg-gray-300';
+    }
+    bouton.addEventListener('click', () => { surveillance === null ? demarrer() : arreter('Suivi arrêté.'); });
+    document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'visible' && surveillance !== null) { garderEcranAllume(); if (derniere) envoyer(derniere, true); }
+    });
+    // Suivi déjà lancé avant le rafraîchissement de la page : il reprend tout seul
+    let relancer = false;
+    try { relancer = localStorage.getItem('lp_suivi_gps') === '1'; } catch (e) {}
+    if (relancer) demarrer();
+})();
 
 // Installation comme une application
 let invitation = null;

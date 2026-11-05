@@ -386,6 +386,10 @@ class Livreur(db.Model):
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     # Lien secret de l'espace du livreur (/l/<code>), installable sur son téléphone
     code_acces = db.Column(db.String(32), unique=True, index=True, default=lambda: nouveau_code_lien())
+    # Dernière position GPS envoyée pendant une course (voir suivi_gps.py)
+    position_lat = db.Column(db.Float, nullable=True)
+    position_lng = db.Column(db.Float, nullable=True)
+    position_at = db.Column(db.DateTime, nullable=True)
 
     boutique = db.relationship('Boutique', backref=db.backref('livreurs', cascade='all, delete-orphan'))
 
@@ -614,3 +618,19 @@ class Administrateur(db.Model):
 
     def verifier_mot_de_passe(self, mot_de_passe):
         return check_password_hash(self.mot_de_passe_hash, mot_de_passe or '')
+
+
+class PositionLivreur(db.Model):
+    """Position GPS d'un livreur pendant ses courses (gardée 30 jours)."""
+    __tablename__ = 'positions_livreurs'
+    __table_args__ = (db.Index('ix_positions_livreur_date', 'livreur_id', 'created_at'),)
+
+    id = db.Column(db.Integer, primary_key=True)
+    livreur_id = db.Column(db.Integer, db.ForeignKey('livreurs.id', ondelete='CASCADE'), nullable=False)
+    lat = db.Column(db.Float, nullable=False)
+    lng = db.Column(db.Float, nullable=False)
+    precision = db.Column(db.Integer, nullable=True)      # en mètres
+    vitesse = db.Column(db.Float, nullable=True)          # km/h
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+
+    livreur = db.relationship('Livreur', backref=db.backref('positions', cascade='all, delete-orphan', lazy='dynamic'))

@@ -11,6 +11,7 @@ from zones_detection import zone_pour_adresse, index_quartiers
 from creneaux import creneaux_disponibles
 import promos
 import notifications
+import suivi_gps
 from utils import enregistrer_photo
 import stock
 from models import db, Boutique, Article, Commande, Photo, Zone, Livreur, enregistrer_avec_numero
@@ -356,7 +357,8 @@ def espace_livreur(code):
                            a_remettre=a_remettre, mes_frais=mes_frais,
                            garde_frais=livreur.boutique.mode_frais != 'boutique_collecte',
                            onglet=request.args.get('onglet', 'a_livrer'), fcfa=msg.fcfa, motifs=Commande.MOTIFS_ECHEC,
-                           lien_arrivee=lambda c: msg.lien_whatsapp(c.client_telephone, msg.arrivee_client(c)))
+                           lien_arrivee=lambda c: msg.lien_whatsapp(c.client_telephone, msg.arrivee_client(c)),
+                           suivi_actif=livreur.position_at and (datetime.utcnow() - livreur.position_at).total_seconds() < 120)
 
 @client_bp.route('/l/<code>/livree/<int:commande_id>', methods=['POST'])
 def espace_livreur_livree(code, commande_id):
@@ -395,6 +397,13 @@ def espace_livreur_arrive(code, commande_id):
               + (" : le téléphone du client sonne." if prevenus else ". Envoyez aussi le message WhatsApp au client."), 'success')
     return redirect(url_for('client.espace_livreur', code=code))
 
+@client_bp.route('/l/<code>/position', methods=['POST'])
+def espace_livreur_position(code):
+    """Position GPS envoyée par le téléphone du livreur pendant ses courses."""
+    livreur = livreur_par_code(code)
+    actif, message = suivi_gps.enregistrer(livreur, request.get_json(silent=True) or {})
+    return jsonify(actif=actif, message=message)
+
 @client_bp.route('/l/<code>/manifest.json')
 def manifest_livreur(code):
     """Manifeste propre au livreur : l'application installée s'ouvre sur SON espace."""
@@ -425,14 +434,31 @@ def suivi(code):
     memoriser_commande(commande)
     cle_push = notifications.cles_vapid()[0] if commande.statut in ('nouvelle', 'confirmee', 'en_livraison') else None
     return render_template('client/suivi.html', commande=commande, boutique=commande.boutique, fcfa=msg.fcfa,
-                           cle_push=cle_push)
+                           cle_push=cle_push, position=suivi_gps.situation(commande))
 
 @client_bp.route('/suivi/<code>/etat')
 def suivi_etat(code):
     """Interrogé régulièrement par la page de suivi ouverte (pour sonner à l'arrivée)."""
     commande = Commande.query.filter_by(code_suivi=code).first_or_404()
     return jsonify(statut=commande.statut,
-                   arrivee=commande.date_arrivee.strftime('%H:%M') if commande.date_arrivee and commande.statut == 'en_livraison' else None)
+                   arrivee=commande.date_arrivee.strftime('%H:%M') if commande.date_arrivee and commande.statut == 'en_livraison' else None,
+                   livreur=suivi_gps.situation(commande))
+
+@client_bp.route('/suivi/<code>/ma-position', methods=['POST'])
+def suivi_ma_position(code):
+    """Le client partage sa position : distance et heure d'arrivée précises."""
+    commande = Commande.query.filter_by(code_suivi=code).first_or_404()
+    d = request.get_json(silent=True) or {}
+    try:
+        lat, lng, precision = float(d.get('lat')), float(d.get('lng')), float(d.get('precision') or 0)
+    except (TypeError, ValueError):
+        return jsonify(ok=False), 400
+    if commande.statut not in ('nouvelle', 'confirmee', 'en_livraison') or precision > 500 \
+            or not (-90 <= lat <= 90 and -180 <= lng <= 180):
+        return jsonify(ok=False), 400
+    commande.latitude, commande.longitude = lat, lng
+    db.session.commit()
+    return jsonify(ok=True)
 
 @client_bp.route('/suivi/<code>/abonner', methods=['POST'])
 def suivi_abonner(code):
