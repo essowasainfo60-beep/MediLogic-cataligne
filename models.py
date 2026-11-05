@@ -336,7 +336,15 @@ class Commande(db.Model):
 
     @property
     def statut_libelle(self):
+        if self.est_retrait:
+            return {'confirmee': 'Confirmée · à retirer', 'livree': 'Remise au client'}.get(
+                self.statut, self.STATUTS.get(self.statut, (self.statut, ''))[0])
         return self.STATUTS.get(self.statut, (self.statut, ''))[0]
+
+    @property
+    def est_retrait(self):
+        """Le client passe lui-même récupérer sa commande à la boutique (pas de livraison)."""
+        return bool(self.zone and self.zone.est_retrait)
 
     @property
     def statut_classe(self):
@@ -685,15 +693,23 @@ class Discussion(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     boutique_id = db.Column(db.Integer, db.ForeignKey('boutiques.id', ondelete='CASCADE'), nullable=False, index=True)
     commande_id = db.Column(db.Integer, db.ForeignKey('commandes.id', ondelete='CASCADE'), nullable=True)
+    livreur_id = db.Column(db.Integer, db.ForeignKey('livreurs.id', ondelete='CASCADE'), nullable=True)   # discussion privée
     dernier_message_at = db.Column(db.DateTime, nullable=True, index=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
     boutique = db.relationship('Boutique', backref=db.backref('discussions', cascade='all, delete-orphan', lazy='dynamic'))
     commande = db.relationship('Commande', backref=db.backref('discussion', uselist=False, cascade='all, delete-orphan'))
+    livreur = db.relationship('Livreur', backref=db.backref('discussion_privee', cascade='all, delete-orphan'))
 
     @property
     def est_generale(self):
-        return self.commande_id is None
+        """Boutique + tous ses livreurs."""
+        return self.commande_id is None and self.livreur_id is None
+
+    @property
+    def est_privee(self):
+        """Boutique + un seul livreur (les autres ne la voient pas)."""
+        return self.commande_id is None and self.livreur_id is not None
 
 
 class MediaMessage(db.Model):

@@ -170,6 +170,7 @@
         <div class="bg-white rounded-2xl shadow-md p-4 {{ 'opacity-60' if not b.livreur.actif }}">
             <div class="flex items-center justify-between">
                 <p class="font-bold text-gray-900">🛵 {{ b.livreur.nom }}{% if not b.livreur.actif %} <span class="text-xs font-normal text-gray-500">(désactivé)</span>{% endif %}</p>
+                <a href="{{ url_for('boutique.discussion_livreur_prive', livreur_id=b.livreur.id) }}" class="text-purple-700 text-sm mr-2"><i class="fas fa-lock"></i> Privé</a>
                 <a href="https://wa.me/{{ b.livreur.telephone_whatsapp }}" target="_blank" class="text-green-600 text-sm"><i class="fab fa-whatsapp"></i> {{ b.livreur.telephone }}</a>
             </div>
             <div class="grid grid-cols-3 gap-2 mt-3 text-center">

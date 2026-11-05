@@ -93,7 +93,20 @@
 
                         <!-- Action selon l'étape : Nouvelle → Confirmer et livrer → En livraison → Livrée -->
                         <div class="mt-4 pt-4 border-t border-gray-100">
-                        {% if commande.statut in ['nouvelle', 'confirmee', 'echec'] %}
+                        {% if commande.est_retrait and commande.statut in ['nouvelle', 'confirmee'] %}
+                            <p class="text-sm text-green-800 mb-2">🛍 <strong>Retrait à la boutique</strong> : le client passe récupérer sa commande.</p>
+                            <div class="flex flex-wrap gap-2">
+                                {% if commande.statut == 'nouvelle' %}
+                                <a href="{{ url_for('boutique.envoyer_confirmation_client', commande_id=commande.id) }}" target="_blank" onclick="setTimeout(() => location.reload(), 1500)"
+                                   class="bg-purple-600 text-white px-4 py-2.5 rounded-xl font-semibold hover:bg-purple-700"><i class="fas fa-check mr-1"></i> Confirmer et inviter à passer</a>
+                                {% endif %}
+                                <form method="POST" action="{{ url_for('boutique.changer_statut_commande', commande_id=commande.id) }}"
+                                      data-question="Confirmer : la commande n°{{ commande.numero }} est remise à {{ commande.client_nom }} et payée ?" onsubmit="return confirm(this.dataset.question)">
+                                    <button type="submit" name="statut" value="livree" class="bg-green-600 text-white px-4 py-2.5 rounded-xl font-semibold hover:bg-green-700">
+                                        <i class="fas fa-circle-check mr-1"></i> Remise au client</button>
+                                </form>
+                            </div>
+                        {% elif commande.statut in ['nouvelle', 'confirmee', 'echec'] %}
                             {% if commande.statut == 'echec' %}
                             <p class="text-sm text-red-700 mb-2"><i class="fas fa-triangle-exclamation mr-1"></i>
                                 Échec{% if commande.livreur %} ({{ commande.livreur.nom }}){% endif %} : <strong>{{ commande.motif_echec or 'non précisé' }}</strong>

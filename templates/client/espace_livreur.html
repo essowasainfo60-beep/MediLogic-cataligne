@@ -299,6 +299,31 @@ document.querySelectorAll('.btn-arrive').forEach((bouton) => {
     });
 })();
 
+// ---------- Nouveaux messages / nouvelles courses : le téléphone sonne ----------
+(function () {
+    let ctx = null, connus = null, courses = {{ a_livrer|length }};
+    const debloquer = () => { try { ctx = ctx || new (window.AudioContext || window.webkitAudioContext)(); ctx.resume(); } catch (e) {} };
+    ['click', 'touchstart'].forEach((ev) => document.addEventListener(ev, debloquer, { passive: true }));
+    function sonner() {
+        if (navigator.vibrate) navigator.vibrate([200, 100, 200, 100, 200]);
+        if (!ctx) return;
+        [[880, 0], [1320, 0.16], [880, 0.45], [1320, 0.61]].forEach(([f, t0]) => {
+            const o = ctx.createOscillator(), g = ctx.createGain(), t = ctx.currentTime + t0;
+            o.frequency.value = f; g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(0.5, t + 0.02);
+            g.gain.exponentialRampToValueAtTime(0.0001, t + 0.22); o.connect(g).connect(ctx.destination); o.start(t); o.stop(t + 0.25);
+        });
+    }
+    setInterval(async () => {
+        if (document.hidden) return;
+        try {
+            const d = await (await fetch({{ url_for('client.non_lus_livreur', code=livreur.code_acces)|tojson }}, { cache: 'no-store' })).json();
+            if ((connus !== null && d.non_lus > connus) || d.courses > courses) sonner();
+            if (d.courses > courses) setTimeout(() => location.reload(), 1500);
+            connus = d.non_lus; courses = d.courses;
+        } catch (e) {}
+    }, 15000);
+})();
+
 // Installation comme une application
 let invitation = null;
 window.addEventListener('beforeinstallprompt', (e) => {

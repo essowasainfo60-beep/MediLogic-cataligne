@@ -12,6 +12,22 @@
     }
     function duree(s) { s = Math.round(s || 0); return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0'); }
 
+    // ----- Son d'arrivée d'un message (le navigateur exige un premier toucher sur la page) -----
+    let audioCtx = null;
+    function debloquerSon() { try { audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)(); audioCtx.resume(); } catch (e) {} }
+    ['click', 'touchstart', 'keydown'].forEach((ev) => document.addEventListener(ev, debloquerSon, { passive: true }));
+    function sonner() {
+        if (navigator.vibrate) navigator.vibrate([180, 90, 180]);
+        if (!audioCtx) return;
+        [[880, 0], [1320, 0.16]].forEach(([f, t0]) => {
+            const o = audioCtx.createOscillator(), g = audioCtx.createGain(), t = audioCtx.currentTime + t0;
+            o.type = 'sine'; o.frequency.value = f;
+            g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(0.5, t + 0.02); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.22);
+            o.connect(g).connect(audioCtx.destination); o.start(t); o.stop(t + 0.25);
+        });
+    }
+    window.LivraPlusSon = { sonner: sonner, debloquer: debloquerSon };
+
     function demarrer(racine, cfg) {
         const liste = racine.querySelector('[data-liste]');
         const champ = racine.querySelector('[data-champ]');
@@ -23,7 +39,7 @@
         const boutonPosition = racine.querySelector('[data-position]');
         const barreVocal = racine.querySelector('[data-barre-vocal]');
         const minuterie = racine.querySelector('[data-minuterie]');
-        let dernierId = 0, dernierJour = '', occupe = false;
+        let dernierId = 0, dernierJour = '', occupe = false, premierChargement = true;
 
         function afficherEtat(t, erreur) {
             etat.textContent = t || '';
@@ -70,6 +86,8 @@
                 const r = await fetch(cfg.urlMessages + '?apres=' + dernierId, { cache: 'no-store' });
                 if (!r.ok) return;
                 const d = await r.json();
+                if (!premierChargement && d.messages.some((m) => !m.moi && m.id > dernierId)) sonner();
+                premierChargement = false;
                 ajouter(d.messages);
                 if (d.lu_jusqu_a) racine.querySelectorAll('.coche').forEach((c) => { if (+c.dataset.id <= d.lu_jusqu_a) c.textContent = '✓✓'; });
             } catch (e) { /* réseau : on réessaie au prochain tour */ }
@@ -131,15 +149,67 @@
 
         // ----- Message vocal -----
         let enregistreur = null, morceaux = [], debut = 0, minuteur = null, annule = false, flux = null;
+        const aideMicro = racine.querySelector('[data-aide-micro]');
+        const ua = navigator.userAgent;
+        const iphone = /iPhone|iPad|iPod/.test(ua);
+        const installee = window.matchMedia('(display-mode: standalone)').matches || navigator.standalone;
+        const appIntegree = /FBAN|FBAV|Instagram|Line\/|; wv\)|WhatsApp|musical_ly|TikTok|Snapchat/i.test(ua);
+        function lienChrome() {
+            return 'intent://' + location.host + location.pathname + location.search + '#Intent;scheme=https;package=com.android.chrome;end';
+        }
+        function montrerAide(cause) {
+            let etapes;
+            if (cause === 'integree') {
+                etapes = '<p>Vous êtes dans le navigateur d\'une autre application (WhatsApp, Facebook, TikTok…) qui ne donne pas accès au micro.</p>'
+                    + (iphone ? '<p class="mt-1">Touchez ⋯ puis <b>« Ouvrir dans Safari »</b>.</p>'
+                              : '<a href="' + lienChrome() + '" class="inline-block mt-2 bg-blue-600 text-white font-semibold px-3 py-1.5 rounded-lg">Ouvrir dans Chrome</a>');
+            } else if (cause === 'occupe') {
+                etapes = '<p>Le micro est déjà utilisé par une autre application (appel en cours, enregistreur, WhatsApp…). Fermez-la puis réessayez.</p>';
+            } else if (cause === 'absent') {
+                etapes = '<p>Aucun micro trouvé sur cet appareil.</p>';
+            } else if (cause === 'navigateur') {
+                etapes = '<p>Ce navigateur ne permet pas d\'enregistrer. Utilisez <b>Google Chrome</b> (Android) ou <b>Safari</b> à jour (iPhone).</p>';
+            } else if (iphone) {
+                etapes = '<ol class="list-decimal ml-4 space-y-0.5"><li>Touchez <b>« aA »</b> à gauche de l\'adresse, puis <b>Réglages du site web</b>.</li>'
+                    + '<li><b>Micro</b> → <b>Autoriser</b>.</li><li>Sinon : Réglages de l\'iPhone → Safari → Micro → Autoriser.</li><li>Revenez ici et touchez <b>Réessayer</b>.</li></ol>';
+            } else if (installee) {
+                etapes = '<ol class="list-decimal ml-4 space-y-0.5"><li>Ouvrez <b>Chrome</b> → menu ⋮ → <b>Paramètres</b> → <b>Paramètres des sites</b> → <b>Micro</b>.</li>'
+                    + '<li>Touchez <b>' + location.host + '</b> → <b>Autoriser</b>.</li>'
+                    + '<li>Vérifiez aussi : Réglages du téléphone → Applications → Chrome → Autorisations → <b>Micro : autorisé</b>.</li>'
+                    + '<li>Revenez dans LivraPlus et touchez <b>Réessayer</b>.</li></ol>';
+            } else {
+                etapes = '<ol class="list-decimal ml-4 space-y-0.5"><li>Touchez le <b>cadenas 🔒</b> (ou ⓘ) à gauche de l\'adresse en haut.</li>'
+                    + '<li><b>Autorisations</b> (ou Paramètres du site) → <b>Micro</b> → <b>Autoriser</b>.</li>'
+                    + '<li>Toujours bloqué ? Réglages du téléphone → Applications → Chrome → Autorisations → <b>Micro : autorisé</b>.</li>'
+                    + '<li>Revenez ici et touchez <b>Réessayer</b>.</li></ol>';
+            }
+            aideMicro.innerHTML = '<div class="flex items-start gap-2"><i class="fas fa-microphone-slash text-red-500 mt-0.5"></i><div class="flex-1">'
+                + '<p class="font-semibold text-gray-900 mb-1">Le micro n\'est pas accessible</p>' + etapes
+                + '<div class="mt-2 flex gap-2"><button type="button" data-reessayer class="bg-green-600 text-white font-semibold px-3 py-1.5 rounded-lg">Réessayer</button>'
+                + '<button type="button" data-fermer-aide class="text-gray-500 px-3 py-1.5">Fermer</button></div></div></div>';
+            aideMicro.classList.remove('hidden');
+            aideMicro.querySelector('[data-reessayer]').addEventListener('click', () => { aideMicro.classList.add('hidden'); demarrerVocal(); });
+            aideMicro.querySelector('[data-fermer-aide]').addEventListener('click', () => aideMicro.classList.add('hidden'));
+            afficherEtat('');
+        }
         function typeAudio() {
             const types = ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4', 'audio/ogg;codecs=opus'];
             return window.MediaRecorder ? types.find((t) => MediaRecorder.isTypeSupported(t)) || '' : null;
         }
         async function demarrerVocal() {
+            debloquerSon();
             const type = typeAudio();
-            if (type === null || !navigator.mediaDevices) { afficherEtat('Les messages vocaux ne marchent pas sur ce navigateur. Essayez Chrome.', true); return; }
-            try { flux = await navigator.mediaDevices.getUserMedia({ audio: true }); }
-            catch (e) { afficherEtat('Micro refusé : autorisez le micro pour ce site dans les réglages du navigateur.', true); return; }
+            if (appIntegree && (!navigator.mediaDevices || type === null)) { montrerAide('integree'); return; }
+            if (type === null || !navigator.mediaDevices || !navigator.mediaDevices.getUserMedia || !window.isSecureContext) { montrerAide('navigateur'); return; }
+            afficherEtat('Autorisez le micro si le téléphone le demande…');
+            try { flux = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true } }); }
+            catch (e) {
+                const n = e && e.name;
+                montrerAide(n === 'NotReadableError' || n === 'AbortError' ? 'occupe' : n === 'NotFoundError' || n === 'OverconstrainedError' ? 'absent'
+                            : appIntegree ? 'integree' : 'refuse');
+                return;
+            }
+            afficherEtat('');
             morceaux = []; annule = false;
             enregistreur = new MediaRecorder(flux, type ? { mimeType: type, audioBitsPerSecond: 32000 } : undefined);
             enregistreur.ondataavailable = (e) => { if (e.data.size) morceaux.push(e.data); };

@@ -45,7 +45,28 @@ def _recap(commande):
     return texte + f"\n\n💰 *TOTAL : {fcfa(commande.total)}*"
 
 
+def _retrait(commande):
+    """Où et comment récupérer une commande « je passe à la boutique »."""
+    b = commande.boutique
+    texte = "🛍️ Vous avez choisi de *passer récupérer votre commande à la boutique*.\n\n"
+    texte += f"🏁 *Adresse :* {b.adresse or b.nom_boutique}\n"
+    if b.lien_itineraire:
+        texte += f"🗺️ *Itinéraire :* {b.lien_itineraire}\n"
+    if b.whatsapp:
+        texte += f"📞 *Boutique :* {b.whatsapp}\n"
+    if commande.creneau:
+        texte += f"🕒 *Passage prévu :* {commande.creneau}\n"
+    return texte + f"\n💵 *À payer sur place : {fcfa(commande.total)}* — présentez le n°{commande.numero}."
+
+
 def confirmation_client(commande):
+    if commande.est_retrait:
+        return (f"✅ *COMMANDE N°{commande.numero} CONFIRMÉE*\n{TRAIT}\n"
+                f"Bonjour {commande.client_nom},\n\n"
+                f"Votre commande est prête : nous vous attendons ! 🙏\n\n"
+                f"📦 *Récapitulatif :*\n{_recap(commande)}\n\n"
+                f"{_retrait(commande)}\n\n"
+                f"Merci pour votre confiance !\n{commande.boutique.nom_boutique}{_suivi(commande)}")
     return (f"✅ *COMMANDE CONFIRMÉE N°{commande.numero}*\n{TRAIT}\n"
             f"Bonjour {commande.client_nom},\n\n"
             f"Nous avons bien reçu votre commande.\n\n"
@@ -91,6 +112,50 @@ def course_livreur(commande, lien_livraison):
               f"💵 *À encaisser à la livraison : {fcfa(commande.total)}*\n{TRAIT}\n"
               f"✅ Une fois livré, validez ici :\n{lien_livraison}")
     return texte
+
+
+def retrait_confirmation_courte(commande):
+    """Message posté dans la discussion LivraPlus quand une commande à retirer est confirmée."""
+    return (f"✅ Votre commande n°{commande.numero} est prête !\n"
+            + _retrait(commande).replace('*', ''))
+
+
+def nouvelle_commande_boutique(commande, lien_article=None, racine=''):
+    """Message « nouvelle commande » envoyé par le client à la boutique (WhatsApp ou messagerie LivraPlus)."""
+    m = f"🆕 *NOUVELLE COMMANDE N°{commande.numero}*\n{TRAIT}\n"
+    m += f"👤 *Client:* {commande.client_nom}\n📱 *Tél:* {commande.client_telephone}\n"
+    if commande.est_retrait:
+        m += "🛍️ *Je passe récupérer ma commande à la boutique* (pas de livraison)\n"
+        if commande.creneau:
+            m += f"🕒 *Passage prévu:* {commande.creneau}\n"
+    else:
+        m += f"📍 *Adresse:* {commande.client_adresse}\n"
+        if commande.zone:
+            m += f"🧭 *Zone:* {commande.zone.nom}\n"
+        if commande.latitude is not None:
+            m += f"🗺️ *Position GPS:* https://maps.google.com/?q={commande.latitude},{commande.longitude}\n"
+        if commande.creneau:
+            m += f"🕒 *Livraison souhaitée:* {commande.creneau}\n"
+    if commande.instructions:
+        m += f"\n📝 *Instructions:*\n\"{commande.instructions}\"\n"
+    m += f"{TRAIT}\n📦 *ARTICLES COMMANDÉS:*\n\n"
+    for item in commande.articles_json:
+        m += f"🔹 *{('n°' + str(item['numero']) + ' · ') if item.get('numero') else ''}{item['nom']}*\n"
+        m += f"   Quantité: {item['quantite']}\n   Prix unitaire: {fcfa(item['prix'])}\n"
+        m += f"   Sous-total: {fcfa(item['prix'] * int(item['quantite']))}\n"
+        if item.get('numero') and item.get('photo_num') and lien_article:
+            m += f"   🖼️ *Photo choisie : {item['photo_num']}/{item['photos_total']}* → {lien_article(item)}\n"
+        elif item.get('photo'):
+            photo = item['photo']
+            m += f"   🖼️ *Photo:* {racine + photo if photo.startswith('/') else photo}\n"
+        m += "\n"
+    m += f"{TRAIT}\n"
+    if commande.remise:
+        m += f"🎁 *Code {commande.code_promo}:* -{fcfa(commande.remise)}\n"
+    if commande.frais_livraison:
+        m += f"🛵 *Livraison ({commande.zone.nom if commande.zone else ''}):* {fcfa(commande.frais_livraison)}\n"
+    m += f"💰 *TOTAL: {fcfa(commande.total)}*" + (" (à payer à la boutique)" if commande.est_retrait else "") + f"\n{TRAIT}"
+    return m
 
 
 def livree_client(commande):

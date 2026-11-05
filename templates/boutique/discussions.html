@@ -14,13 +14,13 @@
         {% for l in lignes %}
         {% set d = l.d %}{% set c = d.commande %}
         <a href="{{ url_for('boutique.discussion', discussion_id=d.id) }}"
-           data-item="{{ ('n°' ~ c.numero ~ ' ' ~ c.client_nom ~ ' ' ~ c.client_telephone ~ ' ' ~ (c.livreur.nom if c.livreur else '')) if c else 'livreurs générale équipe' }}"
+           data-item="{{ ('n°' ~ c.numero ~ ' ' ~ c.client_nom ~ ' ' ~ c.client_telephone ~ ' ' ~ (c.livreur.nom if c.livreur else '')) if c else (d.livreur.nom ~ ' privé livreur' if d.est_privee else 'livreurs générale équipe') }}"
            class="flex items-center gap-3 px-4 py-3 hover:bg-gray-50 {{ 'bg-purple-50/60' if l.non_lus }}">
-            <span class="h-11 w-11 rounded-full flex items-center justify-center flex-shrink-0 {{ 'bg-orange-100 text-orange-600' if not c else 'bg-purple-100 text-purple-700' }}">
-                <i class="fas {{ 'fa-motorcycle' if not c else 'fa-receipt' }}"></i></span>
+            <span class="h-11 w-11 rounded-full flex items-center justify-center flex-shrink-0 {{ 'bg-purple-100 text-purple-700' if c else ('bg-gray-100 text-gray-700' if d.est_privee else 'bg-orange-100 text-orange-600') }}">
+                <i class="fas {{ 'fa-receipt' if c else ('fa-lock' if d.est_privee else 'fa-users') }}"></i></span>
             <span class="flex-1 min-w-0">
                 <span class="flex items-center justify-between gap-2">
-                    <span class="font-semibold text-gray-900 truncate">{{ ('Commande n°' ~ c.numero ~ ' · ' ~ c.client_nom) if c else '🛵 Discussion avec mes livreurs' }}</span>
+                    <span class="font-semibold text-gray-900 truncate">{{ ('Commande n°' ~ c.numero ~ ' · ' ~ c.client_nom) if c else (('🛵 ' ~ d.livreur.nom ~ ' · privé') if d.est_privee else '👥 Tous mes livreurs') }}</span>
                     {% if l.dernier %}<span class="text-[11px] text-gray-400 flex-shrink-0">{{ l.dernier.created_at.strftime('%d/%m %H:%M') }}</span>{% endif %}
                 </span>
                 <span class="flex items-center justify-between gap-2">

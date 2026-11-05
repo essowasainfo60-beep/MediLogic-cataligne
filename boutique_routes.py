@@ -908,7 +908,13 @@ def envoyer_confirmation_client(commande_id):
     # Envoyer la confirmation fait passer une commande nouvelle à "confirmée"
     if commande.statut == 'nouvelle':
         stock.changer_statut(commande, 'confirmee')
+        commande.confirmee_par = qui()
         db.session.commit()
+        # La confirmation part aussi dans la messagerie LivraPlus (le téléphone du client sonne s'il a activé l'alerte)
+        discussions.poster(discussions.discussion_commande(commande), 'boutique',
+                           getattr(current_user, 'nom_utilisateur', None) or current_user.nom_boutique,
+                           {'type': 'texte', 'texte': msg.retrait_confirmation_courte(commande) if commande.est_retrait
+                            else f'✅ Votre commande n°{commande.numero} est confirmée et en préparation.'}, {})
 
     return redirect(msg.lien_whatsapp(commande.client_telephone, msg.confirmation_client(commande)))
 
@@ -1386,11 +1392,14 @@ def discussions_liste():
     """Toutes les discussions : générale (livreurs) + une par commande, les plus récentes d'abord."""
     from models import Discussion
     generale = discussions.discussion_generale(current_user.id)
+    privees = [discussions.discussion_privee(l) for l in
+               Livreur.query.filter_by(boutique_id=current_user.id, actif=True).order_by(Livreur.nom).all()]
+    privees.sort(key=lambda d: d.dernier_message_at or datetime.min, reverse=True)
     fils = (Discussion.query.filter(Discussion.boutique_id == current_user.id, Discussion.commande_id.isnot(None),
                                     Discussion.dernier_message_at.isnot(None))
             .order_by(Discussion.dernier_message_at.desc()).limit(100).all())
     lignes = []
-    for d in [generale] + fils:
+    for d in [generale] + privees + fils:
         dernier = discussions.dernier_message(d)
         lignes.append({'d': d, 'dernier': dernier, 'apercu': discussions.apercu(dernier) if dernier else '',
                        'non_lus': discussions.non_lus(d, 'boutique')})
@@ -1407,14 +1416,24 @@ def discussion(discussion_id):
         sous_titre = 'Vous, le client' + (f' et le livreur {c.livreur.nom}' if c.livreur else ' (pas encore de livreur)')
         secours = msg.lien_whatsapp(c.client_telephone, f"Bonjour {c.client_nom}, nous vous avons écrit au sujet de votre commande n°{c.numero} : "
                                     + url_for('client.discussion_client', code=c.code_suivi, _external=True))
+    elif d.est_privee:
+        titre = f'🔒 {d.livreur.nom} (privé)'
+        sous_titre, secours = 'Seuls vous et ce livreur voyez cette discussion', msg.lien_whatsapp(d.livreur.telephone, 'Bonjour, je vous ai écrit dans LivraPlus.')
     else:
-        titre, sous_titre, secours = 'Discussion avec mes livreurs', 'Consignes, versements, organisation de la journée', None
+        titre, sous_titre, secours = 'Discussion avec tous mes livreurs', 'Tous les livreurs voient ces messages', None
     return render_template('discussion.html', titre=titre, sous_titre=sous_titre, secours_wa=secours,
                            retour=url_for('boutique.commande_details', commande_id=c.id) if c else url_for('boutique.discussions_liste'),
                            url_messages=url_for('boutique.api_discussion_messages', discussion_id=d.id),
                            url_envoyer=url_for('boutique.api_discussion_messages', discussion_id=d.id),
                            rapides=discussions.MESSAGES_RAPIDES['boutique'] if c else ['Bonjour à tous 👋', 'Pensez à faire vos versements',
                                                                                         'Nouvelles courses disponibles'])
+
+
+@boutique_bp.route('/livreur/<int:livreur_id>/discussion')
+@login_required
+def discussion_livreur_prive(livreur_id):
+    livreur = Livreur.query.filter_by(id=livreur_id, boutique_id=current_user.id).first_or_404()
+    return redirect(url_for('boutique.discussion', discussion_id=discussions.discussion_privee(livreur).id))
 
 
 @boutique_bp.route('/commande/<int:commande_id>/discussion')

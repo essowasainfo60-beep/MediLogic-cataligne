@@ -29,9 +29,13 @@
                 <i class="fas fa-circle-info mr-1"></i> Commande {{ commande.statut_libelle|lower }}.
             </p>
             {% else %}
-            {% set rang = {'nouvelle': 0, 'confirmee': 1, 'en_livraison': 2, 'echec': 2, 'livree': 3}.get(commande.statut, 0) %}
-            <ol class="grid grid-cols-4 gap-1 mb-6 text-[11px] sm:text-xs text-center">
-                {% for libelle in ['Reçue', 'Confirmée', 'En livraison', 'Livrée'] %}
+            {% if commande.est_retrait %}
+            {% set rang = {'nouvelle': 0, 'confirmee': 1, 'livree': 2}.get(commande.statut, 0) %}{% set etapes_suivi = ['Reçue', 'Confirmée · à retirer', 'Remise au client'] %}
+            {% else %}
+            {% set rang = {'nouvelle': 0, 'confirmee': 1, 'en_livraison': 2, 'echec': 2, 'livree': 3}.get(commande.statut, 0) %}{% set etapes_suivi = ['Reçue', 'Confirmée', 'En livraison', 'Livrée'] %}
+            {% endif %}
+            <ol class="grid grid-cols-{{ etapes_suivi|length }} gap-1 mb-6 text-[11px] sm:text-xs text-center">
+                {% for libelle in etapes_suivi %}
                 <li>
                     <div class="h-1.5 rounded-full {{ 'bg-green-500' if loop.index0 <= rang else 'bg-gray-200' }}"></div>
                     <p class="mt-1.5 {{ 'font-bold text-red-600' if loop.index0 == rang and commande.statut == 'echec' else ('font-bold text-gray-900' if loop.index0 == rang else ('text-green-700' if loop.index0 < rang else 'text-gray-400')) }}">
@@ -165,19 +169,29 @@
                         </select>
                     </form>
                     {% endif %}
-                    {% if commande.zone and commande.zone.est_retrait and commande.statut in ['nouvelle', 'confirmee'] %}
+                    {% if commande.est_retrait and commande.statut in ['nouvelle', 'confirmee'] %}
                     <div class="mb-3 rounded-xl border border-green-300 bg-green-50 p-3 text-sm">
-                        <p class="font-semibold text-green-900">🛍 Le client vient récupérer sa commande à la boutique</p>
+                        <p class="font-semibold text-green-900">🛍 Le client a choisi de passer récupérer sa commande à la boutique (pas de livraison)</p>
+                        {% if commande.statut == 'nouvelle' %}
+                        <a href="{{ url_for('boutique.envoyer_confirmation_client', commande_id=commande.id) }}" target="_blank"
+                           onclick="setTimeout(() => location.reload(), 1500)"
+                           class="mt-2 block text-center bg-purple-600 text-white py-2.5 rounded-lg font-bold hover:bg-purple-700">
+                            <i class="fas fa-check mr-1"></i> 1. Confirmer et inviter le client à passer</a>
+                        <p class="text-xs text-green-800 mt-1">Le client reçoit l'adresse de la boutique et l'itinéraire (WhatsApp + messagerie LivraPlus).</p>
+                        {% else %}
+                        <p class="text-xs text-green-800 mt-1">✓ Confirmée : le client a reçu l'adresse de la boutique. Quand il passe :</p>
+                        {% endif %}
                         <form method="POST" action="{{ url_for('boutique.changer_statut_commande', commande_id=commande.id) }}" class="mt-2"
                               data-question="Confirmer : la commande n°{{ commande.numero }} est remise à {{ commande.client_nom }} et {{ fcfa(commande.total) if fcfa is defined else commande.total }} encaissés ?"
                               onsubmit="return confirm(this.dataset.question)">
-                            <button type="submit" name="statut" value="livree" class="w-full bg-green-600 text-white py-2.5 rounded-lg font-bold hover:bg-green-700">
-                                ✅ Remise au client (payée)</button>
+                            <button type="submit" name="statut" value="livree" class="w-full {{ 'bg-green-600 text-white' if commande.statut == 'confirmee' else 'bg-white text-green-700 border border-green-600' }} py-2.5 rounded-lg font-bold hover:bg-green-700 hover:text-white">
+                                ✅ {{ '2. ' if commande.statut == 'nouvelle' }}Remise au client (payée)</button>
                         </form>
-                        <p class="text-xs text-green-800 mt-1">Ou confiez-la à un livreur ci-dessous si le client préfère finalement être livré.</p>
+                        <details class="mt-2 text-xs text-green-800"><summary class="cursor-pointer">Le client préfère finalement être livré ?</summary>
+                            <p class="mt-1">Changez la zone ci-dessus (zone de livraison du client), puis confiez la commande à un livreur.</p></details>
                     </div>
                     {% endif %}
-                    {% if livreurs %}
+                    {% if livreurs and not commande.est_retrait %}
                     {% set en_route = commande.statut == 'en_livraison' %}
                     {% set relance = commande.statut == 'echec' %}
                     <form method="POST" action="{{ url_for('boutique.attribuer_livreur', commande_id=commande.id) }}" class="flex flex-col sm:flex-row gap-2"

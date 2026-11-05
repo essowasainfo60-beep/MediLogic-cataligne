@@ -40,8 +40,18 @@ def discussion_commande(commande):
     return d
 
 
+def discussion_privee(livreur):
+    """Discussion entre la boutique et CE livreur seulement."""
+    d = Discussion.query.filter_by(boutique_id=livreur.boutique_id, commande_id=None, livreur_id=livreur.id).first()
+    if d is None:
+        d = Discussion(boutique_id=livreur.boutique_id, commande_id=None, livreur_id=livreur.id)
+        db.session.add(d)
+        db.session.commit()
+    return d
+
+
 def discussion_generale(boutique_id):
-    d = Discussion.query.filter_by(boutique_id=boutique_id, commande_id=None).first()
+    d = Discussion.query.filter_by(boutique_id=boutique_id, commande_id=None, livreur_id=None).first()
     if d is None:
         d = Discussion(boutique_id=boutique_id, commande_id=None)
         db.session.add(d)
@@ -54,9 +64,11 @@ def peut_lire(discussion, qui, livreur=None):
     if qui == 'boutique':
         return True
     if qui == 'client':
-        return not discussion.est_generale
+        return discussion.commande_id is not None
     if livreur is None or livreur.boutique_id != discussion.boutique_id:
         return False
+    if discussion.est_privee:
+        return discussion.livreur_id == livreur.id
     return discussion.est_generale or (discussion.commande and discussion.commande.livreur_id == livreur.id)
 
 
@@ -191,7 +203,7 @@ def non_lus_boutique(boutique_id):
 
 def discussions_livreur(livreur):
     """Discussion générale + discussions des commandes du livreur (en cours ou récentes)."""
-    res = [discussion_generale(livreur.boutique_id)]
+    res = [discussion_privee(livreur), discussion_generale(livreur.boutique_id)]
     cmds = (Commande.query.filter_by(livreur_id=livreur.id)
             .filter(Commande.statut.in_(['en_livraison', 'echec', 'livree']))
             .order_by(Commande.date_depart.desc()).limit(30).all())
@@ -208,7 +220,8 @@ def _prevenir(discussion, msg):
     texte = f'{msg.auteur_nom} : {apercu(msg)}'
     tag = f'discussion-{discussion.id}'
     commande = discussion.commande
-    titre = f'💬 Commande n°{commande.numero}' if commande else '💬 Discussion livreurs'
+    titre = (f'💬 Commande n°{commande.numero}' if commande else
+             '🔒 Message privé' if discussion.est_privee else '💬 Discussion livreurs')
     try:
         if msg.auteur != 'boutique':
             notifications.envoyer_boutique(discussion.boutique_id, titre, texte,
@@ -219,6 +232,11 @@ def _prevenir(discussion, msg):
             if commande.livreur and msg.auteur != f'livreur:{commande.livreur_id}':
                 notifications.envoyer_livreur(commande.livreur, titre, texte,
                                               url_for('client.discussion_livreur', code=commande.livreur.code_acces,
+                                                      discussion_id=discussion.id), tag=tag)
+        elif discussion.est_privee:
+            if msg.auteur != f'livreur:{discussion.livreur_id}':
+                notifications.envoyer_livreur(discussion.livreur, titre, texte,
+                                              url_for('client.discussion_livreur', code=discussion.livreur.code_acces,
                                                       discussion_id=discussion.id), tag=tag)
         else:
             for livreur in Livreur.query.filter_by(boutique_id=discussion.boutique_id, actif=True).all():

@@ -478,6 +478,11 @@
                 document.querySelectorAll('.pastille-messages').forEach((p) => {
                     p.textContent = d.messages_non_lus || ''; p.classList.toggle('hidden', !d.messages_non_lus);
                 });
+                if (window._messagesConnus != null && d.messages_non_lus > window._messagesConnus && !document.getElementById('discussion')) {
+                    bip();
+                    if (navigator.vibrate) navigator.vibrate([180, 90, 180]);
+                }
+                window._messagesConnus = d.messages_non_lus;
                 if (dernierId !== null && d.dernier_id > dernierId && d.derniere) {
                     const texte = 'n°' + d.derniere.numero + ' · ' + d.derniere.client + ' · ' + d.derniere.total;
                     document.getElementById('alerteTexte').textContent = texte;

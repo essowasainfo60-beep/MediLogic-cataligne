@@ -213,6 +213,14 @@ def vider_panier():
 
 # ==================== VALIDATION COMMANDE & WHATSAPP ====================
 
+def _message_commande(commande):
+    b = commande.boutique
+    return msg.nouvelle_commande_boutique(
+        commande, racine=request.url_root.rstrip('/'),
+        lien_article=lambda item: url_for('client.voir_article', code=b.lien_public, numero=item['numero'],
+                                          photo=item['photo_num'], _external=True))
+
+
 @client_bp.route('/valider_commande', methods=['GET', 'POST'])
 def valider_commande():
     panier = session.get('panier', {})
@@ -296,46 +304,8 @@ def valider_commande():
         promo.utilisations += 1
         db.session.commit()
 
-    # ==================== MESSAGE WHATSAPP POUR LA BOUTIQUE ====================
-    message = f"🆕 *NOUVELLE COMMANDE N°{numero_commande}*\n"
-    message += "━━━━━━━━━━━━━━━━━━\n"
-    message += f"👤 *Client:* {client_nom}\n"
-    message += f"📱 *Tél:* {client_telephone}\n"
-    message += f"📍 *Adresse:* {client_adresse}\n"
-    if commande.zone:
-        message += f"🧭 *Zone:* {commande.zone.nom}\n"
-    if commande.latitude is not None:
-        message += f"🗺️ *Position GPS:* https://maps.google.com/?q={commande.latitude},{commande.longitude}\n"
-    if commande.creneau:
-        message += f"🕒 *Livraison souhaitée:* {commande.creneau}\n"
-    if instructions:
-        message += f"\n📝 *Instructions:*\n\"{instructions}\"\n"
-    message += "━━━━━━━━━━━━━━━━━━\n"
-    message += "📦 *ARTICLES COMMANDÉS:*\n\n"
-
-    for item in panier.values():
-        message += f"🔹 *{('n°' + str(item['numero']) + ' · ') if item.get('numero') else ''}{item['nom']}*\n"
-        message += f"   Quantité: {item['quantite']}\n"
-        message += f"   Prix unitaire: {item['prix']:,.0f} FCFA\n"
-        message += f"   Sous-total: {item['prix'] * item['quantite']:,.0f} FCFA\n"
-        if item.get('numero') and item.get('photo_num'):
-            lien = url_for('client.voir_article', code=boutique.lien_public, numero=item['numero'],
-                           photo=item['photo_num'], _external=True)
-            message += f"   🖼️ *Photo choisie : {item['photo_num']}/{item['photos_total']}* → {lien}\n"
-        elif item.get('photo'):
-            photo_url = item['photo']
-            if photo_url.startswith('/'):
-                photo_url = request.url_root.rstrip('/') + photo_url
-            message += f"   🖼️ *Photo:* {photo_url}\n"
-        message += "\n"
-
-    message += "━━━━━━━━━━━━━━━━━━\n"
-    if remise:
-        message += f"🎁 *Code {promo.code}:* -{remise:,.0f} FCFA\n"
-    if frais:
-        message += f"🛵 *Livraison ({zone.nom}):* {frais:,.0f} FCFA\n"
-    message += f"💰 *TOTAL: {commande.total:,.0f} FCFA*\n"
-    message += "━━━━━━━━━━━━━━━━━━"
+    # ==================== MESSAGE POUR LA BOUTIQUE (WhatsApp ou messagerie LivraPlus) ====================
+    message = _message_commande(commande)
 
     numero_boutique = msg.numero_wa(boutique.whatsapp)
     whatsapp_boutique_url = f"https://wa.me/{numero_boutique}?text={quote(message)}"
@@ -487,8 +457,10 @@ def discussion_livreur(code, discussion_id):
     d = _discussion_du_livreur(livreur, discussion_id)
     c = d.commande
     return render_template('discussion.html',
-                           titre=f'Commande n°{c.numero} · {c.client_nom}' if c else f'Discussion {livreur.boutique.nom_boutique}',
-                           sous_titre=(c.client_adresse if c else 'La boutique et tous les livreurs'),
+                           titre=f'Commande n°{c.numero} · {c.client_nom}' if c else (
+                               f'🔒 {livreur.boutique.nom_boutique} (privé)' if d.est_privee else f'👥 {livreur.boutique.nom_boutique} · tous les livreurs'),
+                           sous_titre=(c.client_adresse if c else 'Seuls vous et la boutique voyez cette discussion' if d.est_privee
+                                       else 'La boutique et tous les livreurs voient ces messages'),
                            secours_wa=msg.lien_whatsapp(c.client_telephone, f'Bonjour {c.client_nom}, je suis votre livreur ({livreur.boutique.nom_boutique}).') if c else None,
                            retour=url_for('client.discussions_livreur', code=code), retour_libelle='Mes discussions',
                            url_messages=url_for('client.api_discussion_livreur', code=code, discussion_id=d.id),
@@ -510,6 +482,13 @@ def discussion_commande_livreur(code, commande_id):
     commande = Commande.query.filter_by(id=commande_id, livreur_id=livreur.id).first_or_404()
     return redirect(url_for('client.discussion_livreur', code=code, discussion_id=discussions.discussion_commande(commande).id))
 
+
+@client_bp.route('/l/<code>/api/non-lus')
+def non_lus_livreur(code):
+    livreur = livreur_par_code(code)
+    qui = f'livreur:{livreur.id}'
+    return jsonify(non_lus=sum(discussions.non_lus(d, qui) for d in discussions.discussions_livreur(livreur)),
+                   courses=Commande.query.filter_by(livreur_id=livreur.id, statut='en_livraison').count())
 
 @client_bp.route('/l/<code>/alertes/abonner', methods=['POST'])
 def alertes_livreur(code):
@@ -536,6 +515,18 @@ def discussion_client(code):
                            rapides=discussions.MESSAGES_RAPIDES['client'],
                            aide='Posez vos questions à la boutique et au livreur : texte, photo ou message vocal.')
 
+
+@client_bp.route('/suivi/<code>/envoyer-commande', methods=['POST'])
+def envoyer_commande_messagerie(code):
+    """Le client envoie sa commande à la boutique par la messagerie LivraPlus."""
+    commande = Commande.query.filter_by(code_suivi=code).first_or_404()
+    d = discussions.discussion_commande(commande)
+    deja = discussions.Message.query.filter(discussions.Message.discussion_id == d.id, discussions.Message.auteur == 'client',
+                                            discussions.Message.texte.like('🆕%')).first()
+    if not deja:
+        discussions.poster(d, 'client', commande.client_nom, {'type': 'texte', 'texte': _message_commande(commande).replace('*', '')}, {})
+    memoriser_commande(commande)
+    return redirect(url_for('client.discussion_client', code=code))
 
 @client_bp.route('/suivi/<code>/api/messages', methods=['GET', 'POST'])
 def api_discussion_client(code):
@@ -582,7 +573,8 @@ def suivi_etat(code):
     commande = Commande.query.filter_by(code_suivi=code).first_or_404()
     return jsonify(statut=commande.statut,
                    arrivee=commande.date_arrivee.strftime('%H:%M') if commande.date_arrivee and commande.statut == 'en_livraison' else None,
-                   livreur=suivi_gps.situation(commande))
+                   livreur=suivi_gps.situation(commande),
+                   messages_non_lus=discussions.non_lus(commande.discussion, 'client') if commande.discussion else 0)
 
 @client_bp.route('/suivi/<code>/ma-position', methods=['POST'])
 def suivi_ma_position(code):
