@@ -336,7 +336,7 @@ def valider_commande():
     message += f"💰 *TOTAL: {commande.total:,.0f} FCFA*\n"
     message += "━━━━━━━━━━━━━━━━━━"
 
-    numero_boutique = ''.join(c for c in (boutique.whatsapp or '') if c.isdigit())
+    numero_boutique = msg.numero_wa(boutique.whatsapp)
     whatsapp_boutique_url = f"https://wa.me/{numero_boutique}?text={quote(message)}"
 
     session.pop('panier', None)

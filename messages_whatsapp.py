@@ -11,9 +11,19 @@ def fcfa(montant):
     return f"{montant:,.0f}".replace(',', ' ') + " FCFA"
 
 
-def lien_whatsapp(telephone, message):
+def numero_wa(telephone):
+    """Numéro au format WhatsApp (chiffres avec indicatif) : « 90 00 00 00 » → 22890000000.
+    Un numéro togolais à 8 chiffres sans indicatif reçoit +228 ; « 00228… » devient « 228… »."""
     numero = ''.join(c for c in (telephone or '') if c.isdigit())
-    return f"https://wa.me/{numero}?text={quote(message)}"
+    if numero.startswith('00'):
+        numero = numero[2:]
+    if len(numero) == 8:
+        numero = '228' + numero
+    return numero
+
+
+def lien_whatsapp(telephone, message):
+    return f"https://wa.me/{numero_wa(telephone)}?text={quote(message)}"
 
 
 def lien_suivi(commande):

@@ -106,7 +106,7 @@
         </a>
     </div>
     {% if boutique.whatsapp %}
-    <a href="https://wa.me/{{ boutique.whatsapp|select('in', '0123456789')|join }}?text={{ ('Bonjour, je vous écris au sujet de ma commande n°' ~ commande.numero)|urlencode }}"
+    <a href="https://wa.me/{{ boutique.whatsapp|wa }}?text={{ ('Bonjour, je vous écris au sujet de ma commande n°' ~ commande.numero)|urlencode }}"
        target="_blank" class="block text-center bg-green-500 text-white py-3 rounded-xl font-semibold hover:bg-green-600">
         <i class="fab fa-whatsapp mr-1"></i> Écrire à {{ boutique.nom_boutique }}
     </a>

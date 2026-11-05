@@ -411,7 +411,8 @@ class Livreur(db.Model):
 
     @property
     def telephone_whatsapp(self):
-        return ''.join(c for c in self.telephone if c.isdigit())
+        import messages_whatsapp
+        return messages_whatsapp.numero_wa(self.telephone)
 
 
 class Zone(db.Model):

@@ -80,6 +80,13 @@ def vers_domaine_principal():
         return redirect(cible, code=301 if request.method in ('GET', 'HEAD') else 308)
 
 
+@app.template_filter('wa')
+def filtre_wa(telephone):
+    """{{ numero|wa }} : numéro prêt pour un lien wa.me (indicatif +228 ajouté si absent)."""
+    import messages_whatsapp
+    return messages_whatsapp.numero_wa(telephone)
+
+
 @app.route('/sante')
 def sante():
     """Vérification de bon fonctionnement (Render, surveillance)."""

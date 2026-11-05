@@ -3,7 +3,7 @@
 {% block title %}{{ f.nom }} - client{% endblock %}
 
 {% block content %}
-{% set tel = f.telephone|select('in', '0123456789')|join %}
+{% set tel = f.telephone|wa %}
 <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-5">
     <a href="{{ url_for('boutique.clients') }}" class="text-sm text-purple-600 hover:underline"><i class="fas fa-arrow-left mr-1"></i> Tous les clients</a>
 
