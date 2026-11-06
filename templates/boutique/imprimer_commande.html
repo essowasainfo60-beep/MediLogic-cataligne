@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{{ 'Bon' if format_papier == '80' else 'Facture' }} n°{{ commande.numero }} - {{ boutique.nom_boutique }}</title>
+    <title>{{ ('Reçu' if commande.est_payee else 'Bon') if format_papier == '80' else 'Facture' }} n°{{ commande.numero }} - {{ boutique.nom_boutique }}</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -43,7 +43,16 @@
         .a4 .signatures div { flex: 1; border-top: 1px solid #9ca3af; padding-top: 6px; font-size: 11px; color: #6b7280; height: 60px; }
         .a4 footer { margin-top: 30px; text-align: center; font-size: 11px; color: #6b7280; }
 
+        /* ===== Tampon PAYÉ / ANNULÉE ===== */
+        .tampon { display: inline-block; border: 3px solid #15803d; color: #15803d; font-weight: 900; letter-spacing: 2px;
+                  padding: 4px 12px; border-radius: 6px; transform: rotate(-6deg); text-align: center; line-height: 1.15; }
+        .tampon small { display: block; font-size: 10px; letter-spacing: 0; font-weight: 700; }
+        .tampon.annulee { border-color: #b91c1c; color: #b91c1c; }
+        .ticket .tampon { font-size: 18px; margin: 6px 0; }
+        .a4 .tampon { font-size: 26px; margin-top: 8px; }
+        .paye { color: #15803d; font-weight: bold; }
         @media print {
+            .tampon, .paye { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
             body { background: #fff; }
             .barre { display: none; }
             .feuille { margin: 0; box-shadow: none; }
@@ -52,6 +61,11 @@
     </style>
 </head>
 <body>
+    {% set payee = commande.est_payee %}
+    {% set annulee = commande.statut == 'annulee' %}
+    {% set retrait = commande.est_retrait %}
+    {% set date_paiement = commande.date_livraison.strftime('%d/%m/%Y à %H:%M') if commande.date_livraison else '' %}
+    {% set remis_par = ('remise à la boutique' if retrait else 'remise par la boutique') if not commande.livree_par_livreur else 'livrée par ' ~ commande.livreur.nom %}
     <div class="barre">
         <a href="?format=80" class="{{ 'actif' if format_papier == '80' }}">Ticket 80 mm</a>
         <a href="?format=a4" class="{{ 'actif' if format_papier == 'a4' }}">Facture A4</a>
@@ -65,16 +79,23 @@
             {% if boutique.adresse %}<p>{{ boutique.adresse }}</p>{% endif %}
             {% if boutique.whatsapp %}<p>Tél : {{ boutique.whatsapp }}</p>{% endif %}
             <div class="sep"></div>
-            <p><strong>BON DE LIVRAISON N°{{ commande.numero }}</strong></p>
-            <p>{{ commande.date_commande.strftime('%d/%m/%Y %H:%M') }}</p>
+            <p><strong>{{ 'REÇU' if payee else ('BON DE RETRAIT' if retrait else 'BON DE LIVRAISON') }} N°{{ commande.numero }}</strong></p>
+            <p>Commande du {{ commande.date_commande.strftime('%d/%m/%Y %H:%M') }}</p>
+            {% if payee %}<div class="tampon">PAYÉ<small>le {{ date_paiement }}</small></div>
+            {% elif annulee %}<div class="tampon annulee">ANNULÉE</div>{% endif %}
         </div>
         <div class="sep"></div>
         <p><strong>{{ commande.client_nom }}</strong></p>
         <p>Tél : {{ commande.client_telephone }}</p>
         <div class="sep"></div>
+        {% if retrait %}
+        <p><strong>RETRAIT À LA BOUTIQUE</strong></p>
+        <p>{{ boutique.adresse or boutique.nom_boutique }}</p>
+        {% else %}
         <p><strong>LIEU DE LIVRAISON</strong></p>
         {% if commande.zone %}<p>Zone : {{ commande.zone.nom }}</p>{% endif %}
         <p>{{ commande.client_adresse }}</p>
+        {% endif %}
         {% if commande.latitude is not none %}<p>GPS : {{ '%.5f'|format(commande.latitude) }}, {{ '%.5f'|format(commande.longitude) }}</p>{% endif %}
         {% if commande.creneau %}<p><strong>Livraison : {{ commande.creneau }}</strong></p>{% endif %}
         {% if commande.instructions %}<p><em>Note : {{ commande.instructions }}</em></p>{% endif %}
@@ -92,10 +113,15 @@
             <tr><td>Sous-total</td><td style="text-align:right">{{ fcfa(commande.sous_total) }}</td></tr>
             {% if commande.remise %}<tr><td>Code {{ commande.code_promo }}</td><td style="text-align:right">-{{ fcfa(commande.remise) }}</td></tr>{% endif %}
             <tr><td>Livraison</td><td style="text-align:right">{{ fcfa(commande.frais_livraison or 0) }}</td></tr>
-            <tr class="total"><td>TOTAL</td><td style="text-align:right">{{ fcfa(commande.total) }}</td></tr>
+            <tr class="total"><td>{{ 'TOTAL PAYÉ' if payee else 'TOTAL' }}</td><td style="text-align:right">{{ fcfa(commande.total) }}</td></tr>
         </table>
-        <p class="centre" style="margin-top:4px">Paiement à la livraison</p>
-        {% if commande.livreur %}<div class="sep"></div><p>Livreur : {{ commande.livreur.nom }} ({{ commande.livreur.telephone }})</p>{% endif %}
+        {% if payee %}
+        <p class="centre paye" style="margin-top:4px">✔ Payé le {{ date_paiement }}</p>
+        <p class="centre">Commande {{ remis_par }}</p>
+        {% elif not annulee %}
+        <p class="centre" style="margin-top:4px">{{ 'À payer au retrait à la boutique' if retrait else 'Paiement à la livraison' }}</p>
+        {% endif %}
+        {% if commande.livreur and not retrait %}<div class="sep"></div><p>Livreur : {{ commande.livreur.nom }} ({{ commande.livreur.telephone }})</p>{% endif %}
         <div class="sep"></div>
         <p class="centre">Merci pour votre confiance !</p>
     </div>
@@ -114,6 +140,8 @@
                 <p><strong>N° {{ commande.numero }}</strong></p>
                 <p>Date : {{ commande.date_commande.strftime('%d/%m/%Y') }}</p>
                 <p>Statut : {{ commande.statut_libelle }}</p>
+                {% if payee %}<div class="tampon">PAYÉE<small>le {{ date_paiement }}</small></div>
+                {% elif annulee %}<div class="tampon annulee">ANNULÉE</div>{% endif %}
             </div>
         </header>
 
@@ -125,9 +153,15 @@
                 <p>{{ commande.client_adresse }}</p>
             </div>
             <div class="bloc">
+                {% if retrait %}
+                <h3>Retrait à la boutique</h3>
+                <p><strong>{{ boutique.adresse or boutique.nom_boutique }}</strong></p>
+                <p>Le client récupère sa commande sur place.</p>
+                {% else %}
                 <h3>Lieu de livraison</h3>
                 {% if commande.zone %}<p><strong>Zone : {{ commande.zone.nom }}</strong></p>{% endif %}
                 <p>{{ commande.client_adresse }}</p>
+                {% endif %}
                 {% if commande.latitude is not none %}<p>GPS : {{ '%.5f'|format(commande.latitude) }}, {{ '%.5f'|format(commande.longitude) }}</p>{% endif %}
                 {% if commande.creneau %}<p><strong>Livraison souhaitée : {{ commande.creneau }}</strong></p>{% endif %}
                 {% if commande.instructions %}<p><em>Note : {{ commande.instructions }}</em></p>{% endif %}
@@ -140,12 +174,15 @@
         </div>
         <div class="blocs" style="margin-top:0">
             <div class="bloc">
-                <h3>Livreur</h3>
-                <p>{{ commande.livreur.nom if commande.livreur else '—' }}{% if commande.livreur %} · {{ commande.livreur.telephone }}{% endif %}</p>
+                <h3>{{ 'Remise' if retrait or not commande.livree_par_livreur else 'Livreur' }}</h3>
+                {% if retrait or (payee and not commande.livree_par_livreur) %}<p>Par la boutique</p>
+                {% else %}<p>{{ commande.livreur.nom if commande.livreur else '—' }}{% if commande.livreur %} · {{ commande.livreur.telephone }}{% endif %}</p>{% endif %}
             </div>
             <div class="bloc">
                 <h3>Paiement</h3>
-                <p>À la livraison : <strong>{{ fcfa(commande.total) }}</strong></p>
+                {% if payee %}<p class="paye">✔ Payée : {{ fcfa(commande.total) }}</p><p>le {{ date_paiement }} · commande {{ remis_par }}</p>
+                {% elif annulee %}<p>Commande annulée</p>
+                {% else %}<p>{{ 'Au retrait à la boutique' if retrait else 'À la livraison' }} : <strong>{{ fcfa(commande.total) }}</strong></p>{% endif %}
             </div>
         </div>
 
@@ -158,12 +195,12 @@
                 <tr><td colspan="3" class="num">Sous-total articles</td><td class="num">{{ fcfa(commande.sous_total) }}</td></tr>
                 {% if commande.remise %}<tr><td colspan="3" class="num">Réduction (code {{ commande.code_promo }})</td><td class="num">-{{ fcfa(commande.remise) }}</td></tr>{% endif %}
                 <tr><td colspan="3" class="num">Frais de livraison{% if commande.zone %} ({{ commande.zone.nom }}){% endif %}</td><td class="num">{{ fcfa(commande.frais_livraison or 0) }}</td></tr>
-                <tr class="total"><td colspan="3">TOTAL À PAYER</td><td class="num">{{ fcfa(commande.total) }}</td></tr>
+                <tr class="total"><td colspan="3">{{ 'TOTAL PAYÉ' if payee else 'TOTAL À PAYER' }}</td><td class="num">{{ fcfa(commande.total) }}</td></tr>
             </tbody>
         </table>
 
         <div class="signatures">
-            <div>Signature du livreur</div>
+            <div>{{ 'Cachet de la boutique' if retrait or (payee and not commande.livree_par_livreur) else 'Signature du livreur' }}</div>
             <div>Signature du client (reçu conforme)</div>
         </div>
         <footer>Merci pour votre confiance ! — {{ boutique.nom_boutique }}</footer>

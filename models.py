@@ -343,6 +343,11 @@ class Commande(db.Model):
         return self.STATUTS.get(self.statut, (self.statut, ''))[0]
 
     @property
+    def est_payee(self):
+        """Le client a payé : la commande lui a été livrée ou remise."""
+        return self.statut in ('livree', 'retournee')
+
+    @property
     def livree_par_livreur(self):
         """Livrée (ou en cours) par le livreur : c'est lui qui encaisse et remet l'argent."""
         return bool(self.livreur_id) and self.livre_par != 'boutique'
