@@ -427,12 +427,22 @@
         document.querySelectorAll('form').forEach(function (form) {
             form.addEventListener('submit', function (e) {
                 if (e.defaultPrevented) return;  // confirmation annulée, ou envoi en arrière-plan
-                var bouton = this.querySelector('button[type="submit"]');
+                var form = this;
+                var bouton = e.submitter || form.querySelector('button[type="submit"]');
                 if (bouton && !bouton.hasAttribute('data-no-loading')) {
-                    bouton.disabled = true;
-                    bouton.classList.add('btn-loading');
-                    bouton.setAttribute('data-original-text', bouton.innerHTML);
-                    bouton.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i> Chargement...';
+                    // Un bouton désactivé n'envoie plus sa valeur (ex. statut=livree) : on la recopie
+                    // dans un champ caché, et on ne désactive le bouton qu'après le départ du formulaire.
+                    if (bouton.name) {
+                        var copie = document.createElement('input');
+                        copie.type = 'hidden'; copie.name = bouton.name; copie.value = bouton.value;
+                        form.appendChild(copie);
+                    }
+                    setTimeout(function () {
+                        bouton.disabled = true;
+                        bouton.classList.add('btn-loading');
+                        bouton.setAttribute('data-original-text', bouton.innerHTML);
+                        bouton.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i> Chargement...';
+                    }, 0);
                 }
             });
         });
