@@ -81,7 +81,7 @@
                     <td class="px-3 py-2">{{ c.source_libelle }}</td>
                     <td class="px-3 py-2 text-right whitespace-nowrap">{{ fcfa(c.total) }}</td>
                     <td class="px-3 py-2"><span class="px-2 py-0.5 rounded-full text-xs font-semibold {{ c.statut_classe }}">{{ c.statut_libelle }}</span></td>
-                    <td class="px-3 py-2">{{ c.livreur.nom if c.livreur else '—' }}</td>
+                    <td class="px-3 py-2">{% if c.statut in ['livree', 'retournee'] %}{{ c.livre_par_nom }}{% else %}{{ c.livreur.nom if c.livreur else '—' }}{% endif %}</td>
                     <td class="px-3 py-2 whitespace-nowrap">{{ c.date_livraison.strftime('%d/%m/%Y %H:%M') if c.date_livraison else '—' }}</td>
                 </tr>
                 {% else %}

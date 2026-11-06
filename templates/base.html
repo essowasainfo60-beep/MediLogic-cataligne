@@ -93,6 +93,13 @@
             <div class="flex justify-between items-center h-16 gap-3">
                 <!-- Identité : boutique connectée, boutique visitée, ou LivraPlus -->
                 <div class="flex items-center min-w-0 gap-2">
+                    <!-- Précédent / suivant -->
+                    <div class="nav-historique flex items-center flex-shrink-0">
+                        <button type="button" id="navRetour" onclick="history.back()" title="Page précédente" aria-label="Page précédente"
+                                class="hidden h-9 w-9 rounded-lg text-gray-600 hover:bg-gray-100 items-center justify-center"><i class="fas fa-arrow-left"></i></button>
+                        <button type="button" id="navAvance" onclick="history.forward()" title="Page suivante" aria-label="Page suivante"
+                                class="hidden h-9 w-9 rounded-lg text-gray-600 hover:bg-gray-100 items-center justify-center"><i class="fas fa-arrow-right"></i></button>
+                    </div>
                     {% if espace_boutique %}
                     <button type="button" id="btnMenuLateral" onclick="ouvrirMenuLateral()" aria-label="Ouvrir le menu" aria-controls="menuLateral" aria-expanded="false"
                             class="md:hidden relative h-10 w-10 -ml-1 flex-shrink-0 rounded-xl text-gray-700 hover:bg-gray-100 flex items-center justify-center">
@@ -422,6 +429,51 @@
             champ.addEventListener('input', filtrer);
             filtrer();
         });
+
+        // ---------- Boutons ← → (précédent / suivant) ----------
+        (function () {
+            var retour = document.getElementById('navRetour'), avance = document.getElementById('navAvance');
+            if (!retour) return;
+            // Historique réel de l'onglet (API Navigation de Chrome) ; sinon : au moins une page visitée avant
+            function maj() {
+                var peutRetour = window.navigation && 'canGoBack' in navigation ? navigation.canGoBack : history.length > 1;
+                var peutAvancer = window.navigation && 'canGoForward' in navigation ? navigation.canGoForward : false;
+                retour.classList.toggle('hidden', !peutRetour); retour.classList.toggle('flex', !!peutRetour);
+                avance.classList.toggle('hidden', !peutAvancer); avance.classList.toggle('flex', !!peutAvancer);
+            }
+            maj();
+            window.addEventListener('pageshow', maj);
+        })();
+
+        // ---------- Chargement en cours : trois points qui dansent ----------
+        (function () {
+            var indic = document.createElement('div');
+            indic.id = 'chargementPage';
+            indic.innerHTML = '<div class="barre-chargement"></div><div class="bulle-chargement"><span></span><span></span><span></span></div>';
+            document.body.appendChild(indic);
+            var minuteur = null;
+            window.montrerChargement = function () {
+                clearTimeout(minuteur);
+                minuteur = setTimeout(function () { indic.classList.add('actif'); }, 120);   // pas de clignotement si c'est instantané
+            };
+            window.cacherChargement = function () { clearTimeout(minuteur); indic.classList.remove('actif'); };
+            document.addEventListener('click', function (e) {
+                var a = e.target.closest && e.target.closest('a[href]');
+                if (!a || e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey) return;
+                var href = a.getAttribute('href');
+                if (!href || href.charAt(0) === '#' || a.target === '_blank' || a.hasAttribute('download')
+                    || /^(mailto|tel|sms|intent|whatsapp|javascript):/i.test(href)) return;
+                var url; try { url = new URL(a.href, location.href); } catch (err) { return; }
+                if (url.origin !== location.origin || (url.pathname === location.pathname && url.search === location.search && url.hash)) return;
+                montrerChargement();
+            });
+            document.addEventListener('submit', function (e) {
+                setTimeout(function () { if (!e.defaultPrevented && !(e.target.target === '_blank')) montrerChargement(); }, 0);
+            });
+            window.addEventListener('pageshow', cacherChargement);
+            window.addEventListener('pagehide', function () { setTimeout(cacherChargement, 0); });
+            window.addEventListener('popstate', montrerChargement);
+        })();
 
         // ---------- Boutons : « Chargement… » pendant l'envoi ----------
         document.querySelectorAll('form').forEach(function (form) {

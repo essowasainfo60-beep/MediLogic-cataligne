@@ -147,7 +147,7 @@
                     <td class="px-4 py-2 font-semibold">{{ c.numero }}</td>
                     <td class="px-4 py-2">{{ c.client_nom }}</td>
                     <td class="px-4 py-2">{{ c.zone.nom if c.zone else '—' }}</td>
-                    <td class="px-4 py-2">{{ c.livreur.nom if c.livreur else 'Boutique' }}</td>
+                    <td class="px-4 py-2">{% if c.livree_par_livreur %}🛵 {{ c.livre_par_nom }}{% else %}🏪 Boutique{% endif %}</td>
                     <td class="px-4 py-2 whitespace-nowrap">{{ c.date_livraison.strftime('%d/%m %H:%M') if c.date_livraison else '—' }}</td>
                     <td class="px-4 py-2 text-right whitespace-nowrap">
                         {% if c.date_livraison and c.date_depart and c.date_livraison >= c.date_depart %}{% set m = ((c.date_livraison - c.date_depart).total_seconds() // 60)|int %}{{ m ~ ' min' if m < 60 else (m // 60) ~ ' h ' ~ '%02d'|format(m % 60) }}{% else %}—{% endif %}

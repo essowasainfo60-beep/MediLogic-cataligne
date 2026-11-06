@@ -227,7 +227,7 @@
                 <p class="mt-3 text-sm text-gray-700">
                     Livreur : <strong>{{ commande.livreur.nom }}</strong> · {{ commande.livreur.telephone }}
                     {% if commande.date_arrivee %} · <span class="text-green-700 font-semibold"><i class="fas fa-location-dot"></i> arrivé chez le client à {{ commande.date_arrivee.strftime('%H:%M') }}</span>{% endif %}
-                    {% if commande.date_livraison %} · livrée le {{ commande.date_livraison.strftime('%d/%m/%Y à %H:%M') }}{% endif %}
+                    {% if commande.date_livraison %} · <strong>{{ 'livrée par ' ~ commande.livreur.nom if commande.livree_par_livreur else 'remise par la boutique' }}</strong> le {{ commande.date_livraison.strftime('%d/%m/%Y à %H:%M') }}{% endif %}
                 </p>
                 <a href="{{ url_for('boutique.discussion_commande_boutique', commande_id=commande.id) }}"
                    class="mt-3 flex items-center justify-center gap-2 bg-purple-50 text-purple-700 border border-purple-200 py-2.5 rounded-xl font-semibold hover:bg-purple-100">
@@ -304,12 +304,21 @@
                     </a>
                 </div>
                 <p class="text-xs text-gray-500 mt-2">Le livreur reçoit l'adresse, l'itinéraire et un lien pour marquer la commande « livrée ».</p>
-                <form method="POST" action="{{ url_for('boutique.changer_statut_commande', commande_id=commande.id) }}" class="mt-3"
-                      onsubmit="return confirm('Confirmer que la commande a bien été livrée et payée ?')">
-                    <button type="submit" name="statut" value="livree" class="w-full bg-green-600 text-white py-3 rounded-lg font-bold hover:bg-green-700">
-                        ✅ Marquer comme livrée
-                    </button>
-                </form>
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-3">
+                    <form method="POST" action="{{ url_for('boutique.changer_statut_commande', commande_id=commande.id) }}"
+                          data-question="Confirmer : {{ commande.livreur.nom }} a livré la commande n°{{ commande.numero }} et a l'argent (à remettre à la caisse) ?"
+                          onsubmit="return confirm(this.dataset.question)">
+                        <button type="submit" name="statut" value="livree" class="w-full bg-green-600 text-white py-3 rounded-lg font-bold hover:bg-green-700">
+                            ✅ Livrée par {{ commande.livreur.nom }}</button>
+                    </form>
+                    <form method="POST" action="{{ url_for('boutique.changer_statut_commande', commande_id=commande.id) }}"
+                          data-question="Confirmer : la boutique a remis elle-même la commande n°{{ commande.numero }} et encaissé l'argent ?"
+                          onsubmit="return confirm(this.dataset.question)">
+                        <input type="hidden" name="par" value="boutique">
+                        <button type="submit" name="statut" value="livree" class="w-full bg-white border-2 border-green-600 text-green-700 py-3 rounded-lg font-bold hover:bg-green-50">
+                            🏪 Remise par la boutique</button>
+                    </form>
+                </div>
                 {% endif %}
                 {% endif %}
             </div>

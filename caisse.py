@@ -36,7 +36,7 @@ def a_remettre(commande):
 
 def commande_livree(commande):
     """Appelé quand une commande passe « livrée »."""
-    if commande.livreur_id:
+    if commande.livree_par_livreur:
         commande.reglee = False      # l'argent est chez le livreur jusqu'au versement
         commande.frais_payes = commande.boutique.mode_frais != 'boutique_collecte'
     else:
@@ -50,7 +50,7 @@ def commande_livree(commande):
 def commande_plus_livree(commande):
     """Une commande livrée revient en arrière (erreur, annulation) : on corrige la caisse."""
     if commande.reglee:
-        montant = commande.total if not commande.livreur_id else a_remettre(commande)
+        montant = commande.total if not commande.livree_par_livreur else a_remettre(commande)
         ajouter(commande.boutique_id, 'correction', -montant,
                 f'Annulation de la livraison n°{commande.numero} : argent à rendre', commande_id=commande.id)
     commande.reglee = False

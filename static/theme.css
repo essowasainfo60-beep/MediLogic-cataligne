@@ -114,3 +114,18 @@ html.dark .text-primary { color: #93b4ff !important; }
 html.dark .shadow-md, html.dark .shadow-lg, html.dark .shadow { box-shadow: 0 0 0 1px var(--bordure) !important; }
 html.dark footer { background: #070c16 !important; }
 html.dark img.bg-white { background-color: #fff !important; } /* logos : gardent leur fond clair */
+
+
+/* ===== Chargement d'une page : barre fine en haut + trois points qui dansent ===== */
+#chargementPage { position: fixed; inset: 0 0 auto 0; z-index: 90; pointer-events: none; opacity: 0; transition: opacity .15s; }
+#chargementPage.actif { opacity: 1; }
+#chargementPage .barre-chargement { height: 3px; background: linear-gradient(90deg, #7c3aed, #2dd4bf, #7c3aed); background-size: 200% 100%;
+    animation: defilement 1s linear infinite; }
+#chargementPage .bulle-chargement { position: absolute; top: 72px; left: 50%; transform: translateX(-50%); display: flex; gap: 6px;
+    background: var(--carte, #fff); border-radius: 9999px; padding: 10px 16px; box-shadow: 0 6px 24px rgba(15,23,42,.18); }
+#chargementPage .bulle-chargement span { width: 9px; height: 9px; border-radius: 9999px; background: #7c3aed; animation: danse 1s ease-in-out infinite; }
+#chargementPage .bulle-chargement span:nth-child(2) { animation-delay: .15s; background: #8b5cf6; }
+#chargementPage .bulle-chargement span:nth-child(3) { animation-delay: .3s; background: #2dd4bf; }
+@keyframes danse { 0%, 80%, 100% { transform: translateY(0); opacity: .45 } 40% { transform: translateY(-8px); opacity: 1 } }
+@keyframes defilement { from { background-position: 0 0 } to { background-position: -200% 0 } }
+@media (prefers-reduced-motion: reduce) { #chargementPage .bulle-chargement span, #chargementPage .barre-chargement { animation-duration: 3s; } }

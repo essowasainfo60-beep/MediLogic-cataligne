@@ -244,6 +244,7 @@ class Commande(db.Model):
     photo_preuve = db.Column(db.String(300), nullable=True)
     date_depart = db.Column(db.DateTime, nullable=True)   # remise au livreur (dernière tentative)
     date_arrivee = db.Column(db.DateTime, nullable=True)  # le livreur a signalé « Je suis arrivé »
+    livre_par = db.Column(db.String(20), nullable=True)   # 'boutique' = remise par la boutique ; vide = par le livreur
     # Moment de livraison souhaité par le client (« Demain 05/11 · Soir (16h-20h) »)
     creneau = db.Column(db.String(80), nullable=True)
     # Qui a fait quoi (gérant ou vendeur)
@@ -340,6 +341,16 @@ class Commande(db.Model):
             return {'confirmee': 'Confirmée · à retirer', 'livree': 'Remise au client'}.get(
                 self.statut, self.STATUTS.get(self.statut, (self.statut, ''))[0])
         return self.STATUTS.get(self.statut, (self.statut, ''))[0]
+
+    @property
+    def livree_par_livreur(self):
+        """Livrée (ou en cours) par le livreur : c'est lui qui encaisse et remet l'argent."""
+        return bool(self.livreur_id) and self.livre_par != 'boutique'
+
+    @property
+    def livre_par_nom(self):
+        """Qui a remis la commande au client : le nom du livreur, ou « Boutique »."""
+        return self.livreur.nom if self.livree_par_livreur and self.livreur else 'Boutique'
 
     @property
     def est_retrait(self):

@@ -24,6 +24,10 @@ def nombre_articles(panier):
     return sum(item['quantite'] for item in panier.values())
 
 
+def total_panier(panier):
+    return sum(item['prix'] * item['quantite'] for item in panier.values())
+
+
 def lire_coordonnee(valeur, limite):
     try:
         v = float(valeur)
@@ -40,7 +44,8 @@ def boutique_du_panier(panier):
 
 @client_bp.app_context_processor
 def injecter_panier():
-    return {'panier_quantite': nombre_articles(session.get('panier', {}))}
+    panier = session.get('panier', {})
+    return {'panier_quantite': nombre_articles(panier), 'panier_total': total_panier(panier)}
 
 # ==================== PHOTOS (stockées dans la base Neon) ====================
 
@@ -109,6 +114,12 @@ def voir_article(code, numero):
     choisie = choisie if choisie and 1 <= choisie <= len(photos) else None
     return render_template('client/article.html', boutique=boutique, article=article, photos=photos, choisie=choisie)
 
+@client_bp.route('/api/panier')
+def api_panier():
+    """État du panier (le catalogue le relit quand on revient en arrière après une commande)."""
+    panier = session.get('panier', {})
+    return jsonify(panier_count=nombre_articles(panier), panier_total=total_panier(panier))
+
 # ==================== GESTION DU PANIER ====================
 
 @client_bp.route('/ajouter_panier', methods=['POST'])
@@ -165,7 +176,7 @@ def ajouter_panier():
     session.modified = True
 
     if veut_json:
-        return jsonify(success=True, panier_count=nombre_articles(panier))
+        return jsonify(success=True, panier_count=nombre_articles(panier), panier_total=total_panier(panier))
     flash(f'{article.nom} ajouté au panier', 'success')
     return redirect(url_for('client.catalogue', code=visitee.lien_public))
 
@@ -347,7 +358,8 @@ def espace_livreur(code):
     a_livrer = (Commande.query.filter_by(livreur_id=livreur.id, statut='en_livraison')
                 .order_by(Commande.date_commande).all())
     debut_jour = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
-    livrees = (Commande.query.filter(Commande.livreur_id == livreur.id, Commande.statut == 'livree')
+    livrees = (Commande.query.filter(Commande.livreur_id == livreur.id, Commande.statut == 'livree',
+                                     db.or_(Commande.livre_par.is_(None), Commande.livre_par != 'boutique'))
                .order_by(Commande.date_livraison.desc()).limit(50).all())
     du_jour = [c for c in livrees if c.date_livraison and c.date_livraison >= debut_jour]
     non_reglees = (Commande.query.filter(Commande.livreur_id == livreur.id, Commande.statut.in_(['livree', 'retournee']),

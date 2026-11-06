@@ -41,9 +41,13 @@
     #visionneuse .galerie-points button { background: rgba(255,255,255,.35); }
     #visionneuse .galerie-points button.actif { background: #fff; }
 
-    .toast { position: fixed; left: 50%; bottom: 90px; transform: translateX(-50%); z-index: 70;
+    .toast { width: max-content; max-width: 90vw; text-align: center; position: fixed; left: 50%; bottom: 110px; transform: translateX(-50%); z-index: 70;
              background: #111827; color: #fff; padding: 10px 18px; border-radius: 9999px; font-size: 14px; box-shadow: 0 6px 20px rgba(0,0,0,.25); }
     .toast.erreur { background: #dc2626; }
+    @keyframes rebond { 0%, 100% { transform: translateY(0) } 30% { transform: translateY(-10px) } 60% { transform: translateY(-4px) } }
+    .rebond { animation: rebond .6s ease 2; }
+    @keyframes halo { 0% { box-shadow: 0 0 0 0 rgba(22,163,74,.55) } 100% { box-shadow: 0 0 0 16px rgba(22,163,74,0) } }
+    .halo { animation: halo 1.2s ease-out 3; }
 </style>
 {% endblock %}
 
@@ -258,11 +262,25 @@
     {% endif %}
 </div>
 
-<!-- Panier flottant (téléphone) -->
-<a href="{{ url_for('client.voir_panier') }}" class="md:hidden fixed bottom-5 right-5 z-40 bg-purple-600 text-white pl-5 pr-4 py-3 rounded-full shadow-xl flex items-center gap-2 font-semibold">
-    <i class="fas fa-shopping-cart"></i> Panier
-    <span class="compteur-panier bg-white text-purple-700 rounded-full min-w-[22px] h-[22px] px-1 flex items-center justify-center text-xs font-bold">{{ panier_quantite }}</span>
-</a>
+<!-- Barre du panier : toujours visible en bas dès qu'il y a un article -->
+<div id="barrePanier" class="{{ '' if panier_quantite else 'hidden' }} fixed bottom-0 inset-x-0 z-40 p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] bg-white/95 backdrop-blur border-t border-gray-200 shadow-[0_-6px_20px_rgba(0,0,0,.08)]">
+    <div class="max-w-3xl mx-auto flex items-center gap-3">
+        <a href="{{ url_for('client.voir_panier') }}" class="flex items-center gap-3 min-w-0 flex-1">
+            <span class="relative h-11 w-11 rounded-xl bg-purple-100 text-purple-700 flex items-center justify-center flex-shrink-0">
+                <i class="fas fa-cart-shopping text-lg"></i>
+                <span class="compteur-panier absolute -top-1.5 -right-1.5 bg-purple-600 text-white rounded-full min-w-[22px] h-[22px] px-1 flex items-center justify-center text-xs font-bold">{{ panier_quantite }}</span>
+            </span>
+            <span class="min-w-0">
+                <span class="block text-xs text-gray-500">Mon panier · <span class="underline">voir / modifier</span></span>
+                <span class="block font-extrabold text-gray-900"><span id="totalPanier">{{ '{:,.0f}'.format(panier_total).replace(',', ' ') }}</span> FCFA</span>
+            </span>
+        </a>
+        <a href="{{ url_for('client.valider_commande') }}" id="boutonCommander"
+           class="flex-shrink-0 bg-green-600 text-white font-bold px-5 py-3 rounded-xl shadow-md hover:bg-green-700 flex items-center gap-2">
+            Commander <i class="fas fa-arrow-right"></i></a>
+    </div>
+</div>
+<div id="espacePanier" class="{{ 'h-24' if panier_quantite else '' }}"></div>
 
 <!-- Visionneuse plein écran -->
 <div id="visionneuse" class="galerie" role="dialog" aria-modal="true">
@@ -397,13 +415,30 @@
     document.getElementById('tri').addEventListener('change', filtrer);
 
     // ---------- Panier ----------
+    function majPanier(nombre, total, ajout) {
+        document.querySelectorAll('.compteur-panier').forEach((el) => el.textContent = nombre);
+        const barre = document.getElementById('barrePanier');
+        document.getElementById('totalPanier').textContent = Math.round(total || 0).toLocaleString('fr-FR');
+        barre.classList.toggle('hidden', !nombre);
+        document.getElementById('espacePanier').className = nombre ? 'h-24' : '';
+        if (ajout) {
+            barre.classList.remove('rebond'); void barre.offsetWidth; barre.classList.add('rebond');
+            const b = document.getElementById('boutonCommander');
+            b.classList.remove('halo'); void b.offsetWidth; b.classList.add('halo');
+        }
+    }
+    // Retour arrière après une commande (page gardée en mémoire) : on relit le vrai panier
+    window.addEventListener('pageshow', () => {
+        fetch({{ url_for('client.api_panier')|tojson }}, { cache: 'no-store' }).then((r) => r.json())
+            .then((d) => majPanier(d.panier_count, d.panier_total, false)).catch(() => {});
+    });
     function toast(texte, erreur) {
         document.querySelector('.toast')?.remove();
         const t = document.createElement('div');
         t.className = 'toast' + (erreur ? ' erreur' : '');
         t.textContent = texte;
         document.body.appendChild(t);
-        setTimeout(() => t.remove(), 2500);
+        setTimeout(() => t.remove(), 3500);
     }
     document.querySelectorAll('.ajout-panier').forEach((form) => {
         const champ = form.querySelector('input[name="quantite"]');
@@ -417,8 +452,8 @@
                 const r = await fetch(form.action, { method: 'POST', body: new FormData(form), headers: { 'Accept': 'application/json' } });
                 const d = await r.json();
                 if (!d.success) throw new Error(d.message || "Impossible d'ajouter cet article");
-                document.querySelectorAll('.compteur-panier').forEach((el) => el.textContent = d.panier_count);
-                toast('✓ Ajouté au panier');
+                majPanier(d.panier_count, d.panier_total, true);
+                toast('✓ Ajouté ! Touchez « Commander » en bas pour terminer');
                 champ.value = 1;
             } catch (err) {
                 toast(err.message || 'Erreur, réessayez', true);

@@ -145,16 +145,24 @@
                                     <i class="fab fa-whatsapp mr-1"></i> Envoyer au livreur
                                 </a>
                                 <form method="POST" action="{{ url_for('boutique.changer_statut_commande', commande_id=commande.id) }}"
-                                      data-question="Confirmer que la commande n°{{ commande.numero }} a bien été livrée et payée ?"
+                                      data-question="Confirmer : {{ commande.livreur.nom }} a livré la commande n°{{ commande.numero }} (il a l'argent) ?"
                                       onsubmit="return confirm(this.dataset.question)">
                                     <button type="submit" name="statut" value="livree" class="bg-white border border-green-600 text-green-700 px-3 py-2 rounded-xl text-sm hover:bg-green-50">
-                                        <i class="fas fa-circle-check mr-1"></i> Marquer livrée
+                                        <i class="fas fa-circle-check mr-1"></i> Livrée par {{ commande.livreur.nom }}
+                                    </button>
+                                </form>
+                                <form method="POST" action="{{ url_for('boutique.changer_statut_commande', commande_id=commande.id) }}"
+                                      data-question="Confirmer : la boutique a remis elle-même la commande n°{{ commande.numero }} et encaissé l'argent ?"
+                                      onsubmit="return confirm(this.dataset.question)">
+                                    <input type="hidden" name="par" value="boutique">
+                                    <button type="submit" name="statut" value="livree" class="bg-white border border-gray-300 text-gray-700 px-3 py-2 rounded-xl text-sm hover:bg-gray-50">
+                                        🏪 Remise par la boutique
                                     </button>
                                 </form>
                             </div>
 
                         {% elif commande.statut == 'livree' %}
-                            <p class="text-sm text-green-700"><i class="fas fa-circle-check mr-1"></i> Livrée{% if commande.livreur %} par {{ commande.livreur.nom }}{% endif %}{% if commande.date_livraison %} le {{ commande.date_livraison.strftime('%d/%m à %H:%M') }}{% endif %}</p>
+                            <p class="text-sm text-green-700"><i class="fas fa-circle-check mr-1"></i> {{ 'Remise au client' if commande.est_retrait else 'Livrée' }} par {{ commande.livre_par_nom|lower if commande.livre_par_nom == 'Boutique' else commande.livre_par_nom }}{% if commande.date_livraison %} le {{ commande.date_livraison.strftime('%d/%m à %H:%M') }}{% endif %}</p>
                         {% endif %}
 
                             <div class="flex flex-wrap gap-3 mt-3 text-sm">

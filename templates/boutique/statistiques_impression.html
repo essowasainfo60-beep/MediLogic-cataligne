@@ -115,12 +115,12 @@
             <td>{{ c.numero }}</td>
             <td>{{ c.date_livraison.strftime('%d/%m %H:%M') }}{% if c.date_commande.date() != c.date_livraison.date() %}<br><span class="muted">cmd {{ c.date_commande.strftime('%d/%m') }}</span>{% endif %}</td>
             <td>{{ c.client_nom }}<br><span class="muted">{{ c.client_telephone }}</span></td>
-            <td>{{ c.zone.nom if c.zone else '—' }}<br><span class="muted">{{ c.livreur.nom if c.livreur else 'boutique' }}</span></td>
+            <td>{{ c.zone.nom if c.zone else '—' }}<br><span class="muted">{{ c.livre_par_nom }}</span></td>
             <td>{% for a in c.articles_json %}{{ a.quantite }}× {{ a.nom }}{% if not loop.last %}, {% endif %}{% endfor %}{% if c.statut == 'retournee' %} <b>(retournée)</b>{% endif %}</td>
             <td class="r">{{ fcfa(c.net_articles) }}</td>
             <td class="r">{{ fcfa(c.frais_livraison or 0) }}</td>
             <td class="r">{{ fcfa(c.total) }}</td>
-            <td>{{ 'oui' if c.reglee or not c.livreur_id else 'non' }}</td>
+            <td>{{ 'oui' if c.reglee or not c.livree_par_livreur else 'non' }}</td>
         </tr>
         {% endfor %}
         </tbody>

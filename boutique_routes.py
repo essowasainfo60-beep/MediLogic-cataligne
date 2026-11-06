@@ -891,6 +891,11 @@ def changer_statut_commande(commande_id):
 
     statut = request.form.get('statut')
     if statut in Commande.STATUTS and statut != 'retournee':  # « retournée » passe par un retour
+        if statut == 'livree' and commande.statut != 'livree':
+            # Remise par la boutique (retrait sur place, ou la boutique a livré elle-même) :
+            # l'argent est encaissé en boutique, pas chez le livreur.
+            par_boutique = request.form.get('par') == 'boutique' or commande.est_retrait or not commande.livreur_id
+            commande.livre_par = 'boutique' if par_boutique else None
         stock.changer_statut(commande, statut)
         commande.lu = True
         db.session.commit()
@@ -1029,7 +1034,7 @@ def historique_csv():
         w.writerow([c.numero, c.date_commande.strftime('%d/%m/%Y %H:%M'), c.source_libelle, c.client_nom,
                     c.client_telephone, c.client_adresse, c.zone.nom if c.zone else '',
                     ', '.join(f"{a['nom']} x{a['quantite']}" for a in c.articles_json),
-                    f'{c.sous_total:.0f}', f'{c.frais_livraison or 0:.0f}', f'{c.total:.0f}', c.statut_libelle, c.livreur.nom if c.livreur else '',
+                    f'{c.sous_total:.0f}', f'{c.frais_livraison or 0:.0f}', f'{c.total:.0f}', c.statut_libelle, (c.livre_par_nom if c.statut in ('livree', 'retournee') else (c.livreur.nom if c.livreur else '')),
                     c.date_livraison.strftime('%d/%m/%Y %H:%M') if c.date_livraison else ''])
     # BOM UTF-8 : Excel affiche alors correctement les accents
     return Response('\ufeff' + sortie.getvalue(), mimetype='text/csv; charset=utf-8',
@@ -1715,7 +1720,8 @@ def statistiques():
                     jours_labels=list(cases.keys()), jours_valeurs=list(cases.values()),
                     top=sorted(top.values(), key=lambda t: -t['montant']),
                     par_zone=regrouper(lambda c: c.zone.nom if c.zone else 'Sans zone'),
-                    par_livreur=regrouper(lambda c: c.livreur.nom if c.livreur else 'Sans livreur (boutique)'),
+                    par_livreur=regrouper(lambda c: c.livre_par_nom if c.statut in ('livree', 'retournee')
+                                          else (c.livreur.nom if c.livreur else 'Boutique')),
                     par_source=regrouper(lambda c: c.source_libelle),
                     livrees=livrees, echecs=echecs, annulees=annulees,
                     caisse_periode=caisse_periode, charges_cat=sorted(charges_cat.items(), key=lambda x: -x[1]),
@@ -1800,7 +1806,8 @@ def livraisons():
     bilan = []
     for l in livreurs_liste:
         cmds = base.filter_by(livreur_id=l.id)
-        livrees_jour = cmds.filter(Commande.statut == 'livree', Commande.date_livraison >= debut_jour).all()
+        livrees_jour = cmds.filter(Commande.statut == 'livree', Commande.date_livraison >= debut_jour,
+                                   db.or_(Commande.livre_par.is_(None), Commande.livre_par != 'boutique')).all()
         non_reglees = cmds.filter(Commande.statut.in_(['livree', 'retournee']), Commande.reglee.is_(False)).all()
         bilan.append({'livreur': l, 'en_cours': cmds.filter_by(statut='en_livraison').count(),
                       'livrees_jour': len(livrees_jour), 'echecs': cmds.filter_by(statut='echec').count(),

@@ -65,6 +65,7 @@ def changer_statut(commande, statut):
             _remettre_stock(commande)
         if etait_livree:
             caisse.commande_plus_livree(commande)
+            commande.livre_par = None
     commande.statut = statut
 
 
