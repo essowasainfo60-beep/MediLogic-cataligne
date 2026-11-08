@@ -86,6 +86,15 @@ def autorisations_navigateur(reponse):
     return reponse
 
 
+@app.context_processor
+def dates_formulaires():
+    from datetime import datetime, timedelta
+    from creneaux import AUTRE
+    maintenant = datetime.utcnow()
+    return {'aujourdhui_iso': maintenant.strftime('%Y-%m-%d'),
+            'dans_30j_iso': (maintenant + timedelta(days=30)).strftime('%Y-%m-%d'), 'creneau_autre': AUTRE}
+
+
 @app.template_filter('wa')
 def filtre_wa(telephone):
     """{{ numero|wa }} : numéro prêt pour un lien wa.me (indicatif +228 ajouté si absent)."""

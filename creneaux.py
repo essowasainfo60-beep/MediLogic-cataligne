@@ -18,3 +18,28 @@ def creneaux_disponibles(maintenant=None):
                 continue
             choix.append(f"{nom} {jour.strftime('%d/%m')} · {libelle}")
     return choix
+
+
+AUTRE = 'Autre jour / heure précise…'
+DELAI_MIN = timedelta(minutes=30)     # pas d'heure déjà passée ou dans moins de 30 min
+HORIZON = timedelta(days=30)
+
+
+def lire_creneau(form, maintenant=None):
+    """Créneau choisi dans le formulaire : un des créneaux proposés, ou une date + heure
+    écrites par le client (« Mercredi 12/11 à 15h30 »). Renvoie (créneau, erreur)."""
+    maintenant = maintenant or datetime.utcnow()
+    choix = (form.get('creneau') or '').strip()
+    if choix != AUTRE:
+        return (choix if choix in creneaux_disponibles(maintenant) else None), None
+    try:
+        moment = datetime.strptime(f"{form.get('creneau_date', '')} {form.get('creneau_heure', '')}", '%Y-%m-%d %H:%M')
+    except ValueError:
+        return None, "Indiquez le jour et l'heure souhaités."
+    if moment < maintenant + DELAI_MIN:
+        return None, "Choisissez une heure au moins 30 minutes plus tard."
+    if moment > maintenant + HORIZON:
+        return None, "Choisissez une date dans les 30 prochains jours."
+    jour = "Aujourd'hui" if moment.date() == maintenant.date() else (
+        'Demain' if moment.date() == (maintenant + timedelta(days=1)).date() else JOURS[moment.weekday()].capitalize())
+    return f"{jour} {moment.strftime('%d/%m')} à {moment.strftime('%H')}h{moment.strftime('%M')}", None

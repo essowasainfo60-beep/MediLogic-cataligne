@@ -116,6 +116,24 @@
                         <select name="creneau" class="w-full px-3 py-2 border border-gray-300 rounded-lg">
                             {% for c in creneaux %}<option {{ 'selected' if loop.first }}>{{ c }}</option>{% endfor %}
                         </select>
+                        <div class="bloc-heure-precise hidden mt-2 grid grid-cols-2 gap-2">
+                            <label class="text-xs text-gray-600">Jour
+                                <input type="date" name="creneau_date" min="{{ aujourdhui_iso }}" max="{{ dans_30j_iso }}" value="{{ aujourdhui_iso }}" class="mt-1 w-full px-3 py-2 border border-gray-300 rounded-lg"></label>
+                            <label class="text-xs text-gray-600">Heure
+                                <input type="time" name="creneau_heure" step="900" class="mt-1 w-full px-3 py-2 border border-gray-300 rounded-lg"></label>
+                        </div>
+                        <script>
+                        (function () {
+                            const select = document.currentScript.parentElement.querySelector('select[name="creneau"]');
+                            const bloc = document.currentScript.parentElement.querySelector('.bloc-heure-precise');
+                            function maj() {
+                                const autre = select.value === {{ creneau_autre|tojson }};
+                                bloc.classList.toggle('hidden', !autre);
+                                bloc.querySelectorAll('input').forEach((i) => { i.required = autre; });
+                            }
+                            select.addEventListener('change', maj); maj();
+                        })();
+                        </script>
                     </div>
 
                     <!-- Instructions spéciales -->

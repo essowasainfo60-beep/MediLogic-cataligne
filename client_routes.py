@@ -8,7 +8,7 @@ from flask import (Blueprint, Response, abort, after_this_request, flash, jsonif
 import caisse
 import messages_whatsapp as msg
 from zones_detection import zone_pour_adresse, index_quartiers
-from creneaux import creneaux_disponibles
+from creneaux import creneaux_disponibles, lire_creneau, AUTRE as CRENEAU_AUTRE
 import promos
 import notifications
 import discussions
@@ -252,7 +252,7 @@ def valider_commande():
         return render_template('client/commande.html', panier=panier, total=total, boutique=boutique,
                                zones=[z for z in boutique.zones if z.active and not z.est_retrait],
                                index_quartiers=index_quartiers([z for z in boutique.zones if z.active and not z.est_retrait]),
-                               creneaux=creneaux_disponibles())
+                               creneaux=creneaux_disponibles() + [CRENEAU_AUTRE])
 
     client_nom = (request.form.get('client_nom') or '').strip()
     client_telephone = (request.form.get('client_telephone') or '').strip()
@@ -263,12 +263,13 @@ def valider_commande():
     if retrait:
         client_adresse = 'Retrait en boutique' + (f' ({boutique.adresse})' if boutique.adresse else '')
 
-    if not client_nom or not client_telephone or not client_adresse:
-        flash('Nom, téléphone et adresse sont obligatoires', 'danger')
+    creneau, erreur_creneau = lire_creneau(request.form)
+    if not client_nom or not client_telephone or not client_adresse or erreur_creneau:
+        flash(erreur_creneau or 'Nom, téléphone et adresse sont obligatoires', 'danger')
         return render_template('client/commande.html', panier=panier, total=total, boutique=boutique,
                                zones=[z for z in boutique.zones if z.active and not z.est_retrait],
                                index_quartiers=index_quartiers([z for z in boutique.zones if z.active and not z.est_retrait]),
-                               creneaux=creneaux_disponibles())
+                               creneaux=creneaux_disponibles() + [CRENEAU_AUTRE])
 
 
     zones_actives = [z for z in boutique.zones if z.active and not z.est_retrait]
@@ -298,7 +299,7 @@ def valider_commande():
         statut='nouvelle',
         zone=zone,
         frais_livraison=frais,
-        creneau=request.form.get('creneau') if request.form.get('creneau') in creneaux_disponibles() else None,
+        creneau=creneau,
         latitude=lire_coordonnee(request.form.get('latitude'), 90),
         longitude=lire_coordonnee(request.form.get('longitude'), 180),
     )
