@@ -151,11 +151,7 @@ def liens_whatsapp_livraison(commande):
 
 def confier_au_livreur(commande, livreur):
     """Confirmer = confier à un livreur : la commande part aussitôt en livraison."""
-    commande.livreur = livreur
-    if not commande.code_livraison:
-        commande.code_livraison = nouveau_code_lien()
-    stock.changer_statut(commande, 'en_livraison')
-    commande.lu = True
+    stock.confier(commande, livreur)
 
 
 def zones_actives():
@@ -247,7 +243,7 @@ def connexion():
 
 @boutique_bp.route('/connexion/biometrie/options', methods=['POST'])
 def biometrie_connexion_options():
-    options_json, challenge = webauthn_service.options_connexion(request)
+    options_json, challenge = webauthn_service.options_connexion(request, (request.get_json(silent=True) or {}).get('email'))
     session['webauthn_connexion'] = challenge
     return jsonify(success=True, options=json.loads(options_json))
 
@@ -809,6 +805,61 @@ def nouvelle_commande():
                            sources=Commande.SOURCES, zones=zones_actives(), form=request.args,
                            index_quartiers=index_quartiers(zones_actives()), creneaux=creneaux_disponibles(),
                            livreurs=Livreur.query.filter_by(boutique_id=current_user.id, actif=True).order_by(Livreur.nom).all())
+
+@boutique_bp.route('/commande/<int:commande_id>/valider', methods=['POST'])
+@login_required
+def valider_commande_boutique(commande_id):
+    """Étape 1 : la boutique valide la commande (le client est prévenu dans la messagerie)."""
+    commande = commande_de_la_boutique(commande_id)
+    if not commande:
+        return redirect(url_for('boutique.commandes'))
+    if commande.statut == 'nouvelle':
+        stock.changer_statut(commande, 'confirmee')
+        commande.confirmee_par = qui()
+        commande.lu = True
+        db.session.commit()
+        discussions.poster(discussions.discussion_commande(commande), 'boutique',
+                           getattr(current_user, 'nom_utilisateur', None) or current_user.nom_boutique,
+                           {'type': 'texte', 'texte': msg.retrait_confirmation_courte(commande) if commande.est_retrait
+                            else f'✅ Votre commande n°{commande.numero} est validée. Nous préparons la livraison.'}, {})
+        flash(f'Commande n°{commande.numero} validée. ' + ("Le client est invité à passer la récupérer." if commande.est_retrait
+              else "Étape suivante : proposez-la aux livreurs disponibles ou choisissez un livreur."), 'success')
+    return redirect(url_for('boutique.commande_details', commande_id=commande.id))
+
+
+@boutique_bp.route('/commande/<int:commande_id>/proposer', methods=['POST'])
+@login_required
+def proposer_aux_livreurs(commande_id):
+    """Étape 2 : la course est proposée aux livreurs disponibles ; le premier qui accepte la prend."""
+    commande = commande_de_la_boutique(commande_id)
+    if not commande:
+        return redirect(url_for('boutique.commandes'))
+    if commande.statut == 'nouvelle':
+        stock.changer_statut(commande, 'confirmee')
+        commande.confirmee_par = qui()
+    if commande.statut not in ('confirmee', 'echec') or commande.est_retrait:
+        flash("Cette commande ne peut pas être proposée aux livreurs.", 'warning')
+        return redirect(url_for('boutique.commande_details', commande_id=commande.id))
+    if request.form.get('annuler'):
+        commande.proposee_at = None
+        db.session.commit()
+        flash('Proposition retirée : choisissez vous-même un livreur.', 'warning')
+        return redirect(url_for('boutique.commande_details', commande_id=commande.id))
+    commande.proposee_at = datetime.utcnow()
+    commande.lu = True
+    db.session.commit()
+    livreurs = Livreur.query.filter_by(boutique_id=current_user.id, actif=True).all()
+    disponibles = [l for l in livreurs if l.disponible] or livreurs
+    for l in disponibles:
+        notifications.envoyer_livreur(
+            l, f'📣 Course disponible n°{commande.numero}',
+            f"{commande.zone.nom + ' · ' if commande.zone else ''}{commande.client_adresse} · "
+            f"{msg.fcfa(commande.total)} — touchez pour l'accepter",
+            url_for('client.espace_livreur', code=l.code_acces), tag=f'proposition-{commande.id}')
+    flash(f'Course n°{commande.numero} proposée à {len(disponibles)} livreur(s) '
+          f'{"disponible(s)" if any(l.disponible for l in livreurs) else ""}. Le premier qui accepte passe la récupérer.', 'success')
+    return redirect(url_for('boutique.commande_details', commande_id=commande.id))
+
 
 @boutique_bp.route('/commande/<int:commande_id>/attribuer', methods=['POST'])
 @login_required

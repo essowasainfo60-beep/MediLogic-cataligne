@@ -99,6 +99,8 @@
                                 class="hidden h-9 w-9 rounded-lg text-gray-600 hover:bg-gray-100 items-center justify-center"><i class="fas fa-arrow-left"></i></button>
                         <button type="button" id="navAvance" onclick="history.forward()" title="Page suivante" aria-label="Page suivante"
                                 class="hidden h-9 w-9 rounded-lg text-gray-600 hover:bg-gray-100 items-center justify-center"><i class="fas fa-arrow-right"></i></button>
+                        <button type="button" id="navFermer" onclick="window.close()" title="Fermer cet onglet" aria-label="Fermer"
+                                class="hidden h-9 w-9 rounded-lg text-gray-600 hover:bg-gray-100 items-center justify-center"><i class="fas fa-xmark"></i></button>
                     </div>
                     {% if espace_boutique %}
                     <button type="button" id="btnMenuLateral" onclick="ouvrirMenuLateral()" aria-label="Ouvrir le menu" aria-controls="menuLateral" aria-expanded="false"
@@ -187,7 +189,7 @@
                             {% if not current_user.est_vendeur %}
                             <a href="{{ url_for('boutique.dashboard') }}#biometrie" class="flex items-center gap-3 px-4 py-2 text-gray-700 hover:bg-gray-50"><i class="fas fa-fingerprint w-4 text-center"></i> Face ID / empreinte</a>
                             {% endif %}
-                            <a href="{{ url_for('client.catalogue', code=current_user.lien_public) }}" target="_blank" class="flex items-center gap-3 px-4 py-2 text-gray-700 hover:bg-gray-50"><i class="fas fa-eye w-4 text-center"></i> Voir mon catalogue</a>
+                            <a href="{{ url_for('client.catalogue', code=current_user.lien_public) }}" class="flex items-center gap-3 px-4 py-2 text-gray-700 hover:bg-gray-50"><i class="fas fa-eye w-4 text-center"></i> Voir mon catalogue</a>
                             <button type="button" onclick="basculerTheme()" class="w-full flex items-center gap-3 px-4 py-2 text-gray-700 hover:bg-gray-50">
                                 <i class="fas fa-moon w-4 text-center icone-theme"></i> <span class="libelle-theme">Mode nuit</span>
                             </button>
@@ -212,6 +214,16 @@
             </div>
         </div>
     </nav>
+
+    {% if not espace_boutique and vitrine and current_user.is_authenticated and current_user.nom_boutique is defined and current_user.id == vitrine.id %}
+    <div class="bg-[#0b1d35] text-white text-sm">
+        <div class="max-w-7xl mx-auto px-4 py-2 flex items-center gap-3">
+            <i class="fas fa-eye text-teal-300"></i>
+            <span class="flex-1 min-w-0 truncate">Aperçu : vos clients voient cette page</span>
+            <a href="{{ url_for('boutique.dashboard') }}" class="flex-shrink-0 bg-teal-400 text-[#0b1d35] font-semibold px-3 py-1.5 rounded-lg"><i class="fas fa-arrow-left mr-1"></i> Retour à mon espace</a>
+        </div>
+    </div>
+    {% endif %}
 
     {% if espace_boutique %}
     <!-- Menu latéral gauche (téléphone) : s'ouvre avec ☰, se ferme en choisissant un onglet -->
@@ -248,7 +260,7 @@
                 <i class="fas {{ icone }} w-5 text-center"></i> {{ libelle }}
             </a>
             {% endfor %}
-            <a href="{{ url_for('client.catalogue', code=current_user.lien_public) }}" target="_blank" class="flex items-center gap-3 mx-2 px-3 py-2.5 rounded-xl text-sm text-gray-600 hover:bg-gray-50">
+            <a href="{{ url_for('client.catalogue', code=current_user.lien_public) }}" class="flex items-center gap-3 mx-2 px-3 py-2.5 rounded-xl text-sm text-gray-600 hover:bg-gray-50">
                 <i class="fas fa-eye w-5 text-center"></i> Voir mon catalogue
             </a>
         </nav>
@@ -440,6 +452,8 @@
                 var peutAvancer = window.navigation && 'canGoForward' in navigation ? navigation.canGoForward : false;
                 retour.classList.toggle('hidden', !peutRetour); retour.classList.toggle('flex', !!peutRetour);
                 avance.classList.toggle('hidden', !peutAvancer); avance.classList.toggle('flex', !!peutAvancer);
+                var fermer = document.getElementById('navFermer'), fermable = !peutRetour && !!window.opener;
+                fermer.classList.toggle('hidden', !fermable); fermer.classList.toggle('flex', fermable);
             }
             maj();
             window.addEventListener('pageshow', maj);

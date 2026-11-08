@@ -260,14 +260,35 @@ function libelleAppareil() {
     if (/Mac/.test(ua)) return 'Mac';
     return 'Appareil';
 }
+function raisonBiometrie(err) {
+    const ua = navigator.userAgent;
+    const autreAppli = /FBAN|FBAV|Instagram|; wv\)|WhatsApp|TikTok|musical_ly/i.test(ua);
+    const samsung = /SamsungBrowser/i.test(ua);
+    if (autreAppli) return "Vous êtes dans le navigateur d'une autre application (WhatsApp, Facebook…). Ouvrez LivraPlus dans Chrome (ou Safari sur iPhone), puis réessayez.";
+    if (err && err.name === 'NotAllowedError')
+        return "L'appareil a refusé ou l'opération a été annulée. Vérifiez qu'un verrouillage d'écran par empreinte, visage ou code est bien configuré "
+             + "(Réglages du téléphone → Sécurité), et que « Gestionnaire de mots de passe Google » est activé sur Android. Puis réessayez"
+             + (samsung ? ' — de préférence dans Chrome plutôt que Samsung Internet.' : '.');
+    if (err && err.name === 'SecurityError') return "Opération bloquée par le navigateur pour ce site. Utilisez l'adresse cataligne.medilogicghp.com dans Chrome ou Safari.";
+    if (err && err.name === 'AbortError') return "Opération interrompue. Réessayez.";
+    return 'Échec : ' + ((err && err.message) || err);
+}
 async function activerBiometrie() {
     const msg = document.getElementById('bioMessage');
     const afficher = (texte, ok) => { msg.textContent = texte; msg.className = 'text-sm mt-3 ' + (ok ? 'text-green-600' : 'text-red-600'); };
     if (!window.SimpleWebAuthnBrowser || !SimpleWebAuthnBrowser.browserSupportsWebAuthn()) {
-        return afficher("Cet appareil ou ce navigateur ne permet pas Face ID / empreinte.", false);
+        return afficher("Ce navigateur ne permet pas Face ID / empreinte. Ouvrez LivraPlus dans Chrome (Android) ou Safari (iPhone).", false);
     }
     try {
+        if (window.PublicKeyCredential && PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable
+            && !(await PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable())) {
+            return afficher("Aucun capteur disponible : configurez d'abord une empreinte, Face ID ou un code de verrouillage dans les réglages du téléphone, puis réessayez.", false);
+        }
+    } catch (e) {}
+    afficher('Suivez les instructions du téléphone (empreinte, visage ou code)…', true);
+    try {
         const rOpt = await fetch("{{ url_for('boutique.biometrie_inscription_options') }}", { method: 'POST' });
+        if (!rOpt.ok) return afficher('Le serveur a refusé la demande (session expirée ?). Rechargez la page puis réessayez.', false);
         const dOpt = await rOpt.json();
         const credential = await SimpleWebAuthnBrowser.startRegistration(dOpt.options);
         const rVer = await fetch("{{ url_for('boutique.biometrie_inscription_verifier') }}", {
@@ -279,8 +300,7 @@ async function activerBiometrie() {
         else afficher(dVer.error || 'Échec', false);
     } catch (err) {
         if (err.name === 'InvalidStateError') return afficher('Cet appareil est déjà activé.', true);
-        if (err.name === 'NotAllowedError') return;
-        afficher('Échec : ' + (err.message || err), false);
+        afficher(raisonBiometrie(err), false);
     }
 }
 </script>

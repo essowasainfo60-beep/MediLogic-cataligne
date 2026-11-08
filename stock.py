@@ -76,3 +76,14 @@ def quantites_retournables(commande):
         for l in r.lignes:
             deja[l['index']] = deja.get(l['index'], 0) + l['quantite']
     return {i: int(l['quantite']) - deja.get(i, 0) for i, l in enumerate(commande.articles_json)}
+
+
+def confier(commande, livreur):
+    """La commande part en livraison avec ce livreur (il passe la récupérer à la boutique)."""
+    from models import nouveau_code_lien
+    commande.livreur = livreur
+    commande.proposee_at = None
+    if not commande.code_livraison:
+        commande.code_livraison = nouveau_code_lien()
+    changer_statut(commande, 'en_livraison')
+    commande.lu = True

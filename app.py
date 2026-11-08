@@ -142,7 +142,8 @@ def mettre_a_jour_schema():
                                 ('remise', 'FLOAT NOT NULL DEFAULT 0'),
                                 ('date_depart', 'TIMESTAMP'),
                                 ('date_arrivee', 'TIMESTAMP'),
-                                ('livre_par', 'VARCHAR(20)')]:
+                                ('livre_par', 'VARCHAR(20)'),
+                                ('proposee_at', 'TIMESTAMP')]:
             if nom not in colonnes_commandes:
                 conn.execute(text(f"ALTER TABLE commandes ADD COLUMN {nom} {definition}"))
         if 'frais' not in {c['name'] for c in inspecteur.get_columns('zones')}:
@@ -176,7 +177,8 @@ def mettre_a_jour_schema():
         if 'par' not in {c['name'] for c in inspecteur.get_columns('mouvements_caisse')}:
             conn.execute(text("ALTER TABLE mouvements_caisse ADD COLUMN par VARCHAR(120)"))
         colonnes_livreurs = {c['name'] for c in inspecteur.get_columns('livreurs')}
-        for nom, definition in [('position_lat', 'FLOAT'), ('position_lng', 'FLOAT'), ('position_at', 'TIMESTAMP')]:
+        for nom, definition in [('position_lat', 'FLOAT'), ('position_lng', 'FLOAT'), ('position_at', 'TIMESTAMP'),
+                                ('disponible', 'BOOLEAN NOT NULL DEFAULT TRUE')]:
             if nom not in colonnes_livreurs:
                 conn.execute(text(f"ALTER TABLE livreurs ADD COLUMN {nom} {definition}"))
         if 'code_acces' not in {c['name'] for c in inspecteur.get_columns('livreurs')}:

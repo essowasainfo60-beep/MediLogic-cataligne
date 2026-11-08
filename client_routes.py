@@ -357,6 +357,11 @@ def espace_livreur(code):
     livreur = livreur_par_code(code)
     a_livrer = (Commande.query.filter_by(livreur_id=livreur.id, statut='en_livraison')
                 .order_by(Commande.date_commande).all())
+    # Courses proposées par la boutique, pas encore prises
+    proposees = (Commande.query.filter(Commande.boutique_id == livreur.boutique_id, Commande.proposee_at.isnot(None),
+                                       Commande.statut.in_(['confirmee', 'echec']),
+                                       Commande.livreur_id.is_(None) | (Commande.statut == 'echec'))
+                 .order_by(Commande.proposee_at).all())
     debut_jour = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
     livrees = (Commande.query.filter(Commande.livreur_id == livreur.id, Commande.statut == 'livree',
                                      db.or_(Commande.livre_par.is_(None), Commande.livre_par != 'boutique'))
@@ -375,7 +380,7 @@ def espace_livreur(code):
                            suivi_actif=livreur.position_at and (datetime.utcnow() - livreur.position_at).total_seconds() < 120,
                            non_lus={c.id: discussions.non_lus(c.discussion, f'livreur:{livreur.id}') for c in a_livrer if c.discussion},
                            non_lus_total=sum(discussions.non_lus(d, f'livreur:{livreur.id}') for d in discussions.discussions_livreur(livreur)),
-                           cle_push=notifications.cles_vapid()[0])
+                           cle_push=notifications.cles_vapid()[0], proposees=proposees)
 
 @client_bp.route('/l/<code>/livree/<int:commande_id>', methods=['POST'])
 def espace_livreur_livree(code, commande_id):
@@ -499,8 +504,10 @@ def discussion_commande_livreur(code, commande_id):
 def non_lus_livreur(code):
     livreur = livreur_par_code(code)
     qui = f'livreur:{livreur.id}'
+    proposees = Commande.query.filter(Commande.boutique_id == livreur.boutique_id, Commande.proposee_at.isnot(None),
+                                      Commande.statut.in_(['confirmee', 'echec'])).count()
     return jsonify(non_lus=sum(discussions.non_lus(d, qui) for d in discussions.discussions_livreur(livreur)),
-                   courses=Commande.query.filter_by(livreur_id=livreur.id, statut='en_livraison').count())
+                   courses=Commande.query.filter_by(livreur_id=livreur.id, statut='en_livraison').count() + proposees)
 
 @client_bp.route('/l/<code>/alertes/abonner', methods=['POST'])
 def alertes_livreur(code):
@@ -544,6 +551,43 @@ def envoyer_commande_messagerie(code):
 def api_discussion_client(code):
     commande = Commande.query.filter_by(code_suivi=code).first_or_404()
     return _api_discussion(discussions.discussion_commande(commande), 'client', commande.client_nom)
+
+
+@client_bp.route('/l/<code>/disponible', methods=['POST'])
+def livreur_disponible(code):
+    livreur = livreur_par_code(code)
+    livreur.disponible = request.form.get('disponible') == '1'
+    db.session.commit()
+    flash('Vous êtes disponible : les courses proposées vous arrivent.' if livreur.disponible
+          else 'Vous êtes indisponible : on ne vous propose plus de courses.', 'success' if livreur.disponible else 'warning')
+    return redirect(url_for('client.espace_livreur', code=code))
+
+
+@client_bp.route('/l/<code>/accepter/<int:commande_id>', methods=['POST'])
+def livreur_accepter(code, commande_id):
+    """Le premier livreur qui accepte prend la course (les autres voient qu'elle est partie)."""
+    livreur = livreur_par_code(code)
+    # Prise atomique : une seule ligne peut passer de « proposée, sans livreur » à « à ce livreur »
+    prise = (Commande.query.filter(Commande.id == commande_id, Commande.boutique_id == livreur.boutique_id,
+                                   Commande.livreur_id.is_(None) | (Commande.statut == 'echec'),
+                                   Commande.proposee_at.isnot(None), Commande.statut.in_(['confirmee', 'echec']))
+             .update({Commande.livreur_id: livreur.id, Commande.proposee_at: None}, synchronize_session=False))
+    if not prise:
+        db.session.rollback()
+        flash('Trop tard : cette course a déjà été prise par un autre livreur (ou retirée).', 'warning')
+        return redirect(url_for('client.espace_livreur', code=code))
+    db.session.commit()
+    commande = db.session.get(Commande, commande_id)
+    stock.confier(commande, livreur)
+    db.session.commit()
+    notifications.envoyer_boutique(livreur.boutique_id, f'✋ {livreur.nom} accepte la course n°{commande.numero}',
+                                   f'Il passe récupérer la commande de {commande.client_nom}.',
+                                   url_for('boutique.commande_details', commande_id=commande.id), tag=f'acceptee-{commande.id}')
+    discussions.poster(discussions.discussion_commande(commande), f'livreur:{livreur.id}', livreur.nom,
+                       {'type': 'texte', 'texte': f"✋ J'accepte la course n°{commande.numero}. Je passe la récupérer à la boutique."}, {})
+    flash(f'Course n°{commande.numero} acceptée : passez la récupérer à la boutique'
+          + (f' ({livreur.boutique.adresse})' if livreur.boutique.adresse else '') + '.', 'success')
+    return redirect(url_for('client.espace_livreur', code=code))
 
 
 @client_bp.route('/l/<code>/manifest.json')

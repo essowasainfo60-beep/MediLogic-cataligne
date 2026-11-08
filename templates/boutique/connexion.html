@@ -249,7 +249,10 @@
             const erreur = document.getElementById('errorMsg');
             erreur.style.display = 'none';
             try {
-                const rOpt = await fetch("{{ url_for('boutique.biometrie_connexion_options') }}", { method: 'POST', headers: { 'X-CSRFToken': JETON } });
+                const champEmail = document.querySelector('input[name="email"]');
+                const rOpt = await fetch("{{ url_for('boutique.biometrie_connexion_options') }}", {
+                    method: 'POST', headers: { 'X-CSRFToken': JETON, 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ email: champEmail ? champEmail.value : '' }) });
                 const dOpt = await rOpt.json();
                 const assertion = await SimpleWebAuthnBrowser.startAuthentication(dOpt.options);
                 const rVer = await fetch("{{ url_for('boutique.biometrie_connexion_verifier') }}", {
@@ -261,8 +264,10 @@
                 erreur.textContent = dVer.error || 'Connexion refusée';
                 erreur.style.display = 'block';
             } catch (err) {
-                if (err.name === 'NotAllowedError') return; // annulé par l'utilisateur
-                erreur.textContent = 'Échec : ' + (err.message || err);
+                erreur.textContent = err.name === 'NotAllowedError'
+                    ? "Aucune empreinte / Face ID trouvée pour LivraPlus sur cet appareil, ou opération annulée. "
+                      + "Écrivez votre email ci-dessus puis réessayez ; sinon connectez-vous avec le mot de passe et activez Face ID / empreinte depuis votre tableau de bord."
+                    : 'Échec : ' + (err.message || err);
                 erreur.style.display = 'block';
             }
         }

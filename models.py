@@ -245,6 +245,7 @@ class Commande(db.Model):
     date_depart = db.Column(db.DateTime, nullable=True)   # remise au livreur (dernière tentative)
     date_arrivee = db.Column(db.DateTime, nullable=True)  # le livreur a signalé « Je suis arrivé »
     livre_par = db.Column(db.String(20), nullable=True)   # 'boutique' = remise par la boutique ; vide = par le livreur
+    proposee_at = db.Column(db.DateTime, nullable=True)   # proposée aux livreurs disponibles (le premier qui accepte la prend)
     # Moment de livraison souhaité par le client (« Demain 05/11 · Soir (16h-20h) »)
     creneau = db.Column(db.String(80), nullable=True)
     # Qui a fait quoi (gérant ou vendeur)
@@ -427,6 +428,7 @@ class Livreur(db.Model):
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     # Lien secret de l'espace du livreur (/l/<code>), installable sur son téléphone
     code_acces = db.Column(db.String(32), unique=True, index=True, default=lambda: nouveau_code_lien())
+    disponible = db.Column(db.Boolean, nullable=False, default=True, server_default='1')  # prêt à prendre des courses
     # Dernière position GPS envoyée pendant une course (voir suivi_gps.py)
     position_lat = db.Column(db.Float, nullable=True)
     position_lng = db.Column(db.Float, nullable=True)

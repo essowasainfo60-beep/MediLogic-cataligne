@@ -107,6 +107,25 @@
                                 </form>
                             </div>
                         {% elif commande.statut in ['nouvelle', 'confirmee', 'echec'] %}
+                            {% if commande.statut == 'nouvelle' %}
+                            <div class="flex flex-wrap gap-2 mb-2">
+                                <form method="POST" action="{{ url_for('boutique.valider_commande_boutique', commande_id=commande.id) }}">
+                                    <button type="submit" class="bg-purple-600 text-white px-4 py-2.5 rounded-xl font-semibold hover:bg-purple-700"><i class="fas fa-check mr-1"></i> Valider</button>
+                                </form>
+                                <form method="POST" action="{{ url_for('boutique.proposer_aux_livreurs', commande_id=commande.id) }}"
+                                      onsubmit="return confirm('Valider et proposer la course aux livreurs disponibles ?')">
+                                    <button type="submit" class="bg-orange-500 text-white px-4 py-2.5 rounded-xl font-semibold hover:bg-orange-600"><i class="fas fa-bullhorn mr-1"></i> Valider et proposer aux livreurs</button>
+                                </form>
+                            </div>
+                            <p class="text-xs text-gray-500 mb-1">Ou validez en choisissant directement le livreur :</p>
+                            {% elif commande.proposee_at %}
+                            <p class="text-sm text-orange-700 mb-2"><i class="fas fa-hourglass-half mr-1"></i> Proposée aux livreurs à {{ commande.proposee_at.strftime('%H:%M') }} — en attente d'acceptation. Ou choisissez :</p>
+                            {% elif commande.statut == 'confirmee' %}
+                            <form method="POST" action="{{ url_for('boutique.proposer_aux_livreurs', commande_id=commande.id) }}" class="mb-2">
+                                <button type="submit" class="bg-orange-500 text-white px-4 py-2.5 rounded-xl font-semibold hover:bg-orange-600"><i class="fas fa-bullhorn mr-1"></i> Proposer aux livreurs disponibles</button>
+                            </form>
+                            <p class="text-xs text-gray-500 mb-1">Ou choisissez vous-même le livreur :</p>
+                            {% endif %}
                             {% if commande.statut == 'echec' %}
                             <p class="text-sm text-red-700 mb-2"><i class="fas fa-triangle-exclamation mr-1"></i>
                                 Échec{% if commande.livreur %} ({{ commande.livreur.nom }}){% endif %} : <strong>{{ commande.motif_echec or 'non précisé' }}</strong>
@@ -125,7 +144,7 @@
                                     {% endfor %}
                                 </select>
                                 <button type="submit" class="bg-green-600 text-white px-5 py-2.5 rounded-xl font-semibold hover:bg-green-700 whitespace-nowrap">
-                                    {% if commande.statut == 'echec' %}<i class="fas fa-rotate-right mr-1"></i> Relancer la livraison{% else %}<i class="fas fa-check mr-1"></i> Confirmer et livrer{% endif %}
+                                    {% if commande.statut == 'echec' %}<i class="fas fa-rotate-right mr-1"></i> Relancer la livraison{% else %}<i class="fas fa-motorcycle mr-1"></i> Confier à ce livreur{% endif %}
                                 </button>
                             </form>
                             {% else %}
@@ -167,7 +186,7 @@
 
                             <div class="flex flex-wrap gap-3 mt-3 text-sm">
                                 <a href="{{ url_for('boutique.commande_details', commande_id=commande.id) }}" class="text-purple-700 hover:underline"><i class="fas fa-eye mr-1"></i> Détails</a>
-                                <a href="{{ url_for('boutique.imprimer_commande', commande_id=commande.id, format='80') }}" target="_blank" class="text-gray-600 hover:underline"><i class="fas fa-print mr-1"></i> Imprimer</a>
+                                <a href="{{ url_for('boutique.imprimer_commande', commande_id=commande.id, format='80') }}" class="text-gray-600 hover:underline"><i class="fas fa-print mr-1"></i> Imprimer</a>
                                 {% if commande.statut in ['nouvelle', 'confirmee', 'echec'] %}
                                 <form method="POST" action="{{ url_for('boutique.changer_statut_commande', commande_id=commande.id) }}"
                                       data-question="Annuler la commande n°{{ commande.numero }} de {{ commande.client_nom }} ?"

@@ -169,6 +169,41 @@
                         </select>
                     </form>
                     {% endif %}
+                    {% if not commande.est_retrait and commande.statut == 'nouvelle' %}
+                    <!-- Étape 1 : valider -->
+                    <div class="mb-3 rounded-xl border-2 border-purple-300 bg-white p-3">
+                        <p class="text-sm font-bold text-purple-900">Étape 1 sur 3 — Valider la commande</p>
+                        <p class="text-xs text-gray-600 mt-0.5">Vérifiez les articles et l'adresse, puis validez : le client est prévenu.</p>
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-2">
+                            <form method="POST" action="{{ url_for('boutique.valider_commande_boutique', commande_id=commande.id) }}">
+                                <button type="submit" class="w-full bg-purple-600 text-white py-3 rounded-xl font-bold hover:bg-purple-700"><i class="fas fa-check mr-1"></i> Valider la commande</button>
+                            </form>
+                            <form method="POST" action="{{ url_for('boutique.proposer_aux_livreurs', commande_id=commande.id) }}"
+                                  onsubmit="return confirm('Valider la commande et la proposer tout de suite aux livreurs disponibles ?')">
+                                <button type="submit" class="w-full bg-orange-500 text-white py-3 rounded-xl font-bold hover:bg-orange-600"><i class="fas fa-bullhorn mr-1"></i> Valider et proposer aux livreurs</button>
+                            </form>
+                        </div>
+                    </div>
+                    {% elif not commande.est_retrait and commande.statut in ['confirmee', 'echec'] %}
+                    <!-- Étape 2 : trouver un livreur -->
+                    <div class="mb-3 rounded-xl border-2 {{ 'border-orange-300 bg-orange-50' if commande.proposee_at else 'border-purple-300 bg-white' }} p-3">
+                        <p class="text-sm font-bold {{ 'text-orange-900' if commande.proposee_at else 'text-purple-900' }}">Étape 2 sur 3 — Trouver un livreur</p>
+                        {% if commande.proposee_at %}
+                        <p class="text-sm text-orange-900 mt-1"><i class="fas fa-hourglass-half mr-1"></i> Proposée aux livreurs disponibles à {{ commande.proposee_at.strftime('%H:%M') }} : en attente qu'un livreur accepte.
+                            Vous serez prévenu dès qu'il passe la récupérer.</p>
+                        <form method="POST" action="{{ url_for('boutique.proposer_aux_livreurs', commande_id=commande.id) }}" class="mt-2 flex flex-wrap gap-2">
+                            <button type="submit" class="bg-orange-500 text-white px-4 py-2 rounded-lg text-sm font-semibold"><i class="fas fa-rotate mr-1"></i> Relancer les livreurs</button>
+                            <button type="submit" name="annuler" value="1" class="bg-white border border-gray-300 text-gray-700 px-4 py-2 rounded-lg text-sm">Retirer la proposition</button>
+                        </form>
+                        <p class="text-xs text-gray-600 mt-2">Ou choisissez vous-même un livreur ci-dessous.</p>
+                        {% else %}
+                        <p class="text-xs text-gray-600 mt-0.5">Proposez la course aux livreurs disponibles (le premier qui accepte passe la récupérer), ou choisissez vous-même un livreur ci-dessous.</p>
+                        <form method="POST" action="{{ url_for('boutique.proposer_aux_livreurs', commande_id=commande.id) }}" class="mt-2">
+                            <button type="submit" class="w-full bg-orange-500 text-white py-3 rounded-xl font-bold hover:bg-orange-600"><i class="fas fa-bullhorn mr-1"></i> Proposer aux livreurs disponibles</button>
+                        </form>
+                        {% endif %}
+                    </div>
+                    {% endif %}
                     {% if commande.est_retrait and commande.statut in ['nouvelle', 'confirmee'] %}
                     <div class="mb-3 rounded-xl border border-green-300 bg-green-50 p-3 text-sm">
                         <p class="font-semibold text-green-900">🛍 Le client a choisi de passer récupérer sa commande à la boutique (pas de livraison)</p>
@@ -206,8 +241,8 @@
                         {% if en_route %}
                         <button type="submit" class="bg-gray-100 text-gray-700 px-4 py-2.5 rounded-xl font-semibold hover:bg-gray-200">Changer de livreur</button>
                         {% else %}
-                        <button type="submit" class="bg-green-600 text-white px-5 py-2.5 rounded-xl font-semibold hover:bg-green-700">
-                            {% if relance %}<i class="fas fa-rotate-right mr-1"></i> Relancer la livraison{% else %}<i class="fas fa-check mr-1"></i> Confirmer et livrer{% endif %}
+                        <button type="submit" class="{{ 'bg-green-600 text-white hover:bg-green-700' if relance else 'bg-white border-2 border-purple-300 text-purple-700 hover:bg-purple-50' }} px-5 py-2.5 rounded-xl font-semibold">
+                            {% if relance %}<i class="fas fa-rotate-right mr-1"></i> Relancer la livraison{% else %}<i class="fas fa-motorcycle mr-1"></i> Confier à ce livreur{% endif %}
                         </button>
                         {% endif %}
                     </form>
@@ -344,11 +379,11 @@
                     <i class="fas fa-rotate-left mr-2"></i> Retour / échange d'articles
                 </a>
                 {% endif %}
-                <a href="{{ url_for('boutique.imprimer_commande', commande_id=commande.id, format='80') }}" target="_blank"
+                <a href="{{ url_for('boutique.imprimer_commande', commande_id=commande.id, format='80') }}"
                    class="bg-gray-800 text-white py-3 rounded-lg text-center hover:bg-gray-900 transition">
                     <i class="fas fa-receipt mr-2"></i> Imprimer ticket 80 mm
                 </a>
-                <a href="{{ url_for('boutique.imprimer_commande', commande_id=commande.id, format='a4') }}" target="_blank"
+                <a href="{{ url_for('boutique.imprimer_commande', commande_id=commande.id, format='a4') }}"
                    class="bg-gray-700 text-white py-3 rounded-lg text-center hover:bg-gray-800 transition">
                     <i class="fas fa-file-invoice mr-2"></i> Imprimer facture A4
                 </a>

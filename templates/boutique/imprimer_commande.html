@@ -67,6 +67,7 @@
     {% set date_paiement = commande.date_livraison.strftime('%d/%m/%Y à %H:%M') if commande.date_livraison else '' %}
     {% set remis_par = ('remise à la boutique' if retrait else 'remise par la boutique') if not commande.livree_par_livreur else 'livrée par ' ~ commande.livreur.nom %}
     <div class="barre">
+        <a href="{{ url_for('boutique.commande_details', commande_id=commande.id) }}" style="background:#fff">← Retour à la commande</a>
         <a href="?format=80" class="{{ 'actif' if format_papier == '80' }}">Ticket 80 mm</a>
         <a href="?format=a4" class="{{ 'actif' if format_papier == 'a4' }}">Facture A4</a>
         <button onclick="window.print()">🖨️ Imprimer</button>

@@ -58,8 +58,9 @@ def options_inscription(request, boutique):
         authenticator_selection=AuthenticatorSelectionCriteria(
             # Capteur intégré de l'appareil (pas de clé USB externe)
             authenticator_attachment=AuthenticatorAttachment.PLATFORM,
-            # Clé découvrable : la page de connexion la propose sans email
-            resident_key=ResidentKeyRequirement.REQUIRED,
+            # Clé découvrable si possible (connexion sans email) ; sinon l'email sert à la retrouver.
+            # « Préférée » plutôt qu'« obligatoire » : certains téléphones refusaient l'activation.
+            resident_key=ResidentKeyRequirement.PREFERRED,
             user_verification=UserVerificationRequirement.REQUIRED,
         ),
         exclude_credentials=deja,
@@ -86,12 +87,20 @@ def verifier_inscription(request, boutique, credential, challenge_b64, libelle=N
     db.session.commit()
 
 
-def options_connexion(request):
-    """Sans allow_credentials : le navigateur retrouve seul les clés de cet
-    appareil pour ce site (Face ID / empreinte affiche son sélecteur)."""
+def options_connexion(request, email=None):
+    """Sans email : le navigateur retrouve seul les clés de cet appareil pour ce site.
+    Avec l'email : on lui indique les clés de cette boutique (marche aussi pour une
+    clé non découvrable)."""
+    from models import Boutique
     rp_id, _ = _rp_id_et_origin(request)
+    autorisees = None
+    if email:
+        boutique = Boutique.query.filter(db.func.lower(Boutique.email) == email.strip().lower()).first()
+        if boutique and boutique.cles_biometriques:
+            autorisees = [PublicKeyCredentialDescriptor(id=_unb64(c.credential_id)) for c in boutique.cles_biometriques]
     options = webauthn.generate_authentication_options(
         rp_id=rp_id,
+        allow_credentials=autorisees,
         user_verification=UserVerificationRequirement.REQUIRED,
     )
     return webauthn.options_to_json(options), _b64(options.challenge)
