@@ -3,305 +3,122 @@
 {% block title %}Tableau de bord - {{ current_user.nom_boutique }}{% endblock %}
 
 {% block content %}
-<div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-6">
+<div class="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 space-y-5">
 
     <!-- Bonjour -->
-    <div class="flex flex-col sm:flex-row sm:items-end justify-between gap-3">
-        <div>
-            <p class="text-sm text-gray-500">{{ 'Bonjour' }} {{ current_user.proprietaire_prenom }} 👋</p>
-            <h1 class="text-2xl md:text-3xl font-extrabold text-gray-900 tracking-tight">{{ current_user.nom_boutique }}</h1>
+    <div class="flex items-end justify-between gap-3">
+        <div class="min-w-0">
+            <p class="text-sm text-gray-500">Bonjour {{ current_user.proprietaire_prenom }} 👋</p>
+            <h1 class="text-2xl md:text-3xl font-extrabold text-gray-900 tracking-tight truncate">{{ current_user.nom_boutique }}</h1>
         </div>
-        <div class="flex gap-2">
-            <a href="{{ url_for('boutique.nouvelle_commande') }}" class="inline-flex items-center gap-2 bg-purple-600 text-white px-4 py-2.5 rounded-xl font-semibold hover:bg-purple-700 shadow-sm">
-                <i class="fas fa-plus"></i> Nouvelle commande
-            </a>
-            <a href="{{ url_for('boutique.ajouter_article') }}" class="inline-flex items-center gap-2 bg-white border border-gray-200 text-gray-700 px-4 py-2.5 rounded-xl font-semibold hover:bg-gray-50">
-                <i class="fas fa-box"></i> <span class="hidden sm:inline">Article</span>
-            </a>
-        </div>
-    </div>
-
-    {% if echecs_count %}
-    <a href="{{ url_for('boutique.commandes', statut='echec') }}"
-       class="flex items-center justify-between gap-3 bg-red-50 border border-red-300 rounded-2xl p-4 hover:bg-red-100 transition">
-        <span class="text-red-800 text-sm"><i class="fas fa-triangle-exclamation mr-2"></i>
-            <strong>{{ echecs_count }} livraison(s) en échec</strong> : recontactez le client puis relancez la livraison.</span>
-        <i class="fas fa-arrow-right text-red-600"></i>
-    </a>
-    {% endif %}
-
-    {% if not current_user.zones and peut('boutique.zones_modele') %}
-    <a href="{{ url_for('boutique.zones_modele') }}"
-       class="flex items-center justify-between gap-3 bg-teal-50 border border-teal-300 rounded-2xl p-4 hover:bg-teal-100 transition">
-        <span class="text-teal-900 text-sm">
-            <i class="fas fa-map-location-dot mr-2"></i>
-            <strong>Paramétrez vos zones et prix de livraison</strong> : vos clients verront le prix dès qu'ils choisissent leur quartier.
-        </span>
-        <i class="fas fa-arrow-right text-teal-700"></i>
-    </a>
-    {% endif %}
-
-    <!-- Chiffres clés -->
-    <div class="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        {% for lien, icone, couleur, valeur, libelle, detail in [
-            (url_for('boutique.commandes', statut='nouvelle'), 'fa-bell', 'blue', nouvelles_count, 'À traiter', du_jour ~ " reçue(s) aujourd'hui"),
-            (url_for('boutique.commandes', statut='confirmee'), 'fa-box-open', 'amber', confirmees_count, 'À préparer / livrer', 'confirmées, sans livreur'),
-            (url_for('boutique.commandes', statut='en_livraison'), 'fa-motorcycle', 'purple', en_livraison_count, 'En livraison', 'à clôturer une fois remises'),
-            (url_for('boutique.historique'), 'fa-circle-check', 'green', livrees_jour, "Livrées aujourd'hui", fcfa(encaisse_jour) ~ " d'articles"),
-        ] %}
-        <a href="{{ lien }}" class="bg-white rounded-2xl shadow-md p-4 md:p-5 hover:-translate-y-0.5 transition">
-            <div class="flex items-center justify-between">
-                <span class="h-10 w-10 rounded-xl bg-{{ couleur }}-50 text-{{ couleur }}-600 flex items-center justify-center"><i class="fas {{ icone }}"></i></span>
-                <span class="text-3xl font-extrabold text-gray-900">{{ valeur }}</span>
-            </div>
-            <p class="mt-3 font-semibold text-gray-800">{{ libelle }}</p>
-            <p class="text-xs text-gray-500">{{ detail }}</p>
+        <a href="{{ url_for('boutique.nouvelle_commande') }}" class="flex-shrink-0 inline-flex items-center gap-2 bg-purple-600 text-white px-4 py-2.5 rounded-xl font-semibold hover:bg-purple-700 shadow-sm">
+            <i class="fas fa-plus"></i> <span>Commande</span>
         </a>
-        {% endfor %}
     </div>
 
-    <!-- Caisse -->
-    {% if peut('boutique.page_caisse') %}
-    <a href="{{ url_for('boutique.page_caisse') }}" class="grid grid-cols-1 sm:grid-cols-2 gap-4 bg-white rounded-2xl shadow-md p-5 hover:-translate-y-0.5 transition">
-        <div class="flex items-center gap-3">
-            <span class="h-11 w-11 rounded-xl bg-green-50 text-green-600 flex items-center justify-center"><i class="fas fa-cash-register"></i></span>
-            <div><p class="text-sm text-gray-500">Disponible en caisse</p><p class="text-2xl font-extrabold {{ 'text-red-600' if solde_caisse < 0 else 'text-gray-900' }}">{{ fcfa(solde_caisse) }}</p></div>
+    <!-- ===== À faire maintenant ===== -->
+    <section>
+        <h2 class="text-sm font-bold uppercase tracking-wide text-gray-500 mb-2">À faire maintenant</h2>
+        {% if a_faire %}
+        <div class="bg-white rounded-2xl shadow-md divide-y divide-gray-100 overflow-hidden">
+            {% for lien, icone, couleur, nombre, texte, aide in a_faire %}
+            <a href="{{ lien }}" class="flex items-center gap-3 px-4 py-3.5 hover:bg-gray-50">
+                <span class="h-11 w-11 rounded-xl bg-{{ couleur }}-50 text-{{ couleur }}-600 flex items-center justify-center flex-shrink-0"><i class="fas {{ icone }}"></i></span>
+                <span class="flex-1 min-w-0">
+                    <span class="block font-semibold text-gray-900">{{ texte }}</span>
+                    <span class="block text-xs text-gray-500">{{ aide }}</span>
+                </span>
+                <span class="text-2xl font-extrabold text-{{ couleur }}-600">{{ nombre }}</span>
+                <i class="fas fa-chevron-right text-gray-300"></i>
+            </a>
+            {% endfor %}
         </div>
-        <div class="flex items-center gap-3">
-            <span class="h-11 w-11 rounded-xl bg-purple-50 text-purple-600 flex items-center justify-center"><i class="fas fa-motorcycle"></i></span>
-            <div><p class="text-sm text-gray-500">Encore chez les livreurs</p><p class="text-2xl font-extrabold text-gray-900">{{ fcfa(chez_livreurs) }}</p></div>
+        {% else %}
+        <div class="bg-white rounded-2xl shadow-md p-6 text-center">
+            <p class="text-3xl">✅</p>
+            <p class="font-bold text-gray-900 mt-1">Tout est à jour</p>
+            <p class="text-sm text-gray-500">Les nouvelles commandes et les messages apparaîtront ici.</p>
         </div>
-    </a>
+        {% endif %}
+    </section>
+
+    <!-- ===== Pour bien démarrer (disparaît quand tout est fait) ===== -->
+    {% if a_configurer and not current_user.est_vendeur %}
+    <section class="bg-teal-50 border border-teal-200 rounded-2xl p-4">
+        <p class="font-bold text-teal-900"><i class="fas fa-flag-checkered mr-1"></i> Pour bien démarrer ({{ etapes_faites }}/{{ etapes_total }})</p>
+        <div class="mt-2 space-y-1.5">
+            {% for lien, texte in a_configurer %}
+            <a href="{{ lien }}" class="flex items-center gap-2 text-sm text-teal-900 bg-white rounded-xl px-3 py-2 hover:bg-teal-100">
+                <i class="far fa-circle text-teal-500"></i> <span class="flex-1">{{ texte }}</span> <i class="fas fa-chevron-right text-teal-400 text-xs"></i></a>
+            {% endfor %}
+        </div>
+    </section>
     {% endif %}
 
-    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <!-- Dernières commandes -->
-        <div class="lg:col-span-2 bg-white rounded-2xl shadow-md">
-            <div class="flex items-center justify-between px-5 py-4 border-b border-gray-100">
-                <h2 class="font-bold text-gray-900">Dernières commandes</h2>
-                <a href="{{ url_for('boutique.commandes') }}" class="text-sm text-purple-600 hover:underline">Tout voir</a>
+    <!-- ===== Aujourd'hui ===== -->
+    <section>
+        <h2 class="text-sm font-bold uppercase tracking-wide text-gray-500 mb-2">Aujourd'hui</h2>
+        <div class="grid grid-cols-2 {{ 'lg:grid-cols-4' if peut('boutique.page_caisse') else '' }} gap-3">
+            <div class="bg-white rounded-2xl shadow-md p-4">
+                <p class="text-xs text-gray-500">Commandes reçues</p>
+                <p class="text-2xl font-extrabold text-gray-900">{{ du_jour }}</p>
             </div>
-            {% if dernieres %}
-            <ul class="divide-y divide-gray-100">
-                {% for c in dernieres %}
-                <li>
-                    <a href="{{ url_for('boutique.commande_details', commande_id=c.id) }}" class="flex items-center gap-3 px-5 py-3 hover:bg-gray-50">
-                        <span class="h-9 w-9 rounded-lg bg-gray-100 text-gray-700 flex items-center justify-center text-sm font-bold">{{ c.numero }}</span>
-                        <span class="flex-1 min-w-0">
-                            <span class="block font-medium text-gray-800 truncate">{{ c.client_nom }}</span>
-                            <span class="block text-xs text-gray-500">{{ c.date_commande.strftime('%d/%m %H:%M') }} · {{ c.source_libelle }}{% if c.zone %} · {{ c.zone.nom }}{% endif %}</span>
-                        </span>
-                        <span class="text-right">
-                            <span class="block font-semibold text-gray-900 text-sm whitespace-nowrap">{{ fcfa(c.total) }}</span>
-                            <span class="inline-block mt-0.5 px-2 py-0.5 rounded-full text-[11px] font-semibold {{ c.statut_classe }}">{{ c.statut_libelle }}</span>
-                        </span>
-                    </a>
-                </li>
-                {% endfor %}
-            </ul>
-            {% else %}
-            <div class="p-10 text-center text-gray-500">
-                <i class="fas fa-inbox text-4xl text-gray-300 mb-2"></i>
-                <p>Aucune commande pour l'instant. Partagez votre lien ci-contre !</p>
-            </div>
+            <a href="{{ url_for('boutique.livraisons', onglet='livrees', jours=1) }}" class="bg-white rounded-2xl shadow-md p-4">
+                <p class="text-xs text-gray-500">Livrées</p>
+                <p class="text-2xl font-extrabold text-gray-900">{{ livrees_jour }}</p>
+                <p class="text-xs text-gray-500">{{ fcfa(encaisse_jour) }} d'articles</p>
+            </a>
+            {% if peut('boutique.page_caisse') %}
+            <a href="{{ url_for('boutique.page_caisse') }}" class="bg-white rounded-2xl shadow-md p-4">
+                <p class="text-xs text-gray-500">Disponible en caisse</p>
+                <p class="text-xl font-extrabold {{ 'text-red-600' if solde_caisse < 0 else 'text-gray-900' }}">{{ fcfa(solde_caisse) }}</p>
+            </a>
+            <a href="{{ url_for('boutique.page_caisse') }}" class="bg-white rounded-2xl shadow-md p-4">
+                <p class="text-xs text-gray-500">Encore chez les livreurs</p>
+                <p class="text-xl font-extrabold text-gray-900">{{ fcfa(chez_livreurs) }}</p>
+            </a>
             {% endif %}
         </div>
+    </section>
 
-        <!-- Colonne droite -->
-        <div class="space-y-6">
-            <!-- Message prêt pour le statut WhatsApp -->
-            <div id="statut" class="bg-white rounded-2xl shadow-md p-5">
-                <p class="font-bold text-gray-900"><i class="fab fa-whatsapp text-green-500 mr-1"></i> Mon statut WhatsApp</p>
-                <p class="text-sm text-gray-500 mt-1">Message prêt avec le lien de votre catalogue : vos clients commandent directement depuis votre statut.</p>
-                <div class="mt-3 bg-[#e7fbe6] rounded-xl p-3 text-sm text-gray-800 whitespace-pre-line max-h-56 overflow-y-auto" id="apercuStatut">{{ message_statut }}</div>
-                <div class="grid grid-cols-2 gap-2 mt-3">
-                    <a href="https://wa.me/?text={{ message_statut|urlencode }}" target="_blank" rel="noopener"
-                       class="col-span-2 text-center bg-green-500 text-white py-2.5 rounded-xl font-semibold hover:bg-green-600">
-                        <i class="fab fa-whatsapp mr-1"></i> Publier sur WhatsApp</a>
-                    <button type="button" id="copierStatut" class="bg-gray-100 text-gray-700 py-2 rounded-xl font-semibold text-sm hover:bg-gray-200"><i class="fas fa-copy mr-1"></i> Copier</button>
-                    <button type="button" id="partagerStatut" class="bg-gray-100 text-gray-700 py-2 rounded-xl font-semibold text-sm hover:bg-gray-200"><i class="fas fa-share-nodes mr-1"></i> Autre appli</button>
-                </div>
-                <p class="text-xs text-gray-500 mt-2">Dans WhatsApp, choisissez <strong>« Mon statut »</strong> en haut de la liste. Vous pouvez aussi l'envoyer à un groupe ou à un contact.</p>
-                {% if peut('boutique.message_statut') %}
-                <details class="mt-3">
-                    <summary class="cursor-pointer text-sm font-semibold text-purple-700"><i class="fas fa-pen mr-1"></i> Modifier le message{{ ' (personnalisé)' if message_statut_perso }}</summary>
-                    <form method="POST" action="{{ url_for('boutique.message_statut') }}" class="mt-2 space-y-2">
-                        <textarea name="texte" rows="9" maxlength="1500" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm">{{ message_statut_brut }}</textarea>
-                        <p class="text-xs text-gray-500">Écrivez <code>{lien}</code> là où doit apparaître le lien du catalogue (sinon il est ajouté à la fin). *texte* = gras dans WhatsApp.</p>
-                        <div class="flex flex-wrap gap-2">
-                            <button type="submit" class="bg-purple-600 text-white px-4 py-2 rounded-lg font-semibold text-sm">Enregistrer</button>
-                            {% if message_statut_perso %}
-                            <button type="submit" name="reinitialiser" value="1" class="bg-gray-100 text-gray-700 px-4 py-2 rounded-lg text-sm">Revenir au message proposé</button>
-                            {% endif %}
-                        </div>
-                    </form>
-                </details>
-                {% endif %}
-                <script>
-                (function () {
-                    const texte = {{ message_statut|tojson }};
-                    document.getElementById('copierStatut').addEventListener('click', async (e) => {
-                        try { await navigator.clipboard.writeText(texte); e.currentTarget.innerHTML = '<i class="fas fa-check mr-1"></i> Copié'; }
-                        catch (err) { alert(texte); }
-                    });
-                    const partager = document.getElementById('partagerStatut');
-                    if (!navigator.share) { partager.classList.add('hidden'); document.getElementById('copierStatut').classList.add('col-span-2'); }
-                    else partager.addEventListener('click', () => navigator.share({ text: texte }).catch(() => {}));
-                })();
-                </script>
-            </div>
-
-            <!-- Lien clients -->
-            <div class="bg-gradient-to-br from-[#0b1d35] to-[#1c3358] text-white rounded-2xl p-5">
-                <p class="font-bold"><i class="fas fa-share-nodes mr-2 text-teal-300"></i>Votre catalogue</p>
-                <p class="text-sm text-white/70 mt-1">Lien secret à envoyer à vos clients. Il ne donne jamais accès à votre espace.</p>
-                <input type="text" id="clientLink" readonly onclick="this.select()"
-                       value="{{ url_for('client.catalogue', code=current_user.lien_public, _external=True) }}"
-                       class="mt-3 w-full bg-white/10 border border-white/20 px-3 py-2 text-sm text-white">
-                <div class="grid grid-cols-2 gap-2 mt-2">
-                    <button type="button" onclick="copierLien(this)" class="bg-teal-400 text-[#0b1d35] py-2 rounded-xl font-semibold text-sm hover:bg-teal-300">
-                        <i class="fas fa-copy mr-1"></i> Copier
-                    </button>
-                    <a href="https://wa.me/?text={{ ('Découvrez notre catalogue et commandez en ligne : ' ~ url_for('client.catalogue', code=current_user.lien_public, _external=True))|urlencode }}"
-                       target="_blank" class="text-center bg-white/10 py-2 rounded-xl font-semibold text-sm hover:bg-white/20">
-                        <i class="fab fa-whatsapp mr-1"></i> Partager
-                    </a>
-                </div>
-                {% if peut('boutique.regenerer_lien') %}
-                <form method="POST" action="{{ url_for('boutique.regenerer_lien') }}" class="mt-2 text-right"
-                      onsubmit="return confirm('Créer un nouveau lien ? L\'ancien lien ne fonctionnera plus pour personne.')">
-                    <button type="submit" data-no-loading class="text-xs text-white/60 hover:text-white">Lien partagé par erreur ? En créer un nouveau</button>
-                </form>
-                {% endif %}
-            </div>
-
-            <!-- Raccourcis -->
-            <div class="bg-white rounded-2xl shadow-md p-5">
-                <h2 class="font-bold text-gray-900 mb-3">Raccourcis</h2>
-                <div class="grid grid-cols-2 gap-2 text-sm">
-                    {% for endpoint, icone, libelle, info in [
-                        ('boutique.articles', 'fa-boxes-stacked', 'Articles', articles_count ~ ' en ligne'),
-                        ('boutique.inventaire', 'fa-warehouse', 'Stock', (ruptures ~ ' en rupture') if ruptures else 'Inventaire'),
-                        ('boutique.livreurs', 'fa-motorcycle', 'Livreurs', 'et zones'),
-                        ('boutique.historique', 'fa-clock-rotate-left', 'Historique', 'et export'),
-                        ('boutique.vendeurs', 'fa-users', 'Équipe', vendeurs_count ~ ' membre(s)'),
-                        ('boutique.clients', 'fa-address-book', 'Clients', 'fichier clients'),
-                        ('boutique.codes_promo', 'fa-ticket', 'Codes promo', 'réductions, lives'),
-                        ('boutique.profil', 'fa-store', 'Ma boutique', 'logo, adresse'),
-                    ] if peut(endpoint) %}
-                    {% set lien = url_for(endpoint) %}
-                    <a href="{{ lien }}" class="flex items-center gap-2 p-3 rounded-xl border border-gray-100 hover:bg-gray-50">
-                        <i class="fas {{ icone }} text-purple-500 w-5 text-center"></i>
-                        <span class="min-w-0"><span class="block font-semibold text-gray-800">{{ libelle }}</span><span class="block text-xs {{ 'text-red-600' if 'rupture' in info else 'text-gray-500' }} truncate">{{ info }}</span></span>
-                    </a>
-                    {% endfor %}
-                </div>
-            </div>
+    <!-- ===== Dernières commandes ===== -->
+    <section class="bg-white rounded-2xl shadow-md">
+        <div class="flex items-center justify-between px-4 py-3 border-b border-gray-100">
+            <h2 class="font-bold text-gray-900">Dernières commandes</h2>
+            <a href="{{ url_for('boutique.commandes', statut='toutes') }}" class="text-sm text-purple-600 hover:underline">Tout voir</a>
         </div>
-    </div>
-
-    {% if not current_user.est_vendeur %}
-    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <!-- Face ID / empreinte -->
-        <div id="biometrie" class="bg-white rounded-2xl shadow-md p-5 scroll-mt-24">
-            <div class="flex items-start justify-between gap-3">
-                <div>
-                    <h2 class="font-bold text-gray-900"><i class="fas fa-fingerprint text-purple-500 mr-2"></i>Face ID / empreinte</h2>
-                    <p class="text-sm text-gray-500 mt-1">Connectez-vous sans mot de passe sur cet appareil.</p>
-                </div>
-                <button type="button" onclick="activerBiometrie()" class="flex-shrink-0 bg-purple-600 text-white px-3 py-2 rounded-xl text-sm font-semibold hover:bg-purple-700">Activer</button>
-            </div>
-            <p id="bioMessage" class="text-sm mt-3 hidden"></p>
-            {% if current_user.cles_biometriques %}
-            <ul class="mt-3 divide-y divide-gray-100 text-sm">
-                {% for cle in current_user.cles_biometriques %}
-                <li class="flex justify-between items-center py-2 gap-2">
-                    <span class="min-w-0">
-                        <i class="fas fa-mobile-screen text-gray-400 mr-1"></i>{{ cle.libelle }}
-                        <span class="block text-xs text-gray-400">ajouté le {{ cle.created_at.strftime('%d/%m/%Y') }}{% if cle.derniere_utilisation %} · utilisé le {{ cle.derniere_utilisation.strftime('%d/%m/%Y') }}{% endif %}</span>
+        {% if dernieres %}
+        <ul class="divide-y divide-gray-100">
+            {% for c in dernieres %}
+            <li>
+                <a href="{{ url_for('boutique.commande_details', commande_id=c.id) }}" class="flex items-center gap-3 px-4 py-3 hover:bg-gray-50">
+                    <span class="h-9 w-9 rounded-lg bg-gray-100 text-gray-700 flex items-center justify-center text-sm font-bold flex-shrink-0">{{ c.numero }}</span>
+                    <span class="flex-1 min-w-0">
+                        <span class="block font-medium text-gray-800 truncate">{{ c.client_nom }}</span>
+                        <span class="block text-xs text-gray-500">{{ c.date_commande.strftime('%d/%m %H:%M') }}{% if c.zone %} · {{ c.zone.nom }}{% endif %}</span>
                     </span>
-                    <form method="POST" action="{{ url_for('boutique.biometrie_retirer', cle_id=cle.id) }}" onsubmit="return confirm('Retirer cet appareil ?')">
-                        <button type="submit" class="text-red-500 hover:text-red-700 text-xs"><i class="fas fa-trash"></i> Retirer</button>
-                    </form>
-                </li>
-                {% endfor %}
-            </ul>
-            {% endif %}
+                    <span class="text-right flex-shrink-0">
+                        <span class="block font-semibold text-gray-900 text-sm whitespace-nowrap">{{ fcfa(c.total) }}</span>
+                        <span class="inline-block mt-0.5 px-2 py-0.5 rounded-full text-[11px] font-semibold {{ c.statut_classe }}">{{ c.statut_libelle }}</span>
+                    </span>
+                </a>
+            </li>
+            {% endfor %}
+        </ul>
+        {% else %}
+        <div class="p-8 text-center text-gray-500">
+            <i class="fas fa-inbox text-4xl text-gray-300 mb-2"></i>
+            <p>Aucune commande pour l'instant.</p>
+            <a href="{{ url_for('boutique.partager') }}" class="inline-block mt-3 bg-green-500 text-white px-4 py-2 rounded-xl font-semibold"><i class="fab fa-whatsapp mr-1"></i> Partager mon catalogue</a>
         </div>
+        {% endif %}
+    </section>
 
-        <!-- WhatsApp -->
-        <div class="bg-white rounded-2xl shadow-md p-5">
-            <h2 class="font-bold text-gray-900"><i class="fab fa-whatsapp text-green-500 mr-2"></i>WhatsApp de la boutique</h2>
-            <p class="text-sm text-gray-500 mt-1">Les commandes de vos clients arrivent sur ce numéro.</p>
-            <form action="{{ url_for('boutique.modifier_whatsapp') }}" method="POST" class="flex gap-2 mt-3">
-                <input type="tel" name="whatsapp" required value="{{ current_user.whatsapp or '' }}" placeholder="+228 90 00 00 00"
-                       class="flex-1 min-w-0 px-3 py-2 border border-gray-300">
-                <button type="submit" class="bg-green-600 text-white px-4 py-2 rounded-xl text-sm font-semibold hover:bg-green-700">Enregistrer</button>
-            </form>
-        </div>
-    </div>
-    {% endif %}
+    <a href="{{ url_for('boutique.partager') }}" class="flex items-center gap-3 bg-white rounded-2xl shadow-md px-4 py-3 hover:bg-gray-50">
+        <span class="h-10 w-10 rounded-xl bg-green-50 text-green-600 flex items-center justify-center"><i class="fab fa-whatsapp"></i></span>
+        <span class="flex-1"><span class="block font-semibold text-gray-900">Partager mon catalogue</span>
+            <span class="block text-xs text-gray-500">Lien à envoyer et message prêt pour votre statut WhatsApp</span></span>
+        <i class="fas fa-chevron-right text-gray-300"></i>
+    </a>
 </div>
-
-<script src="https://cdn.jsdelivr.net/npm/@simplewebauthn/browser@10.0.0/dist/bundle/index.umd.min.js"></script>
-<script>
-function copierLien(bouton) {
-    const champ = document.getElementById('clientLink');
-    const fini = () => { const avant = bouton.innerHTML; bouton.innerHTML = '<i class="fas fa-check mr-1"></i> Copié !'; setTimeout(() => bouton.innerHTML = avant, 2000); };
-    if (navigator.clipboard) navigator.clipboard.writeText(champ.value).then(fini, () => { champ.select(); document.execCommand('copy'); fini(); });
-    else { champ.select(); document.execCommand('copy'); fini(); }
-}
-function libelleAppareil() {
-    const ua = navigator.userAgent;
-    if (/iPhone/.test(ua)) return 'iPhone';
-    if (/iPad/.test(ua)) return 'iPad';
-    if (/Android/.test(ua)) return 'Téléphone Android';
-    if (/Windows/.test(ua)) return 'PC Windows';
-    if (/Mac/.test(ua)) return 'Mac';
-    return 'Appareil';
-}
-function raisonBiometrie(err) {
-    const ua = navigator.userAgent;
-    const autreAppli = /FBAN|FBAV|Instagram|; wv\)|WhatsApp|TikTok|musical_ly/i.test(ua);
-    const samsung = /SamsungBrowser/i.test(ua);
-    if (autreAppli) return "Vous êtes dans le navigateur d'une autre application (WhatsApp, Facebook…). Ouvrez LivraPlus dans Chrome (ou Safari sur iPhone), puis réessayez.";
-    if (err && err.name === 'NotAllowedError')
-        return "L'appareil a refusé ou l'opération a été annulée. Vérifiez qu'un verrouillage d'écran par empreinte, visage ou code est bien configuré "
-             + "(Réglages du téléphone → Sécurité), et que « Gestionnaire de mots de passe Google » est activé sur Android. Puis réessayez"
-             + (samsung ? ' — de préférence dans Chrome plutôt que Samsung Internet.' : '.');
-    if (err && err.name === 'SecurityError') return "Opération bloquée par le navigateur pour ce site. Utilisez l'adresse cataligne.medilogicghp.com dans Chrome ou Safari.";
-    if (err && err.name === 'AbortError') return "Opération interrompue. Réessayez.";
-    return 'Échec : ' + ((err && err.message) || err);
-}
-async function activerBiometrie() {
-    const msg = document.getElementById('bioMessage');
-    const afficher = (texte, ok) => { msg.textContent = texte; msg.className = 'text-sm mt-3 ' + (ok ? 'text-green-600' : 'text-red-600'); };
-    if (!window.SimpleWebAuthnBrowser || !SimpleWebAuthnBrowser.browserSupportsWebAuthn()) {
-        return afficher("Ce navigateur ne permet pas Face ID / empreinte. Ouvrez LivraPlus dans Chrome (Android) ou Safari (iPhone).", false);
-    }
-    try {
-        if (window.PublicKeyCredential && PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable
-            && !(await PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable())) {
-            return afficher("Aucun capteur disponible : configurez d'abord une empreinte, Face ID ou un code de verrouillage dans les réglages du téléphone, puis réessayez.", false);
-        }
-    } catch (e) {}
-    afficher('Suivez les instructions du téléphone (empreinte, visage ou code)…', true);
-    try {
-        const rOpt = await fetch("{{ url_for('boutique.biometrie_inscription_options') }}", { method: 'POST' });
-        if (!rOpt.ok) return afficher('Le serveur a refusé la demande (session expirée ?). Rechargez la page puis réessayez.', false);
-        const dOpt = await rOpt.json();
-        const credential = await SimpleWebAuthnBrowser.startRegistration(dOpt.options);
-        const rVer = await fetch("{{ url_for('boutique.biometrie_inscription_verifier') }}", {
-            method: 'POST', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ credential: credential, libelle: libelleAppareil() }),
-        });
-        const dVer = await rVer.json();
-        if (dVer.success) { afficher('Appareil activé ! Vous pourrez vous connecter avec Face ID / empreinte.', true); setTimeout(() => location.reload(), 1200); }
-        else afficher(dVer.error || 'Échec', false);
-    } catch (err) {
-        if (err.name === 'InvalidStateError') return afficher('Cet appareil est déjà activé.', true);
-        afficher(raisonBiometrie(err), false);
-    }
-}
-</script>
 {% endblock %}

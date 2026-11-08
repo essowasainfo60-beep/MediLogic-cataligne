@@ -127,14 +127,98 @@
         <button type="submit" class="w-full bg-purple-600 text-white py-3 rounded-xl font-semibold hover:bg-purple-700">
             <i class="fas fa-check mr-1"></i> Enregistrer
         </button>
-        <a href="{{ url_for('client.catalogue', code=current_user.lien_public) }}" target="_blank"
+        <a href="{{ url_for('client.catalogue', code=current_user.lien_public) }}"
            class="block text-center text-sm text-gray-600 hover:text-primary">
             <i class="fas fa-eye mr-1"></i> Voir mon catalogue comme un client
         </a>
     </form>
+
+    <div class="mt-6">
+        <!-- Face ID / empreinte -->
+        <div id="biometrie" class="bg-white rounded-2xl shadow-md p-5 scroll-mt-24">
+            <div class="flex items-start justify-between gap-3">
+                <div>
+                    <h2 class="font-bold text-gray-900"><i class="fas fa-fingerprint text-purple-500 mr-2"></i>Face ID / empreinte</h2>
+                    <p class="text-sm text-gray-500 mt-1">Connectez-vous sans mot de passe sur cet appareil.</p>
+                </div>
+                <button type="button" onclick="activerBiometrie()" class="flex-shrink-0 bg-purple-600 text-white px-3 py-2 rounded-xl text-sm font-semibold hover:bg-purple-700">Activer</button>
+            </div>
+            <p id="bioMessage" class="text-sm mt-3 hidden"></p>
+            {% if current_user.cles_biometriques %}
+            <ul class="mt-3 divide-y divide-gray-100 text-sm">
+                {% for cle in current_user.cles_biometriques %}
+                <li class="flex justify-between items-center py-2 gap-2">
+                    <span class="min-w-0">
+                        <i class="fas fa-mobile-screen text-gray-400 mr-1"></i>{{ cle.libelle }}
+                        <span class="block text-xs text-gray-400">ajouté le {{ cle.created_at.strftime('%d/%m/%Y') }}{% if cle.derniere_utilisation %} · utilisé le {{ cle.derniere_utilisation.strftime('%d/%m/%Y') }}{% endif %}</span>
+                    </span>
+                    <form method="POST" action="{{ url_for('boutique.biometrie_retirer', cle_id=cle.id) }}" onsubmit="return confirm('Retirer cet appareil ?')">
+                        <button type="submit" class="text-red-500 hover:text-red-700 text-xs"><i class="fas fa-trash"></i> Retirer</button>
+                    </form>
+                </li>
+                {% endfor %}
+            </ul>
+            {% endif %}
+        </div>
+
+    </div>
 </div>
 
+<script src="https://cdn.jsdelivr.net/npm/@simplewebauthn/browser@10.0.0/dist/bundle/index.umd.min.js"></script>
 <script>
+function libelleAppareil() {
+    const ua = navigator.userAgent;
+    if (/iPhone/.test(ua)) return 'iPhone';
+    if (/iPad/.test(ua)) return 'iPad';
+    if (/Android/.test(ua)) return 'Téléphone Android';
+    if (/Windows/.test(ua)) return 'PC Windows';
+    if (/Mac/.test(ua)) return 'Mac';
+    return 'Appareil';
+}
+function raisonBiometrie(err) {
+    const ua = navigator.userAgent;
+    const autreAppli = /FBAN|FBAV|Instagram|; wv\)|WhatsApp|TikTok|musical_ly/i.test(ua);
+    const samsung = /SamsungBrowser/i.test(ua);
+    if (autreAppli) return "Vous êtes dans le navigateur d'une autre application (WhatsApp, Facebook…). Ouvrez LivraPlus dans Chrome (ou Safari sur iPhone), puis réessayez.";
+    if (err && err.name === 'NotAllowedError')
+        return "L'appareil a refusé ou l'opération a été annulée. Vérifiez qu'un verrouillage d'écran par empreinte, visage ou code est bien configuré "
+             + "(Réglages du téléphone → Sécurité), et que « Gestionnaire de mots de passe Google » est activé sur Android. Puis réessayez"
+             + (samsung ? ' — de préférence dans Chrome plutôt que Samsung Internet.' : '.');
+    if (err && err.name === 'SecurityError') return "Opération bloquée par le navigateur pour ce site. Utilisez l'adresse cataligne.medilogicghp.com dans Chrome ou Safari.";
+    if (err && err.name === 'AbortError') return "Opération interrompue. Réessayez.";
+    return 'Échec : ' + ((err && err.message) || err);
+}
+async function activerBiometrie() {
+    const msg = document.getElementById('bioMessage');
+    const afficher = (texte, ok) => { msg.textContent = texte; msg.className = 'text-sm mt-3 ' + (ok ? 'text-green-600' : 'text-red-600'); };
+    if (!window.SimpleWebAuthnBrowser || !SimpleWebAuthnBrowser.browserSupportsWebAuthn()) {
+        return afficher("Ce navigateur ne permet pas Face ID / empreinte. Ouvrez LivraPlus dans Chrome (Android) ou Safari (iPhone).", false);
+    }
+    try {
+        if (window.PublicKeyCredential && PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable
+            && !(await PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable())) {
+            return afficher("Aucun capteur disponible : configurez d'abord une empreinte, Face ID ou un code de verrouillage dans les réglages du téléphone, puis réessayez.", false);
+        }
+    } catch (e) {}
+    afficher('Suivez les instructions du téléphone (empreinte, visage ou code)…', true);
+    try {
+        const rOpt = await fetch("{{ url_for('boutique.biometrie_inscription_options') }}", { method: 'POST' });
+        if (!rOpt.ok) return afficher('Le serveur a refusé la demande (session expirée ?). Rechargez la page puis réessayez.', false);
+        const dOpt = await rOpt.json();
+        const credential = await SimpleWebAuthnBrowser.startRegistration(dOpt.options);
+        const rVer = await fetch("{{ url_for('boutique.biometrie_inscription_verifier') }}", {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ credential: credential, libelle: libelleAppareil() }),
+        });
+        const dVer = await rVer.json();
+        if (dVer.success) { afficher('Appareil activé ! Vous pourrez vous connecter avec Face ID / empreinte.', true); setTimeout(() => location.reload(), 1200); }
+        else afficher(dVer.error || 'Échec', false);
+    } catch (err) {
+        if (err.name === 'InvalidStateError') return afficher('Cet appareil est déjà activé.', true);
+        afficher(raisonBiometrie(err), false);
+    }
+}
+
 document.getElementById('champLogo').addEventListener('change', function (e) {
     const fichier = e.target.files[0];
     if (!fichier) return;

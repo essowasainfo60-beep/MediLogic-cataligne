@@ -16,24 +16,27 @@
         </a>
     </div>
 
-    <!-- Filtres par statut -->
-    <div class="flex flex-wrap gap-2 mb-6">
-        {% for code, (libelle, classe) in statuts.items() if code == 'nouvelle' %}
-        <a href="{{ url_for('boutique.commandes', statut=code) }}"
-           class="px-3 py-1.5 rounded-full text-sm font-semibold {{ 'bg-purple-600 text-white' if statut_actif == code else 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50' }}">
-            {{ libelle }}s <span class="opacity-75">({{ compteurs.get(code, 0) }})</span>
+    <!-- 4 onglets simples -->
+    <div class="grid grid-cols-4 gap-1 bg-white rounded-2xl shadow-sm p-1 mb-3 text-center">
+        {% for code, libelle, icone, _ in vues %}
+        {% set n = compteurs_vues[code] %}
+        <a href="{{ url_for('boutique.commandes', vue=code) }}"
+           class="relative rounded-xl py-2 px-1 text-xs sm:text-sm {{ 'bg-purple-600 text-white font-bold' if vue_active == code else 'text-gray-600 hover:bg-gray-50' }}">
+            <i class="fas {{ icone }} block text-base mb-0.5"></i>{{ libelle }}
+            {% if n %}<span class="absolute top-1 right-1 min-w-[18px] h-[18px] px-1 rounded-full text-[10px] font-bold flex items-center justify-center
+                {{ 'bg-white text-purple-700' if vue_active == code else ('bg-red-500 text-white' if code == 'a_valider' else 'bg-gray-200 text-gray-700') }}">{{ n }}</span>{% endif %}
         </a>
         {% endfor %}
-        {% for code, (libelle, classe) in statuts.items() if code != 'nouvelle' %}
-        <a href="{{ url_for('boutique.commandes', statut=code) }}"
-           class="px-3 py-1.5 rounded-full text-sm {{ 'bg-purple-600 text-white' if statut_actif == code else 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50' }}">
-            {{ libelle }} <span class="opacity-75">({{ compteurs.get(code, 0) }})</span>
-        </a>
+    </div>
+    <div class="flex flex-wrap gap-2 mb-5 text-xs">
+        {% if vue_active == 'terminees' %}
+        {% for code in ['livree', 'retournee', 'annulee'] %}
+        <a href="{{ url_for('boutique.commandes', statut=code) }}" class="px-2.5 py-1 rounded-full {{ 'bg-purple-100 text-purple-800 font-semibold' if statut_actif == code else 'bg-white border border-gray-200 text-gray-600' }}">{{ statuts[code][0] }} ({{ compteurs.get(code, 0) }})</a>
         {% endfor %}
-        <a href="{{ url_for('boutique.commandes', statut='toutes') }}"
-           class="px-3 py-1.5 rounded-full text-sm {{ 'bg-purple-600 text-white' if not statut_actif else 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50' }}">
-            Toutes <span class="opacity-75">({{ compteurs.values()|sum }})</span>
-        </a>
+        {% elif vue_active == 'a_livrer' and compteurs.get('echec') %}
+        <a href="{{ url_for('boutique.commandes', statut='echec') }}" class="px-2.5 py-1 rounded-full bg-red-50 text-red-700 border border-red-200 font-semibold">⚠ {{ compteurs.get('echec') }} échec(s) à relancer</a>
+        {% endif %}
+        <a href="{{ url_for('boutique.commandes', statut='toutes') }}" class="px-2.5 py-1 rounded-full {{ 'bg-purple-100 text-purple-800 font-semibold' if vue_active == 'toutes' else 'bg-white border border-gray-200 text-gray-600' }}">Toutes ({{ total_commandes }})</a>
     </div>
 
     {% if commandes %}
@@ -203,12 +206,14 @@
     {% else %}
         <div class="bg-white rounded-xl shadow-md p-12 text-center">
             <i class="fas fa-inbox text-gray-300 text-6xl mb-4"></i>
-            {% if statut_actif == 'nouvelle' %}
-            <h3 class="text-xl font-semibold text-gray-600 mb-2">Aucune nouvelle commande</h3>
+            {% if vue_active == 'a_valider' %}
+            <h3 class="text-xl font-semibold text-gray-600 mb-2">Aucune commande à valider</h3>
             <p class="text-gray-500">Tout est traité 👍 Les commandes qui arrivent s'afficheront ici en premier.</p>
             <a href="{{ url_for('boutique.commandes', statut='toutes') }}" class="inline-block mt-4 text-purple-600 hover:underline">Voir toutes les commandes</a>
             {% elif statut_actif %}
             <h3 class="text-xl font-semibold text-gray-600 mb-2">Aucune commande « {{ statuts[statut_actif][0] }} »</h3>
+            {% elif vue_active != 'toutes' %}
+            <h3 class="text-xl font-semibold text-gray-600 mb-2">Rien ici pour le moment</h3>
             {% else %}
             <h3 class="text-xl font-semibold text-gray-600 mb-2">Aucune commande</h3>
             <p class="text-gray-500">Les commandes des clients apparaîtront ici</p>

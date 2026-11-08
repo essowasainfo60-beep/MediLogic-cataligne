@@ -338,44 +338,73 @@ def logout():
 @boutique_bp.route('/dashboard')
 @login_required
 def dashboard():
-    lien_catalogue = url_for('client.catalogue', code=current_user.lien_public, _external=True)
-    articles_count = Article.query.filter_by(boutique_id=current_user.id, archive=False).count()
-    vendeurs_count = Vendeur.query.filter_by(boutique_id=current_user.id, actif=True).count()
-    commandes_count = Commande.query.filter_by(boutique_id=current_user.id).count()
-    nouvelles_count = Commande.query.filter_by(boutique_id=current_user.id, statut='nouvelle').count()
-    en_livraison_count = Commande.query.filter_by(boutique_id=current_user.id, statut='en_livraison').count()
-    confirmees_count = Commande.query.filter_by(boutique_id=current_user.id, statut='confirmee').count()
-    echecs_count = Commande.query.filter_by(boutique_id=current_user.id, statut='echec').count()
+    """Accueil : ce qu'il faut faire maintenant, les chiffres du jour, les dernières commandes."""
+    b = current_user
+    base = Commande.query.filter_by(boutique_id=b.id)
+    compte = lambda *f: base.filter(*f).count()
+    nouvelles = compte(Commande.statut == 'nouvelle')
+    confirmees = base.filter(Commande.statut == 'confirmee').all()
+    a_confier = [c for c in confirmees if not c.est_retrait and not c.proposee_at]
+    en_attente_livreur = [c for c in confirmees if not c.est_retrait and c.proposee_at]
+    a_retirer = [c for c in confirmees if c.est_retrait]
+    echecs = compte(Commande.statut == 'echec')
+    en_route = compte(Commande.statut == 'en_livraison')
+    non_lus = discussions.non_lus_boutique(b.id)
+    ruptures = Article.query.filter(Article.boutique_id == b.id, Article.archive.is_(False),
+                                    Article.stock.isnot(None), Article.stock <= 0).count()
+    pluriel = lambda n, mot: f"{n} {mot}{'s' if n > 1 else ''}"
+    a_faire = [x for x in [
+        (url_for('boutique.commandes', vue='a_valider'), 'fa-inbox', 'red', nouvelles,
+         f"{pluriel(nouvelles, 'commande')} à valider", "Vérifiez et validez : le client est prévenu"),
+        (url_for('boutique.commandes', vue='a_livrer'), 'fa-bullhorn', 'orange', len(a_confier),
+         f"{pluriel(len(a_confier), 'commande')} à confier à un livreur", "Proposez-les aux livreurs disponibles"),
+        (url_for('boutique.commandes', statut='echec'), 'fa-triangle-exclamation', 'red', echecs,
+         f"{pluriel(echecs, 'livraison')} en échec", "Recontactez le client puis relancez"),
+        (url_for('boutique.commandes', vue='a_livrer'), 'fa-hourglass-half', 'amber', len(en_attente_livreur),
+         "En attente qu'un livreur accepte", "Proposées aux livreurs : vous serez prévenu"),
+        (url_for('boutique.commandes', vue='a_livrer'), 'fa-store', 'green', len(a_retirer),
+         f"{pluriel(len(a_retirer), 'client')} attendu{'s' if len(a_retirer) > 1 else ''} à la boutique", "Commandes à remettre sur place"),
+        (url_for('boutique.livraisons'), 'fa-motorcycle', 'purple', en_route,
+         f"{pluriel(en_route, 'livraison')} en route", "Suivez les livreurs sur la carte"),
+        (url_for('boutique.discussions_liste'), 'fa-comments', 'green', non_lus,
+         f"{pluriel(non_lus, 'message')} non lu{'s' if non_lus > 1 else ''}", "Clients et livreurs vous ont écrit"),
+        (url_for('boutique.inventaire'), 'fa-box-open', 'gray', ruptures if peut('boutique.inventaire') else 0,
+         f"{pluriel(ruptures, 'article')} en rupture de stock", "Réapprovisionnez ou archivez"),
+    ] if x[3]]
+
+    # Pour bien démarrer : ce qui manque encore à la boutique
+    etapes = [
+        (bool(Article.query.filter_by(boutique_id=b.id, archive=False).first()), url_for('boutique.ajouter_article'), 'Ajoutez vos premiers articles (avec photos)'),
+        (bool(b.zones) or not peut('boutique.zones_modele'), url_for('boutique.zones_modele') if peut('boutique.zones_modele') else '#',
+         'Paramétrez vos zones et prix de livraison'),
+        (bool(Livreur.query.filter_by(boutique_id=b.id, actif=True).first()), url_for('boutique.livreurs'), 'Ajoutez vos livreurs'),
+        (bool(b.adresse), url_for('boutique.profil'), "Indiquez l'adresse de la boutique (point de départ)"),
+        (bool(b.logo_url), url_for('boutique.profil'), 'Ajoutez votre logo'),
+    ]
+    a_configurer = [(lien, texte) for fait, lien, texte in etapes if not fait]
 
     debut_jour = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
-    du_jour = Commande.query.filter(Commande.boutique_id == current_user.id, Commande.date_commande >= debut_jour).count()
-    livrees_jour = Commande.query.filter(Commande.boutique_id == current_user.id, Commande.statut == 'livree',
-                                         Commande.date_livraison >= debut_jour).all()
-    ruptures = Article.query.filter(Article.boutique_id == current_user.id, Article.archive.is_(False),
-                                    Article.stock.isnot(None), Article.stock <= 0).count()
-    dernieres = (Commande.query.filter_by(boutique_id=current_user.id)
-                 .order_by(Commande.date_commande.desc()).limit(6).all())
+    livrees_jour = base.filter(Commande.statut == 'livree', Commande.date_livraison >= debut_jour).all()
     solde_caisse = db.session.query(db.func.coalesce(db.func.sum(MouvementCaisse.montant), 0)).filter(
-        MouvementCaisse.boutique_id == current_user.id).scalar()
-    chez_livreurs = sum(caisse.a_remettre(c) for c in _livrees_non_reglees())
+        MouvementCaisse.boutique_id == b.id).scalar()
+    return render_template('boutique/dashboard.html', a_faire=a_faire, a_configurer=a_configurer,
+                           etapes_faites=len(etapes) - len(a_configurer), etapes_total=len(etapes),
+                           du_jour=compte(Commande.date_commande >= debut_jour),
+                           livrees_jour=len(livrees_jour), encaisse_jour=sum(c.net_articles for c in livrees_jour),
+                           solde_caisse=solde_caisse, chez_livreurs=sum(caisse.a_remettre(c) for c in _livrees_non_reglees()),
+                           dernieres=base.order_by(Commande.date_commande.desc()).limit(5).all(), fcfa=msg.fcfa)
 
-    return render_template('boutique/dashboard.html', message_statut=msg.message_statut(boutique_connectee(), lien_catalogue),
-                           message_statut_brut=(boutique_connectee().message_statut or msg.message_statut_defaut(boutique_connectee())),
-                           message_statut_perso=bool(boutique_connectee().message_statut),
-                           en_livraison_count=en_livraison_count,
-                           confirmees_count=confirmees_count,
-                           echecs_count=echecs_count,
-                           du_jour=du_jour,
-                           livrees_jour=len(livrees_jour),
-                           encaisse_jour=sum(c.net_articles for c in livrees_jour),
-                           solde_caisse=solde_caisse, chez_livreurs=chez_livreurs,
-                           ruptures=ruptures,
-                           dernieres=dernieres,
-                           fcfa=msg.fcfa,
-                           articles_count=articles_count,
-                           vendeurs_count=vendeurs_count,
-                           commandes_count=commandes_count,
-                           nouvelles_count=nouvelles_count)
+
+@boutique_bp.route('/partager')
+@login_required
+def partager():
+    """Partager le catalogue : lien + message prêt pour le statut WhatsApp."""
+    b = boutique_connectee()
+    lien = url_for('client.catalogue', code=b.lien_public, _external=True)
+    return render_template('boutique/partager.html', lien_catalogue=lien,
+                           message_statut=msg.message_statut(b, lien),
+                           message_statut_brut=b.message_statut or msg.message_statut_defaut(b),
+                           message_statut_perso=bool(b.message_statut))
 
 # ==================== GESTION DU LOGO ====================
 
@@ -636,24 +665,44 @@ def modifier_vendeur(vendeur_id):
 
 # ==================== GESTION DES COMMANDES ====================
 
+# Les commandes en 4 onglets simples (au lieu de 8 statuts)
+VUES_COMMANDES = [
+    ('a_valider', 'À valider', 'fa-inbox', ['nouvelle']),
+    ('a_livrer', 'À livrer', 'fa-box', ['confirmee', 'echec']),
+    ('en_cours', 'En cours', 'fa-motorcycle', ['en_livraison']),
+    ('terminees', 'Terminées', 'fa-circle-check', ['livree', 'retournee', 'annulee']),
+]
+
+
 @boutique_bp.route('/commandes')
 @login_required
 def commandes():
-    # Par défaut : les nouvelles commandes, pour traiter tout de suite celles qui arrivent
-    statut = request.args.get('statut', 'nouvelle')
-    if statut not in Commande.STATUTS:
-        statut = None  # « toutes »
+    # Par défaut : « À valider », pour traiter tout de suite celles qui arrivent.
+    # Ancien paramètre ?statut=… accepté (un statut précis, ou « toutes »).
+    statut = request.args.get('statut')
+    vue = request.args.get('vue')
+    vues = {v[0]: v for v in VUES_COMMANDES}
+    if statut == 'toutes':
+        vue, statuts_filtre = 'toutes', None
+    elif statut in Commande.STATUTS:
+        vue = next(v[0] for v in VUES_COMMANDES if statut in v[3])
+        statuts_filtre = [statut]
+    else:
+        vue = vue if vue in vues or vue == 'toutes' else 'a_valider'
+        statuts_filtre = None if vue == 'toutes' else vues[vue][3]
 
     requete = Commande.query.filter_by(boutique_id=current_user.id)
-    if statut:
-        requete = requete.filter_by(statut=statut)
-    commandes_list = requete.order_by(Commande.date_commande.desc()).all()
+    if statuts_filtre:
+        requete = requete.filter(Commande.statut.in_(statuts_filtre))
+    commandes_list = requete.order_by(Commande.date_commande.desc()).limit(300).all()
 
     compteurs = dict(db.session.query(Commande.statut, db.func.count(Commande.id))
                      .filter(Commande.boutique_id == current_user.id)
                      .group_by(Commande.statut).all())
-    return render_template('boutique/commandes.html', commandes=commandes_list,
-                           statut_actif=statut, compteurs=compteurs, statuts=Commande.STATUTS,
+    compteurs_vues = {v[0]: sum(compteurs.get(s, 0) for s in v[3]) for v in VUES_COMMANDES}
+    return render_template('boutique/commandes.html', commandes=commandes_list, vues=VUES_COMMANDES, vue_active=vue,
+                           compteurs_vues=compteurs_vues, total_commandes=sum(compteurs.values()),
+                           statut_actif=statut if statut in Commande.STATUTS else None, compteurs=compteurs, statuts=Commande.STATUTS,
                            livreurs=Livreur.query.filter_by(boutique_id=current_user.id, actif=True).order_by(Livreur.nom).all(),
                            liens_wa={c.id: liens_whatsapp_livraison(c) for c in commandes_list if c.statut == 'en_livraison' and c.livreur})
 
@@ -1535,7 +1584,7 @@ def message_statut():
     boutique.message_statut = None if request.form.get('reinitialiser') or not texte else texte
     db.session.commit()
     flash('Message du statut enregistré' if boutique.message_statut else 'Message proposé rétabli', 'success')
-    return redirect(url_for('boutique.dashboard') + '#statut')
+    return redirect(url_for('boutique.partager') + '#statut')
 
 # ==================== ABONNEMENT LIVRAPLUS ====================
 

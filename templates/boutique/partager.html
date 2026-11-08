@@ -1,0 +1,79 @@
+{% extends "base.html" %}
+
+{% block title %}Partager mon catalogue - {{ current_user.nom_boutique }}{% endblock %}
+
+{% block content %}
+<div class="max-w-3xl mx-auto px-4 sm:px-6 space-y-5">
+    <div>
+        <h1 class="text-2xl font-extrabold text-gray-900"><i class="fas fa-share-nodes text-purple-500 mr-2"></i> Partager mon catalogue</h1>
+        <p class="text-sm text-gray-500">Faites venir les clients : votre lien, et un message prêt pour votre statut WhatsApp.</p>
+    </div>
+
+    <!-- Message prêt pour le statut WhatsApp -->
+    <div id="statut" class="bg-white rounded-2xl shadow-md p-5">
+        <p class="font-bold text-gray-900"><i class="fab fa-whatsapp text-green-500 mr-1"></i> Mon statut WhatsApp</p>
+        <p class="text-sm text-gray-500 mt-1">Message prêt avec le lien de votre catalogue : vos clients commandent directement depuis votre statut.</p>
+        <div class="mt-3 bg-[#e7fbe6] rounded-xl p-3 text-sm text-gray-800 whitespace-pre-line max-h-64 overflow-y-auto">{{ message_statut }}</div>
+        <div class="grid grid-cols-2 gap-2 mt-3">
+            <a href="https://wa.me/?text={{ message_statut|urlencode }}" target="_blank" rel="noopener"
+               class="col-span-2 text-center bg-green-500 text-white py-3 rounded-xl font-bold hover:bg-green-600"><i class="fab fa-whatsapp mr-1"></i> Publier sur WhatsApp</a>
+            <button type="button" id="copierStatut" class="bg-gray-100 text-gray-700 py-2 rounded-xl font-semibold text-sm"><i class="fas fa-copy mr-1"></i> Copier</button>
+            <button type="button" id="partagerStatut" class="bg-gray-100 text-gray-700 py-2 rounded-xl font-semibold text-sm"><i class="fas fa-share-nodes mr-1"></i> Autre appli</button>
+        </div>
+        <p class="text-xs text-gray-500 mt-2">Dans WhatsApp, choisissez <strong>« Mon statut »</strong> en haut de la liste. Vous pouvez aussi l'envoyer à un groupe ou à un contact.</p>
+        {% if peut('boutique.message_statut') %}
+        <details class="mt-3">
+            <summary class="cursor-pointer text-sm font-semibold text-purple-700"><i class="fas fa-pen mr-1"></i> Modifier le message{{ ' (personnalisé)' if message_statut_perso }}</summary>
+            <form method="POST" action="{{ url_for('boutique.message_statut') }}" class="mt-2 space-y-2">
+                <textarea name="texte" rows="9" maxlength="1500" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm">{{ message_statut_brut }}</textarea>
+                <p class="text-xs text-gray-500">Écrivez <code>{lien}</code> là où doit apparaître le lien du catalogue (sinon il est ajouté à la fin). *texte* = gras dans WhatsApp.</p>
+                <div class="flex flex-wrap gap-2">
+                    <button type="submit" class="bg-purple-600 text-white px-4 py-2 rounded-lg font-semibold text-sm">Enregistrer</button>
+                    {% if message_statut_perso %}
+                    <button type="submit" name="reinitialiser" value="1" class="bg-gray-100 text-gray-700 px-4 py-2 rounded-lg text-sm">Revenir au message proposé</button>
+                    {% endif %}
+                </div>
+            </form>
+        </details>
+        {% endif %}
+    </div>
+    <!-- Lien du catalogue -->
+    <div class="bg-gradient-to-br from-[#0b1d35] to-[#1c3358] text-white rounded-2xl p-5">
+        <p class="font-bold"><i class="fas fa-link mr-2 text-teal-300"></i>Le lien de votre catalogue</p>
+        <p class="text-sm text-white/70 mt-1">À envoyer à vos clients. Il ne donne jamais accès à votre espace.</p>
+        <input type="text" id="clientLink" readonly onclick="this.select()" value="{{ lien_catalogue }}"
+               class="mt-3 w-full bg-white/10 border border-white/20 px-3 py-2 text-sm text-white">
+        <div class="grid grid-cols-3 gap-2 mt-2">
+            <button type="button" onclick="copierLien(this)" class="bg-teal-400 text-[#0b1d35] py-2 rounded-xl font-semibold text-sm"><i class="fas fa-copy mr-1"></i> Copier</button>
+            <a href="https://wa.me/?text={{ ('Découvrez notre catalogue et commandez en ligne : ' ~ lien_catalogue)|urlencode }}" target="_blank"
+               class="text-center bg-white/10 py-2 rounded-xl font-semibold text-sm"><i class="fab fa-whatsapp mr-1"></i> Envoyer</a>
+            <a href="{{ url_for('client.catalogue', code=current_user.lien_public) }}" class="text-center bg-white/10 py-2 rounded-xl font-semibold text-sm"><i class="fas fa-eye mr-1"></i> Voir</a>
+        </div>
+        {% if peut('boutique.regenerer_lien') %}
+        <form method="POST" action="{{ url_for('boutique.regenerer_lien') }}" class="mt-2 text-right"
+              onsubmit="return confirm('Créer un nouveau lien ? L\'ancien lien ne fonctionnera plus pour personne.')">
+            <button type="submit" data-no-loading class="text-xs text-white/60 hover:text-white">Lien partagé par erreur ? En créer un nouveau</button>
+        </form>
+        {% endif %}
+    </div>
+
+</div>
+<script>
+function copierLien(bouton) {
+    const champ = document.getElementById('clientLink');
+    const fini = () => { const avant = bouton.innerHTML; bouton.innerHTML = '<i class="fas fa-check mr-1"></i> Copié !'; setTimeout(() => bouton.innerHTML = avant, 2000); };
+    if (navigator.clipboard) navigator.clipboard.writeText(champ.value).then(fini, () => { champ.select(); document.execCommand('copy'); fini(); });
+    else { champ.select(); document.execCommand('copy'); fini(); }
+}
+(function () {
+    const texte = {{ message_statut|tojson }};
+    document.getElementById('copierStatut').addEventListener('click', async (e) => {
+        try { await navigator.clipboard.writeText(texte); e.currentTarget.innerHTML = '<i class="fas fa-check mr-1"></i> Copié'; }
+        catch (err) { alert(texte); }
+    });
+    const partager = document.getElementById('partagerStatut');
+    if (!navigator.share) { partager.classList.add('hidden'); document.getElementById('copierStatut').classList.add('col-span-2'); }
+    else partager.addEventListener('click', () => navigator.share({ text: texte }).catch(() => {}));
+})();
+</script>
+{% endblock %}

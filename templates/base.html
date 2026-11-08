@@ -76,16 +76,20 @@
 <body class="min-h-screen flex flex-col">
     {% set espace_boutique = current_user.is_authenticated and current_user.nom_boutique is defined and request.blueprint == 'boutique' %}
     {% set vitrine = current_user if espace_boutique else (boutique if boutique is defined and boutique else none) %}
-    {% set liens_boutique = [
+    {% set liens_principaux = [
         ('boutique.dashboard', 'fa-house', 'Accueil'),
         ('boutique.commandes', 'fa-receipt', 'Commandes'),
         ('boutique.livraisons', 'fa-motorcycle', 'Livraisons'),
-        ('boutique.discussions_liste', 'fa-comments', 'Discussions'),
-        ('boutique.clients', 'fa-address-book', 'Clients'),
-        ('boutique.articles', 'fa-boxes-stacked', 'Articles'),
-        ('boutique.inventaire', 'fa-warehouse', 'Stock'),
-        ('boutique.page_caisse', 'fa-cash-register', 'Caisse'),
-        ('boutique.statistiques', 'fa-chart-line', 'Stats')] %}
+        ('boutique.discussions_liste', 'fa-comments', 'Messages')] %}
+    {% set groupes_plus = [
+        ('Vente', [('boutique.articles', 'fa-boxes-stacked', 'Articles'), ('boutique.inventaire', 'fa-warehouse', 'Stock'),
+                   ('boutique.codes_promo', 'fa-ticket', 'Codes promo'), ('boutique.clients', 'fa-address-book', 'Clients')]),
+        ('Argent', [('boutique.page_caisse', 'fa-cash-register', 'Caisse'), ('boutique.statistiques', 'fa-chart-line', 'Statistiques'),
+                    ('boutique.historique', 'fa-clock-rotate-left', 'Historique et export')]),
+        ('Équipe', [('boutique.livreurs', 'fa-id-badge', 'Livreurs et zones'), ('boutique.vendeurs', 'fa-users', 'Équipe et accès')]),
+        ('Ma boutique', [('boutique.partager', 'fa-share-nodes', 'Partager mon catalogue'), ('boutique.profil', 'fa-store', 'Ma boutique et réglages'),
+                         ('boutique.abonnement_page', 'fa-file-signature', 'Abonnement LivraPlus')]),
+    ] %}
 
     <!-- Navigation -->
     <nav class="bg-white/95 backdrop-blur border-b border-gray-200 sticky top-0 z-50">
@@ -104,7 +108,7 @@
                     </div>
                     {% if espace_boutique %}
                     <button type="button" id="btnMenuLateral" onclick="ouvrirMenuLateral()" aria-label="Ouvrir le menu" aria-controls="menuLateral" aria-expanded="false"
-                            class="md:hidden relative h-10 w-10 -ml-1 flex-shrink-0 rounded-xl text-gray-700 hover:bg-gray-100 flex items-center justify-center">
+                            class="hidden relative h-10 w-10 -ml-1 flex-shrink-0 rounded-xl text-gray-700 hover:bg-gray-100 items-center justify-center">
                         <i class="fas fa-bars text-lg"></i>
                         {% if nouvelles_commandes %}<span class="pastille-nouvelles absolute top-1 right-1 bg-red-500 text-white text-[9px] font-bold rounded-full min-w-[16px] h-4 px-1 flex items-center justify-center">{{ nouvelles_commandes }}</span>{% endif %}
                     </button>
@@ -132,10 +136,10 @@
                 {% if espace_boutique %}
                 <!-- Liens principaux (ordinateur / tablette) -->
                 <div class="hidden md:flex items-center gap-1 text-sm">
-                    {% for endpoint, icone, libelle in liens_boutique if peut(endpoint) %}
+                    {% for endpoint, icone, libelle in liens_principaux if peut(endpoint) %}
                     <a href="{{ url_for(endpoint) }}"
                        class="relative px-3 py-2 rounded-lg font-medium transition {{ 'bg-purple-50 text-purple-700' if request.endpoint == endpoint else 'text-gray-600 hover:bg-gray-100' }}">
-                        <i class="fas {{ icone }} opacity-80"></i><span class="hidden xl:inline ml-1.5">{{ libelle }}</span>
+                        <i class="fas {{ icone }} opacity-80"></i><span class="ml-1.5">{{ libelle }}</span>
                         {% if endpoint == 'boutique.discussions_liste' %}
                         <span class="pastille-messages {{ '' if messages_non_lus else 'hidden' }} absolute -top-1 -right-1 bg-green-600 text-white text-[10px] font-bold rounded-full min-w-[18px] h-[18px] px-1 flex items-center justify-center">{{ messages_non_lus or '' }}</span>
                         {% endif %}
@@ -144,6 +148,20 @@
                         {% endif %}
                     </a>
                     {% endfor %}
+                    <details class="menu-utilisateur relative">
+                        <summary class="px-3 py-2 rounded-lg font-medium text-gray-600 hover:bg-gray-100"><i class="fas fa-grip opacity-80"></i><span class="ml-1.5">Plus</span> <i class="fas fa-chevron-down text-[10px] ml-0.5"></i></summary>
+                        <div class="absolute right-0 mt-2 w-[520px] bg-white border border-gray-200 rounded-2xl shadow-xl p-3 grid grid-cols-2 gap-x-4 gap-y-2 z-50">
+                            {% for titre, liens in groupes_plus %}
+                            <div>
+                                <p class="px-2 pt-1 pb-0.5 text-[11px] font-bold uppercase tracking-wide text-gray-400">{{ titre }}</p>
+                                {% for endpoint, icone, libelle in liens if peut(endpoint) %}
+                                <a href="{{ url_for(endpoint) }}" class="flex items-center gap-2 px-2 py-1.5 rounded-lg {{ 'bg-purple-50 text-purple-700 font-semibold' if request.endpoint == endpoint else 'text-gray-700 hover:bg-gray-50' }}">
+                                    <i class="fas {{ icone }} w-4 text-center opacity-80"></i> {{ libelle }}</a>
+                                {% endfor %}
+                            </div>
+                            {% endfor %}
+                        </div>
+                    </details>
                 </div>
                 {% endif %}
 
@@ -187,7 +205,7 @@
                             </button>
                             <a href="{{ url_for('boutique.changer_mot_de_passe') }}" class="flex items-center gap-3 px-4 py-2 text-gray-700 hover:bg-gray-50"><i class="fas fa-key w-4 text-center"></i> Changer le mot de passe</a>
                             {% if not current_user.est_vendeur %}
-                            <a href="{{ url_for('boutique.dashboard') }}#biometrie" class="flex items-center gap-3 px-4 py-2 text-gray-700 hover:bg-gray-50"><i class="fas fa-fingerprint w-4 text-center"></i> Face ID / empreinte</a>
+                            <a href="{{ url_for('boutique.profil') }}#biometrie" class="flex items-center gap-3 px-4 py-2 text-gray-700 hover:bg-gray-50"><i class="fas fa-fingerprint w-4 text-center"></i> Face ID / empreinte</a>
                             {% endif %}
                             <a href="{{ url_for('client.catalogue', code=current_user.lien_public) }}" class="flex items-center gap-3 px-4 py-2 text-gray-700 hover:bg-gray-50"><i class="fas fa-eye w-4 text-center"></i> Voir mon catalogue</a>
                             <button type="button" onclick="basculerTheme()" class="w-full flex items-center gap-3 px-4 py-2 text-gray-700 hover:bg-gray-50">
@@ -226,6 +244,24 @@
     {% endif %}
 
     {% if espace_boutique %}
+    <!-- Barre d'onglets en bas (téléphone), comme une application -->
+    <nav id="ongletsBas" class="md:hidden fixed bottom-0 inset-x-0 z-50 bg-white/95 backdrop-blur border-t border-gray-200 pb-[env(safe-area-inset-bottom)]">
+        <div class="grid grid-cols-5 h-16 text-[11px]">
+            {% for endpoint, icone, libelle in liens_principaux if peut(endpoint) %}
+            {% set actif = request.endpoint == endpoint or (endpoint == 'boutique.commandes' and request.endpoint == 'boutique.commande_details')
+                           or (endpoint == 'boutique.discussions_liste' and request.endpoint == 'boutique.discussion') %}
+            <a href="{{ url_for(endpoint) }}" class="relative flex flex-col items-center justify-center gap-0.5 {{ 'text-purple-700 font-bold' if actif else 'text-gray-500' }}">
+                <i class="fas {{ icone }} text-lg"></i>{{ libelle }}
+                {% if endpoint == 'boutique.commandes' %}<span class="pastille-nouvelles {{ '' if nouvelles_commandes else 'hidden' }} absolute top-1.5 left-1/2 ml-2 bg-red-500 text-white text-[10px] font-bold rounded-full min-w-[18px] h-[18px] px-1 flex items-center justify-center">{{ nouvelles_commandes or '' }}</span>{% endif %}
+                {% if endpoint == 'boutique.discussions_liste' %}<span class="pastille-messages {{ '' if messages_non_lus else 'hidden' }} absolute top-1.5 left-1/2 ml-2 bg-green-600 text-white text-[10px] font-bold rounded-full min-w-[18px] h-[18px] px-1 flex items-center justify-center">{{ messages_non_lus or '' }}</span>{% endif %}
+            </a>
+            {% endfor %}
+            <button type="button" onclick="ouvrirMenuLateral()" class="flex flex-col items-center justify-center gap-0.5 text-gray-500">
+                <i class="fas fa-grip text-lg"></i>Plus</button>
+        </div>
+    </nav>
+    <div class="md:hidden h-20" aria-hidden="true"></div>
+
     <!-- Menu latéral gauche (téléphone) : s'ouvre avec ☰, se ferme en choisissant un onglet -->
     <div id="fondMenuLateral" onclick="fermerMenuLateral()" class="md:hidden fixed inset-0 z-[60] bg-black/40 opacity-0 pointer-events-none transition-opacity duration-200"></div>
     <aside id="menuLateral" aria-label="Menu" aria-hidden="true"
@@ -243,26 +279,15 @@
             <button type="button" onclick="fermerMenuLateral()" aria-label="Fermer le menu" class="h-9 w-9 rounded-lg text-gray-500 hover:bg-gray-100 flex-shrink-0"><i class="fas fa-xmark text-lg"></i></button>
         </div>
         <nav class="flex-1 overflow-y-auto py-2 text-[15px]">
-            {% for endpoint, icone, libelle in liens_boutique if peut(endpoint) %}
+            {% for titre, liens in groupes_plus %}
+            <p class="mx-5 mt-3 mb-1 text-[11px] font-bold uppercase tracking-wide text-gray-400">{{ titre }}</p>
+            {% for endpoint, icone, libelle in liens if peut(endpoint) %}
             <a href="{{ url_for(endpoint) }}"
-               class="flex items-center gap-3 mx-2 px-3 py-3 rounded-xl {{ 'bg-purple-50 text-purple-700 font-semibold' if request.endpoint == endpoint else 'text-gray-700 hover:bg-gray-50' }}">
-                <i class="fas {{ icone }} w-5 text-center"></i> {{ 'Statistiques' if libelle == 'Stats' else libelle }}
-                {% if endpoint == 'boutique.commandes' and nouvelles_commandes %}<span class="pastille-nouvelles ml-auto bg-red-500 text-white text-[11px] font-bold rounded-full px-2 py-0.5">{{ nouvelles_commandes }}</span>{% endif %}
-                {% if endpoint == 'boutique.discussions_liste' %}<span class="pastille-messages {{ '' if messages_non_lus else 'hidden' }} ml-auto bg-green-600 text-white text-[11px] font-bold rounded-full px-2 py-0.5">{{ messages_non_lus or '' }}</span>{% endif %}
-            </a>
-            {% endfor %}
-            <div class="border-t border-gray-100 my-2 mx-4"></div>
-            {% for endpoint, icone, libelle in [('boutique.codes_promo', 'fa-ticket', 'Codes promo'), ('boutique.historique', 'fa-clock-rotate-left', 'Historique et export'),
-                                               ('boutique.profil', 'fa-store', 'Ma boutique'), ('boutique.vendeurs', 'fa-users', 'Équipe et accès'),
-                                               ('boutique.abonnement_page', 'fa-file-signature', 'Abonnement LivraPlus')] if peut(endpoint) %}
-            <a href="{{ url_for(endpoint) }}"
-               class="flex items-center gap-3 mx-2 px-3 py-2.5 rounded-xl text-sm {{ 'bg-purple-50 text-purple-700 font-semibold' if request.endpoint == endpoint else 'text-gray-600 hover:bg-gray-50' }}">
+               class="flex items-center gap-3 mx-2 px-3 py-2.5 rounded-xl text-sm {{ 'bg-purple-50 text-purple-700 font-semibold' if request.endpoint == endpoint else 'text-gray-700 hover:bg-gray-50' }}">
                 <i class="fas {{ icone }} w-5 text-center"></i> {{ libelle }}
             </a>
             {% endfor %}
-            <a href="{{ url_for('client.catalogue', code=current_user.lien_public) }}" class="flex items-center gap-3 mx-2 px-3 py-2.5 rounded-xl text-sm text-gray-600 hover:bg-gray-50">
-                <i class="fas fa-eye w-5 text-center"></i> Voir mon catalogue
-            </a>
+            {% endfor %}
         </nav>
         <div class="border-t border-gray-100 p-2 flex-shrink-0 text-sm">
             <button type="button" onclick="activerAlertes()" class="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-purple-700 font-semibold hover:bg-purple-50">
@@ -540,7 +565,8 @@
         function majPastilles(n) {
             document.querySelectorAll('nav a[href$="/boutique/commandes"]').forEach((a) => {
                 let p = a.querySelector('.pastille-nouvelles');
-                if (!n) { if (p) p.remove(); return; }
+                if (p) { p.textContent = n || ''; p.classList.toggle('hidden', !n); return; }
+                if (!n) return;
                 if (!p) { p = document.createElement('span'); p.className = 'pastille-nouvelles absolute -top-1 -right-1 bg-red-500 text-white text-[10px] font-bold rounded-full min-w-[18px] h-[18px] px-1 flex items-center justify-center'; a.classList.add('relative'); a.appendChild(p); }
                 p.textContent = n;
             });

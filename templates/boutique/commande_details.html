@@ -6,415 +6,335 @@
 {% block title %}Commande n°{{ commande.numero }}{% endblock %}
 
 {% block content %}
-{% set numero = commande.numero %}
-<div class="max-w-[1100px] mx-auto px-4 sm:px-6 py-2">
-    <div class="bg-white rounded-xl shadow-lg overflow-hidden">
-        <!-- En-tête -->
-        <div class="bg-gradient-to-r from-purple-500 to-purple-600 px-6 py-4 flex justify-between items-center">
-            <div>
-                <h1 class="text-2xl font-bold text-white">
-                    <i class="fas fa-receipt mr-2"></i> Commande n°{{ numero }}
-                </h1>
-                <p class="text-purple-100">{{ commande.date_commande.strftime('%d/%m/%Y à %H:%M') }} · {{ commande.source_libelle }}
-                    {% if commande.saisie_par %} · saisie par {{ commande.saisie_par }}{% endif %}
-                    {% if commande.confirmee_par %} · confirmée par {{ commande.confirmee_par }}{% endif %}</p>
-            </div>
-            <span class="px-3 py-1 rounded-full text-sm font-semibold {{ commande.statut_classe }}">{{ commande.statut_libelle }}</span>
+{% set c = commande %}
+{% set tel = c.client_telephone|wa %}
+<div class="max-w-[1100px] mx-auto px-4 sm:px-6 py-2 space-y-4">
+
+    <!-- ===== En-tête ===== -->
+    <div class="flex items-start justify-between gap-3">
+        <div class="min-w-0">
+            <a href="{{ url_for('boutique.commandes') }}" class="text-sm text-gray-500 hover:underline"><i class="fas fa-arrow-left mr-1"></i> Commandes</a>
+            <h1 class="text-2xl font-extrabold text-gray-900">Commande n°{{ c.numero }}</h1>
+            <p class="text-sm text-gray-500">{{ c.date_commande.strftime('%d/%m/%Y à %H:%M') }} · {{ c.source_libelle }}
+                {% if c.saisie_par %} · saisie par {{ c.saisie_par }}{% endif %}{% if c.confirmee_par %} · confirmée par {{ c.confirmee_par }}{% endif %}</p>
+        </div>
+        <span class="flex-shrink-0 px-3 py-1 rounded-full text-sm font-semibold {{ c.statut_classe }}">{{ c.statut_libelle }}</span>
+    </div>
+
+    <!-- ===== Étapes ===== -->
+    {% if c.statut not in ['annulee', 'retournee'] %}
+    {% if c.est_retrait %}
+    {% set rang = {'nouvelle': 0, 'confirmee': 1, 'livree': 2}.get(c.statut, 0) %}{% set etapes_suivi = ['Reçue', 'Confirmée · à retirer', 'Remise au client'] %}
+    {% else %}
+    {% set rang = {'nouvelle': 0, 'confirmee': 1, 'en_livraison': 2, 'echec': 2, 'livree': 3}.get(c.statut, 0) %}{% set etapes_suivi = ['Reçue', 'Confirmée', 'En livraison', 'Livrée'] %}
+    {% endif %}
+    <ol class="grid grid-cols-{{ etapes_suivi|length }} gap-1 text-[11px] sm:text-xs text-center">
+        {% for libelle in etapes_suivi %}
+        <li>
+            <div class="h-1.5 rounded-full {{ 'bg-green-500' if loop.index0 <= rang else 'bg-gray-200' }}"></div>
+            <p class="mt-1.5 {{ 'font-bold text-red-600' if loop.index0 == rang and c.statut == 'echec' else ('font-bold text-gray-900' if loop.index0 == rang else ('text-green-700' if loop.index0 < rang else 'text-gray-400')) }}">
+                {% if loop.index0 < rang %}✓ {% endif %}{{ 'Échec de livraison' if loop.index0 == rang and c.statut == 'echec' else libelle }}</p>
+        </li>
+        {% endfor %}
+    </ol>
+    {% endif %}
+
+    <!-- ===== PROCHAINE ÉTAPE : un seul gros bouton ===== -->
+    <div id="livraison" class="rounded-2xl border-2 p-4 shadow-sm {{ 'border-purple-400 bg-purple-50' if c.statut in ['nouvelle', 'confirmee', 'echec', 'en_livraison'] else 'border-gray-200 bg-white' }}">
+        {% if c.statut == 'annulee' %}
+        <p class="font-semibold text-gray-700"><i class="fas fa-ban mr-1 text-red-500"></i> Commande annulée.</p>
+
+        {% elif c.statut in ['livree', 'retournee'] %}
+        <p class="text-xs font-bold uppercase tracking-wide text-green-700">Terminée</p>
+        <p class="font-bold text-gray-900 mt-1"><i class="fas fa-circle-check text-green-600 mr-1"></i>
+            {{ ('Livrée par ' ~ c.livreur.nom) if c.livree_par_livreur else 'Commande remise par la boutique' }}{% if c.date_livraison %} le {{ c.date_livraison.strftime('%d/%m/%Y à %H:%M') }}{% endif %}
+            · <span class="text-green-700">payée</span></p>
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-3">
+            <a href="{{ url_for('boutique.imprimer_commande', commande_id=c.id, format='80') }}" class="text-center bg-gray-900 text-white py-3 rounded-xl font-bold"><i class="fas fa-receipt mr-1"></i> Imprimer le reçu</a>
+            <a href="{{ url_for('boutique.retour_commande', commande_id=c.id) }}" class="text-center bg-white border-2 border-orange-300 text-orange-700 py-3 rounded-xl font-semibold"><i class="fas fa-rotate-left mr-1"></i> Retour / échange d'articles</a>
         </div>
 
-        <div class="p-6">
-            <!-- Suivi : Reçue → Confirmée → En livraison → Livrée -->
-            {% if commande.statut in ['annulee', 'retournee'] %}
-            <p class="mb-5 px-4 py-3 rounded-xl text-sm font-semibold {{ commande.statut_classe }}">
-                <i class="fas fa-circle-info mr-1"></i> Commande {{ commande.statut_libelle|lower }}.
-            </p>
-            {% else %}
-            {% if commande.est_retrait %}
-            {% set rang = {'nouvelle': 0, 'confirmee': 1, 'livree': 2}.get(commande.statut, 0) %}{% set etapes_suivi = ['Reçue', 'Confirmée · à retirer', 'Remise au client'] %}
-            {% else %}
-            {% set rang = {'nouvelle': 0, 'confirmee': 1, 'en_livraison': 2, 'echec': 2, 'livree': 3}.get(commande.statut, 0) %}{% set etapes_suivi = ['Reçue', 'Confirmée', 'En livraison', 'Livrée'] %}
-            {% endif %}
-            <ol class="grid grid-cols-{{ etapes_suivi|length }} gap-1 mb-6 text-[11px] sm:text-xs text-center">
-                {% for libelle in etapes_suivi %}
-                <li>
-                    <div class="h-1.5 rounded-full {{ 'bg-green-500' if loop.index0 <= rang else 'bg-gray-200' }}"></div>
-                    <p class="mt-1.5 {{ 'font-bold text-red-600' if loop.index0 == rang and commande.statut == 'echec' else ('font-bold text-gray-900' if loop.index0 == rang else ('text-green-700' if loop.index0 < rang else 'text-gray-400')) }}">
-                        {% if loop.index0 < rang %}✓ {% endif %}{{ 'Échec de livraison' if loop.index0 == rang and commande.statut == 'echec' else libelle }}
-                    </p>
-                </li>
+        {% elif c.est_retrait %}
+        <p class="text-xs font-bold uppercase tracking-wide text-purple-700">Prochaine étape</p>
+        <p class="font-bold text-gray-900 mt-1">🛍 Le client a choisi de passer récupérer sa commande à la boutique (pas de livraison)</p>
+        {% if c.statut == 'nouvelle' %}
+        <form method="POST" action="{{ url_for('boutique.valider_commande_boutique', commande_id=c.id) }}" class="mt-3">
+            <button type="submit" class="w-full bg-purple-600 text-white py-3.5 rounded-xl font-bold text-lg hover:bg-purple-700"><i class="fas fa-check mr-1"></i> Confirmer et inviter le client à passer</button>
+        </form>
+        <p class="text-xs text-gray-600 mt-1">Le client reçoit l'adresse de la boutique et l'itinéraire dans la messagerie LivraPlus.
+            <a href="{{ url_for('boutique.envoyer_confirmation_client', commande_id=c.id) }}" target="_blank" class="text-green-700 font-semibold underline">Prévenir aussi par WhatsApp</a></p>
+        {% else %}
+        <p class="text-sm text-gray-600 mt-1">✓ Confirmée · à retirer : le client a reçu l'adresse de la boutique. Quand il passe :</p>
+        {% endif %}
+        <form method="POST" action="{{ url_for('boutique.changer_statut_commande', commande_id=c.id) }}" class="mt-2"
+              data-question="Confirmer : la commande n°{{ c.numero }} est remise à {{ c.client_nom }} et {{ fcfa(c.total) }} encaissés ?"
+              onsubmit="return confirm(this.dataset.question)">
+            <button type="submit" name="statut" value="livree" class="w-full {{ 'bg-green-600 text-white text-lg py-3.5' if c.statut == 'confirmee' else 'bg-white text-green-700 border-2 border-green-600 py-2.5' }} rounded-xl font-bold">
+                ✅ Remise au client (payée)</button>
+        </form>
+
+        {% elif c.statut == 'nouvelle' %}
+        <p class="text-xs font-bold uppercase tracking-wide text-purple-700">Étape 1 sur 3 — Valider la commande</p>
+        <p class="text-sm text-gray-600 mt-1">Vérifiez les articles et l'adresse ci-dessous, puis validez : le client est prévenu.</p>
+        <form method="POST" action="{{ url_for('boutique.proposer_aux_livreurs', commande_id=c.id) }}" class="mt-3">
+            <button type="submit" class="w-full bg-purple-600 text-white py-3.5 rounded-xl font-bold text-lg hover:bg-purple-700"><i class="fas fa-bullhorn mr-1"></i> Valider et proposer aux livreurs</button>
+        </form>
+        <form method="POST" action="{{ url_for('boutique.valider_commande_boutique', commande_id=c.id) }}" class="mt-2">
+            <button type="submit" class="w-full bg-white border-2 border-purple-300 text-purple-700 py-2.5 rounded-xl font-semibold"><i class="fas fa-check mr-1"></i> Valider la commande seulement (je choisis le livreur après)</button>
+        </form>
+
+        {% elif c.statut in ['confirmee', 'echec'] %}
+        {% if c.statut == 'echec' %}
+        <div class="mb-3 rounded-xl border border-red-200 bg-red-50 p-3 text-sm">
+            <p class="text-red-800"><i class="fas fa-triangle-exclamation mr-1"></i>
+                <strong>Échec de livraison</strong>{% if c.livreur %} signalé par {{ c.livreur.nom }}{% endif %}{% if c.date_echec %} le {{ c.date_echec.strftime('%d/%m à %H:%M') }}{% endif %} :
+                {{ c.motif_echec or 'motif non précisé' }}. Tentative(s) : {{ c.tentatives }}.</p>
+            <a href="{{ wa_echec }}" target="_blank" class="inline-block mt-2 bg-green-500 text-white px-3 py-1.5 rounded-lg font-semibold"><i class="fab fa-whatsapp mr-1"></i> Recontacter le client</a>
+        </div>
+        {% endif %}
+        <p class="text-xs font-bold uppercase tracking-wide text-purple-700">Étape 2 sur 3 — Trouver un livreur</p>
+        {% if c.proposee_at %}
+        <p class="text-sm text-orange-900 bg-orange-50 border border-orange-200 rounded-xl p-3 mt-2"><i class="fas fa-hourglass-half mr-1"></i>
+            Proposée aux livreurs à {{ c.proposee_at.strftime('%H:%M') }} : en attente qu'un livreur accepte. Vous serez prévenu dès qu'il passe la récupérer.</p>
+        <form method="POST" action="{{ url_for('boutique.proposer_aux_livreurs', commande_id=c.id) }}" class="mt-2 grid grid-cols-2 gap-2">
+            <button type="submit" class="bg-orange-500 text-white py-2.5 rounded-xl text-sm font-semibold"><i class="fas fa-rotate mr-1"></i> Relancer les livreurs</button>
+            <button type="submit" name="annuler" value="1" class="bg-white border border-gray-300 text-gray-700 py-2.5 rounded-xl text-sm">Retirer la proposition</button>
+        </form>
+        {% else %}
+        <p class="text-sm text-gray-600 mt-1">Le premier livreur disponible qui accepte passe récupérer la commande.</p>
+        <form method="POST" action="{{ url_for('boutique.proposer_aux_livreurs', commande_id=c.id) }}" class="mt-3">
+            <button type="submit" class="w-full bg-orange-500 text-white py-3.5 rounded-xl font-bold text-lg hover:bg-orange-600"><i class="fas fa-bullhorn mr-1"></i> Proposer aux livreurs disponibles</button>
+        </form>
+        {% endif %}
+        {% if livreurs %}
+        <form method="POST" action="{{ url_for('boutique.attribuer_livreur', commande_id=c.id) }}" class="mt-3 flex flex-col sm:flex-row gap-2"
+              data-question="{{ ('Relancer la livraison n°' ~ c.numero ~ ' ?') if c.statut == 'echec' else ('Confier la commande n°' ~ c.numero ~ ' de ' ~ c.client_nom ~ ' à ce livreur ?') }}"
+              onsubmit="return confirm(this.dataset.question + '\n\nLivreur : ' + this.livreur_id.selectedOptions[0].dataset.nom)">
+            <select name="livreur_id" required class="flex-1 border border-gray-300 px-3 py-2.5 bg-white">
+                <option value="" data-nom="">Ou choisir moi-même le livreur…</option>
+                {% for l in livreurs %}
+                <option value="{{ l.id }}" data-nom="{{ l.nom }}" {{ 'selected' if livreur_propose == l.id }}>🛵 {{ l.nom }}{% if c.zone and c.zone.livreur_id == l.id %} · livreur de la zone{% endif %}{% if not l.disponible %} · en pause{% endif %}</option>
                 {% endfor %}
-            </ol>
+            </select>
+            <button type="submit" class="bg-white border-2 border-purple-300 text-purple-700 px-5 py-2.5 rounded-xl font-semibold">
+                {% if c.statut == 'echec' %}<i class="fas fa-rotate-right mr-1"></i> Relancer la livraison{% else %}<i class="fas fa-motorcycle mr-1"></i> Confier à ce livreur{% endif %}</button>
+        </form>
+        {% else %}
+        <p class="text-sm text-gray-600 mt-2">Aucun livreur enregistré. <a href="{{ url_for('boutique.livreurs') }}" class="text-purple-700 font-semibold underline">Ajouter un livreur</a></p>
+        {% endif %}
+
+        {% elif c.statut == 'en_livraison' %}
+        <p class="text-xs font-bold uppercase tracking-wide text-purple-700">Étape 3 sur 3 — En livraison</p>
+        <p class="font-semibold text-gray-900 mt-1">🛵 {{ c.livreur.nom }} · {{ c.livreur.telephone }}
+            {% if c.date_arrivee %}<span class="block text-sm text-green-700"><i class="fas fa-location-dot"></i> arrivé chez le client à {{ c.date_arrivee.strftime('%H:%M') }}</span>{% endif %}</p>
+        <p class="text-xs text-gray-600 mt-1">Le livreur marque « Livrée » depuis son téléphone. Vous pouvez aussi le faire ici :</p>
+        <form method="POST" action="{{ url_for('boutique.changer_statut_commande', commande_id=c.id) }}" class="mt-3"
+              data-question="Confirmer : {{ c.livreur.nom }} a livré la commande n°{{ c.numero }} et a l'argent (à remettre à la caisse) ?"
+              onsubmit="return confirm(this.dataset.question)">
+            <button type="submit" name="statut" value="livree" class="w-full bg-green-600 text-white py-3.5 rounded-xl font-bold text-lg hover:bg-green-700">✅ Livrée par {{ c.livreur.nom }}</button>
+        </form>
+        <form method="POST" action="{{ url_for('boutique.changer_statut_commande', commande_id=c.id) }}" class="mt-2"
+              data-question="Confirmer : la boutique a remis elle-même la commande n°{{ c.numero }} et encaissé l'argent ?"
+              onsubmit="return confirm(this.dataset.question)">
+            <input type="hidden" name="par" value="boutique">
+            <button type="submit" name="statut" value="livree" class="w-full bg-white border-2 border-green-600 text-green-700 py-2.5 rounded-xl font-semibold">🏪 Remise par la boutique</button>
+        </form>
+        {% endif %}
+    </div>
+
+    <!-- ===== Discussion + trajet ===== -->
+    <a href="{{ url_for('boutique.discussion_commande_boutique', commande_id=c.id) }}"
+       class="flex items-center justify-center gap-2 bg-white text-purple-700 border border-purple-200 py-3 rounded-xl font-semibold hover:bg-purple-50 shadow-sm">
+        <i class="fas fa-comments"></i> Discussion avec le client{{ ' et le livreur' if c.livreur and not c.est_retrait }}
+        {% if discussion_non_lus %}<span class="bg-red-500 text-white text-xs rounded-full px-2">{{ discussion_non_lus }}</span>{% endif %}
+    </a>
+    {% if c.date_depart and c.livreur %}
+    {% include '_carte.html' %}
+    <details id="blocTrajet" class="bg-white rounded-2xl shadow-sm border border-gray-200 p-3" {{ 'open' if c.statut == 'en_livraison' }}>
+        <summary class="cursor-pointer text-sm font-semibold text-purple-700"><i class="fas fa-route mr-1"></i> Trajet du livreur{{ ' — en direct' if c.statut == 'en_livraison' }}</summary>
+        <div id="carteTrajet" class="h-72 rounded-xl border mt-2"></div>
+        <p id="infoTrajet" class="text-xs text-gray-500 mt-2"></p>
+        <div id="etapesTrajet" class="mt-2 flex flex-wrap gap-1 text-[11px]"></div>
+    </details>
+    <script>
+    (function () {
+        if (!window.L || !window.Carte) return;
+        const bloc = document.getElementById('blocTrajet');
+        const enDirect = {{ (c.statut == 'en_livraison')|tojson }};
+        let carte = null, couche = null, cadree = false;
+        function charger() {
+            fetch({{ url_for('boutique.api_trajet_commande', commande_id=c.id)|tojson }}, { cache: 'no-store' })
+                .then((r) => r.json()).then((d) => {
+                    if (!carte) { carte = Carte.creer('carteTrajet'); couche = L.layerGroup().addTo(carte); }
+                    carte.invalidateSize();
+                    couche.clearLayers();
+                    const pts = d.points.map((p) => [p.lat, p.lng]);
+                    const info = document.getElementById('infoTrajet'), etapes = document.getElementById('etapesTrajet');
+                    if (d.destination) L.marker([d.destination.lat, d.destination.lng], { icon: Carte.client() }).addTo(couche).bindPopup('Client');
+                    if (!pts.length) {
+                        info.textContent = "Aucune position GPS reçue pour cette course (le livreur n'a pas activé le suivi).";
+                        if (d.destination && !cadree) { Carte.cadrer(carte, [[d.destination.lat, d.destination.lng]]); cadree = true; }
+                        return;
+                    }
+                    L.polyline(pts, { color: '#7c3aed', weight: 5, opacity: .8 }).addTo(couche);
+                    L.marker(pts[0], { icon: Carte.depart() }).addTo(couche).bindPopup('Départ ' + d.points[0].heure);
+                    const fin = d.points[d.points.length - 1];
+                    L.marker(pts[pts.length - 1], { icon: Carte.livreur() }).addTo(couche).bindPopup((enDirect ? 'Position de ' : 'Dernière position ') + fin.heure);
+                    if (!cadree) { Carte.cadrer(carte, pts.concat(d.destination ? [[d.destination.lat, d.destination.lng]] : [])); cadree = true; }
+                    info.textContent = d.points.length + ' positions de ' + d.points[0].heure + ' à ' + fin.heure
+                        + (d.situation && d.situation.distance_km != null ? ' · encore ' + String(d.situation.distance_km).replace('.', ',')
+                           + ' km, arrivée dans ~' + d.situation.arrivee_min + ' min' : '');
+                    etapes.innerHTML = '';
+                    let dernier = '';
+                    d.points.forEach((p, i) => {
+                        const m = parseInt(p.heure.slice(3), 10);
+                        if (i === 0 || i === d.points.length - 1 || (m % 5 === 0 && p.heure !== dernier)) {
+                            dernier = p.heure;
+                            const b = document.createElement('button');
+                            b.type = 'button'; b.className = 'px-2 py-0.5 rounded-full bg-purple-50 text-purple-700 hover:bg-purple-100';
+                            b.textContent = p.heure + (p.vitesse ? ' · ' + Math.round(p.vitesse) + ' km/h' : '');
+                            b.addEventListener('click', () => { carte.setView([p.lat, p.lng], 17); L.popup().setLatLng([p.lat, p.lng]).setContent('Ici à ' + p.heure).openOn(carte); });
+                            etapes.appendChild(b);
+                        }
+                    });
+                }).catch(() => {});
+        }
+        if (bloc.open) charger();
+        bloc.addEventListener('toggle', () => { if (bloc.open) charger(); });
+        if (enDirect) setInterval(() => { if (bloc.open && !document.hidden) charger(); }, 20000);
+    })();
+    </script>
+    {% endif %}
+
+    <div class="fiche-2col">
+        <!-- ===== Client ===== -->
+        <div class="bg-white rounded-2xl shadow-sm border border-gray-200 p-4 space-y-2">
+            <div class="flex items-start justify-between gap-2">
+                <div class="min-w-0">
+                    <p class="text-xs font-bold uppercase tracking-wide text-gray-500">Client</p>
+                    <p class="font-bold text-gray-900">{{ c.client_nom }}
+                        <a href="{{ url_for('boutique.fiche_client', cle=(c.client_telephone|select('in', '0123456789')|join)[-8:]) }}" class="ml-1 text-xs font-normal text-purple-600 hover:underline">fiche client</a></p>
+                    <p class="text-sm text-gray-600">{{ c.client_telephone }}</p>
+                </div>
+                <div class="flex gap-1.5 flex-shrink-0">
+                    <a href="tel:{{ c.client_telephone|replace(' ', '') }}" class="h-10 w-10 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center" title="Appeler"><i class="fas fa-phone"></i></a>
+                    <a href="https://wa.me/{{ tel }}" target="_blank" class="h-10 w-10 rounded-xl bg-green-50 text-green-600 flex items-center justify-center" title="WhatsApp"><i class="fab fa-whatsapp"></i></a>
+                </div>
+            </div>
+            <div class="pt-2 border-t border-gray-100">
+                <p class="text-xs text-gray-500">{{ 'Retrait' if c.est_retrait else 'Adresse de livraison' }}{% if c.zone %} · zone <strong>{{ c.zone.nom }}</strong>{% endif %}</p>
+                <p class="font-medium">{{ c.client_adresse }}</p>
+                {% if not c.est_retrait %}
+                <a href="{{ c.lien_carte }}" target="_blank" class="text-sm text-purple-700 hover:underline"><i class="fas fa-map-location-dot mr-1"></i>
+                    {{ 'Voir la position du client' if c.carte_integree else 'Chercher cette adresse sur la carte' }}</a>
+                {{ alerte_zone(c) }}
+                {% endif %}
+            </div>
+            {% if c.creneau %}<p class="text-sm font-semibold text-purple-700"><i class="fas fa-clock mr-1"></i> {{ c.creneau }}</p>{% endif %}
+            {% if c.instructions %}<p class="text-sm bg-yellow-50 border border-yellow-200 rounded-lg p-2">📝 {{ c.instructions }}</p>{% endif %}
+            {% if c.photo_preuve %}
+            <div class="pt-2 border-t border-gray-100">
+                <p class="text-xs text-gray-500 mb-1"><i class="fas fa-camera mr-1"></i> Photo de preuve du livreur</p>
+                <a href="{{ c.photo_preuve }}" target="_blank"><img src="{{ c.photo_preuve }}" alt="Preuve de livraison" class="h-32 rounded-xl border object-cover"></a>
+            </div>
             {% endif %}
+        </div>
 
-            <div class="fiche-2col">
-            <div>
-            <!-- Client -->
-            <div class="border-b border-gray-200 pb-4 mb-4">
-                <h2 class="text-lg font-semibold text-gray-800 mb-3">
-                    <i class="fas fa-user text-purple-500 mr-2"></i> Informations client
-                </h2>
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                        <p class="text-sm text-gray-500">Nom complet</p>
-                        <p class="font-medium">{{ commande.client_nom }}
-                            <a href="{{ url_for('boutique.fiche_client', cle=(commande.client_telephone|select('in', '0123456789')|join)[-8:]) }}" class="ml-1 text-xs text-purple-600 hover:underline">fiche client</a></p>
-                    </div>
-                    <div>
-                        <p class="text-sm text-gray-500">Téléphone</p>
-                        <p class="font-medium">{{ commande.client_telephone }}</p>
-                    </div>
-                    <div class="md:col-span-2">
-                        <p class="text-sm text-gray-500">Adresse de livraison</p>
-                        <p class="font-medium">{{ commande.client_adresse }}</p>
-                        {% if commande.carte_integree %}
-                        <iframe src="{{ commande.carte_integree }}" class="w-full h-56 rounded-lg border mt-2" loading="lazy"></iframe>
+        <!-- ===== Articles et total ===== -->
+        <div class="bg-white rounded-2xl shadow-sm border border-gray-200 p-4">
+            <p class="text-xs font-bold uppercase tracking-wide text-gray-500 mb-2">Articles</p>
+            {% for article in c.articles_json %}
+            <div class="flex justify-between items-center gap-3 py-2 border-b border-gray-100">
+                <div class="flex items-center gap-3 min-w-0">
+                    {% if article.photo %}<img src="{{ article.photo }}" alt="" class="w-12 h-12 object-cover rounded-lg flex-shrink-0">{% endif %}
+                    <div class="min-w-0">
+                        <p class="font-medium truncate">{% if article.numero %}<span class="text-purple-600">n°{{ article.numero }}</span> · {% endif %}{{ article.nom }}</p>
+                        <p class="text-sm text-gray-500">{{ fcfa(article.prix) }} × {{ article.quantite }}</p>
+                        {% if article.photo_num and article.numero %}
+                        <a href="{{ url_for('client.voir_article', code=c.boutique.lien_public, numero=article.numero, photo=article.photo_num) }}"
+                           class="text-xs font-semibold text-purple-700 hover:underline"><i class="fas fa-image mr-1"></i>Photo choisie {{ article.photo_num }}/{{ article.photos_total }} — voir</a>
                         {% endif %}
-                        <a href="{{ commande.lien_carte }}" target="_blank" class="inline-block mt-2 text-sm text-primary hover:underline">
-                            <i class="fas fa-map-location-dot mr-1"></i>
-                            {{ 'Voir la position du client sur Google Maps' if commande.carte_integree else 'Chercher cette adresse sur Google Maps' }}
-                        </a>
                     </div>
-                    {% if commande.creneau %}
-                    <div class="md:col-span-2">
-                        <p class="text-sm text-gray-500">Livraison souhaitée</p>
-                        <p class="font-medium text-purple-700"><i class="fas fa-clock mr-1"></i> {{ commande.creneau }}</p>
-                    </div>
-                    {% endif %}
-                    {% if commande.instructions %}
-                    <div class="md:col-span-2">
-                        <p class="text-sm text-gray-500">Instructions du client</p>
-                        <p class="font-medium bg-yellow-50 border border-yellow-200 rounded p-2">{{ commande.instructions }}</p>
-                    </div>
-                    {% endif %}
                 </div>
+                <p class="font-semibold whitespace-nowrap">{{ fcfa(article.prix * article.quantite) }}</p>
             </div>
-
-            <!-- Articles -->
-            <div class="border-b border-gray-200 pb-4 mb-4">
-                <h2 class="text-lg font-semibold text-gray-800 mb-3">
-                    <i class="fas fa-boxes text-purple-500 mr-2"></i> Articles commandés
-                </h2>
-                <div class="space-y-2">
-                    {% for article in commande.articles_json %}
-                        <div class="flex justify-between items-center py-2 border-b border-gray-100">
-                            <div class="flex items-center gap-3">
-                                {% if article.photo %}
-                                <img src="{{ article.photo }}" alt="" class="w-12 h-12 object-cover rounded">
-                                {% endif %}
-                                <div>
-                                    <p class="font-medium">{% if article.numero %}<span class="text-purple-600">n°{{ article.numero }}</span> · {% endif %}{{ article.nom }}</p>
-                                    <p class="text-sm text-gray-500">{{ fcfa(article.prix) }} × {{ article.quantite }}</p>
-                                    {% if article.photo_num and article.numero %}
-                                    <a href="{{ url_for('client.voir_article', code=commande.boutique.lien_public, numero=article.numero, photo=article.photo_num) }}" target="_blank"
-                                       class="text-xs font-semibold text-purple-700 hover:underline"><i class="fas fa-image mr-1"></i>Photo choisie {{ article.photo_num }}/{{ article.photos_total }} — voir</a>
-                                    {% endif %}
-                                </div>
-                            </div>
-                            <p class="font-semibold text-primary">{{ fcfa(article.prix * article.quantite) }}</p>
-                        </div>
-                    {% endfor %}
-                </div>
-            </div>
-
-            <!-- Total -->
-            <div class="mb-6 space-y-1">
-                <div class="flex justify-between text-gray-600"><span>Sous-total articles</span><span>{{ fcfa(commande.sous_total) }}</span></div>
-                {% if commande.remise %}<div class="flex justify-between text-green-700"><span>Code {{ commande.code_promo }}</span><span>-{{ fcfa(commande.remise) }}</span></div>{% endif %}
+            {% endfor %}
+            <div class="mt-3 space-y-1 text-sm">
+                <div class="flex justify-between text-gray-600"><span>Sous-total articles</span><span>{{ fcfa(c.sous_total) }}</span></div>
+                {% if c.remise %}<div class="flex justify-between text-green-700"><span>Code {{ c.code_promo }}</span><span>-{{ fcfa(c.remise) }}</span></div>{% endif %}
                 <div class="flex justify-between items-center text-gray-600">
-                    <span>Livraison{% if commande.zone %} ({{ commande.zone.nom }}){% endif %}</span>
-                    {% if commande.statut not in ['livree', 'retournee'] %}
-                    <form method="POST" action="{{ url_for('boutique.changer_frais_commande', commande_id=commande.id) }}" class="flex items-center gap-1">
-                        <input type="number" name="frais_livraison" value="{{ '%.0f'|format(commande.frais_livraison or 0) }}" min="0" step="50"
-                               class="w-24 border border-gray-300 rounded px-2 py-1 text-right text-sm">
+                    <span>Livraison{% if c.zone %} ({{ c.zone.nom }}){% endif %}</span>
+                    {% if c.statut not in ['livree', 'retournee'] %}
+                    <form method="POST" action="{{ url_for('boutique.changer_frais_commande', commande_id=c.id) }}" class="flex items-center gap-1">
+                        <input type="number" name="frais_livraison" value="{{ '%.0f'|format(c.frais_livraison or 0) }}" min="0" step="50" class="w-24 border border-gray-300 rounded px-2 py-1 text-right text-sm">
                         <button type="submit" class="text-xs bg-gray-200 px-2 py-1.5 rounded" title="Enregistrer les frais"><i class="fas fa-check"></i></button>
                     </form>
-                    {% else %}
-                    <span>{{ fcfa(commande.frais_livraison or 0) }}</span>
-                    {% endif %}
+                    {% else %}<span>{{ fcfa(c.frais_livraison or 0) }}</span>{% endif %}
                 </div>
                 <div class="flex justify-between items-center pt-2 border-t">
-                    <span class="text-lg font-bold text-gray-800">Total à encaisser</span>
-                    <span class="text-2xl font-bold text-primary">{{ fcfa(commande.total) }}</span>
+                    <span class="font-bold text-gray-800">{{ 'Total payé' if c.est_payee else 'Total à encaisser' }}</span>
+                    <span class="text-2xl font-extrabold text-purple-700">{{ fcfa(c.total) }}</span>
                 </div>
-            </div>
-
-            </div>
-            <div>
-            <!-- Livraison -->
-            <div id="livraison" class="bg-purple-50 border border-purple-200 rounded-xl p-4 mb-6">
-                <h2 class="text-lg font-semibold text-gray-800 mb-3">
-                    <i class="fas fa-motorcycle text-purple-500 mr-2"></i> Livraison
-                </h2>
-                {{ alerte_zone(commande) }}
-                {% if commande.statut == 'echec' %}
-                <div class="mb-3 rounded-xl border border-red-200 bg-red-50 p-3 text-sm">
-                    <p class="text-red-800"><i class="fas fa-triangle-exclamation mr-1"></i>
-                        <strong>Échec de livraison</strong>{% if commande.livreur %} signalé par {{ commande.livreur.nom }}{% endif %}{% if commande.date_echec %} le {{ commande.date_echec.strftime('%d/%m à %H:%M') }}{% endif %} :
-                        {{ commande.motif_echec or 'motif non précisé' }}. Tentative(s) : {{ commande.tentatives }}.</p>
-                    <a href="{{ wa_echec }}" target="_blank" class="inline-block mt-2 bg-green-500 text-white px-3 py-1.5 rounded-lg font-semibold hover:bg-green-600">
-                        <i class="fab fa-whatsapp mr-1"></i> Recontacter le client
-                    </a>
-                    <span class="text-gray-600 ml-1">puis relancez la livraison ci-dessous, ou annulez la commande.</span>
-                </div>
-                {% endif %}
-                {% if commande.statut not in ['livree', 'annulee'] %}
-                    {% if zones %}
-                    <form method="POST" action="{{ url_for('boutique.changer_zone_commande', commande_id=commande.id) }}" class="flex items-center gap-2 mb-2">
-                        <label class="text-sm text-gray-600 w-14">Zone</label>
-                        <select name="zone_id" onchange="this.form.submit()" class="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm">
-                            <option value="">— Non précisée —</option>
-                            {% for z in zones %}
-                            <option value="{{ z.id }}" {{ 'selected' if commande.zone_id == z.id }}>{{ z.nom }}{% if z.livreur %} (livreur : {{ z.livreur.nom }}){% endif %}</option>
-                            {% endfor %}
-                        </select>
-                    </form>
-                    {% endif %}
-                    {% if not commande.est_retrait and commande.statut == 'nouvelle' %}
-                    <!-- Étape 1 : valider -->
-                    <div class="mb-3 rounded-xl border-2 border-purple-300 bg-white p-3">
-                        <p class="text-sm font-bold text-purple-900">Étape 1 sur 3 — Valider la commande</p>
-                        <p class="text-xs text-gray-600 mt-0.5">Vérifiez les articles et l'adresse, puis validez : le client est prévenu.</p>
-                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-2">
-                            <form method="POST" action="{{ url_for('boutique.valider_commande_boutique', commande_id=commande.id) }}">
-                                <button type="submit" class="w-full bg-purple-600 text-white py-3 rounded-xl font-bold hover:bg-purple-700"><i class="fas fa-check mr-1"></i> Valider la commande</button>
-                            </form>
-                            <form method="POST" action="{{ url_for('boutique.proposer_aux_livreurs', commande_id=commande.id) }}"
-                                  onsubmit="return confirm('Valider la commande et la proposer tout de suite aux livreurs disponibles ?')">
-                                <button type="submit" class="w-full bg-orange-500 text-white py-3 rounded-xl font-bold hover:bg-orange-600"><i class="fas fa-bullhorn mr-1"></i> Valider et proposer aux livreurs</button>
-                            </form>
-                        </div>
-                    </div>
-                    {% elif not commande.est_retrait and commande.statut in ['confirmee', 'echec'] %}
-                    <!-- Étape 2 : trouver un livreur -->
-                    <div class="mb-3 rounded-xl border-2 {{ 'border-orange-300 bg-orange-50' if commande.proposee_at else 'border-purple-300 bg-white' }} p-3">
-                        <p class="text-sm font-bold {{ 'text-orange-900' if commande.proposee_at else 'text-purple-900' }}">Étape 2 sur 3 — Trouver un livreur</p>
-                        {% if commande.proposee_at %}
-                        <p class="text-sm text-orange-900 mt-1"><i class="fas fa-hourglass-half mr-1"></i> Proposée aux livreurs disponibles à {{ commande.proposee_at.strftime('%H:%M') }} : en attente qu'un livreur accepte.
-                            Vous serez prévenu dès qu'il passe la récupérer.</p>
-                        <form method="POST" action="{{ url_for('boutique.proposer_aux_livreurs', commande_id=commande.id) }}" class="mt-2 flex flex-wrap gap-2">
-                            <button type="submit" class="bg-orange-500 text-white px-4 py-2 rounded-lg text-sm font-semibold"><i class="fas fa-rotate mr-1"></i> Relancer les livreurs</button>
-                            <button type="submit" name="annuler" value="1" class="bg-white border border-gray-300 text-gray-700 px-4 py-2 rounded-lg text-sm">Retirer la proposition</button>
-                        </form>
-                        <p class="text-xs text-gray-600 mt-2">Ou choisissez vous-même un livreur ci-dessous.</p>
-                        {% else %}
-                        <p class="text-xs text-gray-600 mt-0.5">Proposez la course aux livreurs disponibles (le premier qui accepte passe la récupérer), ou choisissez vous-même un livreur ci-dessous.</p>
-                        <form method="POST" action="{{ url_for('boutique.proposer_aux_livreurs', commande_id=commande.id) }}" class="mt-2">
-                            <button type="submit" class="w-full bg-orange-500 text-white py-3 rounded-xl font-bold hover:bg-orange-600"><i class="fas fa-bullhorn mr-1"></i> Proposer aux livreurs disponibles</button>
-                        </form>
-                        {% endif %}
-                    </div>
-                    {% endif %}
-                    {% if commande.est_retrait and commande.statut in ['nouvelle', 'confirmee'] %}
-                    <div class="mb-3 rounded-xl border border-green-300 bg-green-50 p-3 text-sm">
-                        <p class="font-semibold text-green-900">🛍 Le client a choisi de passer récupérer sa commande à la boutique (pas de livraison)</p>
-                        {% if commande.statut == 'nouvelle' %}
-                        <a href="{{ url_for('boutique.envoyer_confirmation_client', commande_id=commande.id) }}" target="_blank"
-                           onclick="setTimeout(() => location.reload(), 1500)"
-                           class="mt-2 block text-center bg-purple-600 text-white py-2.5 rounded-lg font-bold hover:bg-purple-700">
-                            <i class="fas fa-check mr-1"></i> 1. Confirmer et inviter le client à passer</a>
-                        <p class="text-xs text-green-800 mt-1">Le client reçoit l'adresse de la boutique et l'itinéraire (WhatsApp + messagerie LivraPlus).</p>
-                        {% else %}
-                        <p class="text-xs text-green-800 mt-1">✓ Confirmée : le client a reçu l'adresse de la boutique. Quand il passe :</p>
-                        {% endif %}
-                        <form method="POST" action="{{ url_for('boutique.changer_statut_commande', commande_id=commande.id) }}" class="mt-2"
-                              data-question="Confirmer : la commande n°{{ commande.numero }} est remise à {{ commande.client_nom }} et {{ fcfa(commande.total) if fcfa is defined else commande.total }} encaissés ?"
-                              onsubmit="return confirm(this.dataset.question)">
-                            <button type="submit" name="statut" value="livree" class="w-full {{ 'bg-green-600 text-white' if commande.statut == 'confirmee' else 'bg-white text-green-700 border border-green-600' }} py-2.5 rounded-lg font-bold hover:bg-green-700 hover:text-white">
-                                ✅ {{ '2. ' if commande.statut == 'nouvelle' }}Remise au client (payée)</button>
-                        </form>
-                        <details class="mt-2 text-xs text-green-800"><summary class="cursor-pointer">Le client préfère finalement être livré ?</summary>
-                            <p class="mt-1">Changez la zone ci-dessus (zone de livraison du client), puis confiez la commande à un livreur.</p></details>
-                    </div>
-                    {% endif %}
-                    {% if livreurs and not commande.est_retrait %}
-                    {% set en_route = commande.statut == 'en_livraison' %}
-                    {% set relance = commande.statut == 'echec' %}
-                    <form method="POST" action="{{ url_for('boutique.attribuer_livreur', commande_id=commande.id) }}" class="flex flex-col sm:flex-row gap-2"
-                          data-question="{{ ('Confier la commande n°' ~ commande.numero ~ ' à un autre livreur ?') if en_route else (('Relancer la livraison n°' ~ commande.numero ~ ' ?') if relance else ('Voulez-vous vraiment confirmer la commande n°' ~ commande.numero ~ ' de ' ~ commande.client_nom ~ ' ?')) }}"
-                          onsubmit="return confirm(this.dataset.question + '\n\nLivreur : ' + this.livreur_id.selectedOptions[0].dataset.nom)">
-                        <select name="livreur_id" required class="flex-1 border border-gray-300 px-3 py-2.5">
-                            <option value="" data-nom="">Choisir le livreur…</option>
-                            {% for l in livreurs %}
-                            <option value="{{ l.id }}" data-nom="{{ l.nom }}" {{ 'selected' if livreur_propose == l.id }}>🛵 {{ l.nom }} ({{ l.telephone }}){% if commande.zone and commande.zone.livreur_id == l.id %} · livreur de la zone{% endif %}</option>
-                            {% endfor %}
-                        </select>
-                        {% if en_route %}
-                        <button type="submit" class="bg-gray-100 text-gray-700 px-4 py-2.5 rounded-xl font-semibold hover:bg-gray-200">Changer de livreur</button>
-                        {% else %}
-                        <button type="submit" class="{{ 'bg-green-600 text-white hover:bg-green-700' if relance else 'bg-white border-2 border-purple-300 text-purple-700 hover:bg-purple-50' }} px-5 py-2.5 rounded-xl font-semibold">
-                            {% if relance %}<i class="fas fa-rotate-right mr-1"></i> Relancer la livraison{% else %}<i class="fas fa-motorcycle mr-1"></i> Confier à ce livreur{% endif %}
-                        </button>
-                        {% endif %}
-                    </form>
-                    {% else %}
-                    <p class="text-sm text-gray-600">Aucun livreur enregistré.
-                        <a href="{{ url_for('boutique.livreurs') }}" class="text-purple-700 font-semibold hover:underline">Ajouter un livreur</a></p>
-                    {% endif %}
-                {% endif %}
-
-                {% if commande.photo_preuve %}
-                <div class="mt-3">
-                    <p class="text-sm text-gray-600 mb-1"><i class="fas fa-camera mr-1"></i> Photo de preuve prise par le livreur :</p>
-                    <a href="{{ commande.photo_preuve }}" target="_blank"><img src="{{ commande.photo_preuve }}" alt="Preuve de livraison" class="h-40 rounded-xl border object-cover"></a>
-                </div>
-                {% endif %}
-                {% if commande.livreur %}
-                <p class="mt-3 text-sm text-gray-700">
-                    Livreur : <strong>{{ commande.livreur.nom }}</strong> · {{ commande.livreur.telephone }}
-                    {% if commande.date_arrivee %} · <span class="text-green-700 font-semibold"><i class="fas fa-location-dot"></i> arrivé chez le client à {{ commande.date_arrivee.strftime('%H:%M') }}</span>{% endif %}
-                    {% if commande.date_livraison %} · <strong>{{ 'livrée par ' ~ commande.livreur.nom if commande.livree_par_livreur else 'remise par la boutique' }}</strong> le {{ commande.date_livraison.strftime('%d/%m/%Y à %H:%M') }}{% endif %}
-                </p>
-                <a href="{{ url_for('boutique.discussion_commande_boutique', commande_id=commande.id) }}"
-                   class="mt-3 flex items-center justify-center gap-2 bg-purple-50 text-purple-700 border border-purple-200 py-2.5 rounded-xl font-semibold hover:bg-purple-100">
-                    <i class="fas fa-comments"></i> Discussion avec le client{{ ' et le livreur' if commande.livreur }}
-                    {% set nl = discussion_non_lus %}{% if nl %}<span class="bg-red-500 text-white text-xs rounded-full px-2">{{ nl }}</span>{% endif %}
-                </a>
-                {% if commande.date_depart %}
-                {% include '_carte.html' %}
-                <details id="blocTrajet" class="mt-3 rounded-xl border border-gray-200 p-3" {{ 'open' if commande.statut == 'en_livraison' }}>
-                    <summary class="cursor-pointer text-sm font-semibold text-purple-700"><i class="fas fa-route mr-1"></i>
-                        Trajet du livreur{{ ' — en direct' if commande.statut == 'en_livraison' }}</summary>
-                    <div id="carteTrajet" class="h-72 rounded-xl border mt-2"></div>
-                    <p id="infoTrajet" class="text-xs text-gray-500 mt-2"></p>
-                    <div id="etapesTrajet" class="mt-2 flex flex-wrap gap-1 text-[11px]"></div>
-                </details>
-                <script>
-                (function () {
-                    if (!window.L || !window.Carte) return;
-                    const bloc = document.getElementById('blocTrajet');
-                    const enDirect = {{ (commande.statut == 'en_livraison')|tojson }};
-                    let carte = null, couche = null, cadree = false;
-                    function charger() {
-                        fetch({{ url_for('boutique.api_trajet_commande', commande_id=commande.id)|tojson }}, { cache: 'no-store' })
-                            .then((r) => r.json()).then((d) => {
-                                if (!carte) { carte = Carte.creer('carteTrajet'); couche = L.layerGroup().addTo(carte); }
-                                carte.invalidateSize();
-                                couche.clearLayers();
-                                const pts = d.points.map((p) => [p.lat, p.lng]);
-                                const info = document.getElementById('infoTrajet'), etapes = document.getElementById('etapesTrajet');
-                                if (d.destination) L.marker([d.destination.lat, d.destination.lng], { icon: Carte.client() }).addTo(couche).bindPopup('Client');
-                                if (!pts.length) {
-                                    info.textContent = "Aucune position GPS reçue pour cette course (le livreur n'a pas activé le suivi).";
-                                    if (d.destination && !cadree) { Carte.cadrer(carte, [[d.destination.lat, d.destination.lng]]); cadree = true; }
-                                    return;
-                                }
-                                L.polyline(pts, { color: '#7c3aed', weight: 5, opacity: .8 }).addTo(couche);
-                                L.marker(pts[0], { icon: Carte.depart() }).addTo(couche).bindPopup('Départ ' + d.points[0].heure);
-                                const fin = d.points[d.points.length - 1];
-                                L.marker(pts[pts.length - 1], { icon: Carte.livreur() }).addTo(couche)
-                                 .bindPopup((enDirect ? 'Position de ' : 'Dernière position ') + fin.heure);
-                                if (!cadree) { Carte.cadrer(carte, pts.concat(d.destination ? [[d.destination.lat, d.destination.lng]] : [])); cadree = true; }
-                                info.textContent = d.points.length + ' positions de ' + d.points[0].heure + ' à ' + fin.heure
-                                    + (d.situation && d.situation.distance_km != null ? ' · encore ' + String(d.situation.distance_km).replace('.', ',')
-                                       + ' km, arrivée dans ~' + d.situation.arrivee_min + ' min' : '');
-                                // Repères horaires (toutes les ~5 min)
-                                etapes.innerHTML = '';
-                                let dernier = '';
-                                d.points.forEach((p, i) => {
-                                    const m = parseInt(p.heure.slice(3), 10);
-                                    if (i === 0 || i === d.points.length - 1 || (m % 5 === 0 && p.heure !== dernier)) {
-                                        dernier = p.heure;
-                                        const b = document.createElement('button');
-                                        b.type = 'button'; b.className = 'px-2 py-0.5 rounded-full bg-purple-50 text-purple-700 hover:bg-purple-100';
-                                        b.textContent = p.heure + (p.vitesse ? ' · ' + Math.round(p.vitesse) + ' km/h' : '');
-                                        b.addEventListener('click', () => { carte.setView([p.lat, p.lng], 17); L.popup().setLatLng([p.lat, p.lng]).setContent('Ici à ' + p.heure).openOn(carte); });
-                                        etapes.appendChild(b);
-                                    }
-                                });
-                            }).catch(() => {});
-                    }
-                    if (bloc.open) charger();
-                    bloc.addEventListener('toggle', () => { if (bloc.open) charger(); });
-                    if (enDirect) setInterval(() => { if (bloc.open && !document.hidden) charger(); }, 20000);
-                })();
-                </script>
-                {% endif %}
-                {% if commande.statut == 'en_livraison' %}
-                <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-3">
-                    <a href="{{ wa_client }}" target="_blank" class="text-center bg-green-500 text-white py-2.5 rounded-lg hover:bg-green-600">
-                        <i class="fab fa-whatsapp mr-1"></i> 1. Prévenir le client
-                    </a>
-                    <a href="{{ wa_livreur }}" target="_blank" class="text-center bg-emerald-700 text-white py-2.5 rounded-lg hover:bg-emerald-800">
-                        <i class="fab fa-whatsapp mr-1"></i> 2. Envoyer la course au livreur
-                    </a>
-                </div>
-                <p class="text-xs text-gray-500 mt-2">Le livreur reçoit l'adresse, l'itinéraire et un lien pour marquer la commande « livrée ».</p>
-                <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-3">
-                    <form method="POST" action="{{ url_for('boutique.changer_statut_commande', commande_id=commande.id) }}"
-                          data-question="Confirmer : {{ commande.livreur.nom }} a livré la commande n°{{ commande.numero }} et a l'argent (à remettre à la caisse) ?"
-                          onsubmit="return confirm(this.dataset.question)">
-                        <button type="submit" name="statut" value="livree" class="w-full bg-green-600 text-white py-3 rounded-lg font-bold hover:bg-green-700">
-                            ✅ Livrée par {{ commande.livreur.nom }}</button>
-                    </form>
-                    <form method="POST" action="{{ url_for('boutique.changer_statut_commande', commande_id=commande.id) }}"
-                          data-question="Confirmer : la boutique a remis elle-même la commande n°{{ commande.numero }} et encaissé l'argent ?"
-                          onsubmit="return confirm(this.dataset.question)">
-                        <input type="hidden" name="par" value="boutique">
-                        <button type="submit" name="statut" value="livree" class="w-full bg-white border-2 border-green-600 text-green-700 py-3 rounded-lg font-bold hover:bg-green-50">
-                            🏪 Remise par la boutique</button>
-                    </form>
-                </div>
-                {% endif %}
-                {% endif %}
-            </div>
-
-            {% if commande.retours %}
-            <div class="bg-orange-50 border border-orange-200 rounded-xl p-4 mb-6">
-                <h2 class="font-semibold text-gray-800 mb-2"><i class="fas fa-rotate-left text-orange-500 mr-2"></i> Retours</h2>
-                {% for r in commande.retours %}
-                <div class="text-sm py-1">
-                    <strong>{{ r.type_libelle }}</strong> le {{ r.date.strftime('%d/%m/%Y') }} :
-                    {% for l in r.lignes %}{{ l.nom }} ×{{ l.quantite }}{{ ', ' if not loop.last }}{% endfor %}
-                    · {{ fcfa(r.montant) }}{% if r.motif %} · <em>{{ r.motif }}</em>{% endif %}
-                </div>
-                {% endfor %}
-            </div>
-            {% endif %}
-
-            <!-- Actions -->
-            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                {% if commande.statut in ['livree', 'retournee'] %}
-                <a href="{{ url_for('boutique.retour_commande', commande_id=commande.id) }}"
-                   class="bg-orange-500 text-white py-3 rounded-lg text-center hover:bg-orange-600 transition">
-                    <i class="fas fa-rotate-left mr-2"></i> Retour / échange d'articles
-                </a>
-                {% endif %}
-                <a href="{{ url_for('boutique.imprimer_commande', commande_id=commande.id, format='80') }}"
-                   class="bg-gray-800 text-white py-3 rounded-lg text-center hover:bg-gray-900 transition">
-                    <i class="fas fa-receipt mr-2"></i> Imprimer ticket 80 mm
-                </a>
-                <a href="{{ url_for('boutique.imprimer_commande', commande_id=commande.id, format='a4') }}"
-                   class="bg-gray-700 text-white py-3 rounded-lg text-center hover:bg-gray-800 transition">
-                    <i class="fas fa-file-invoice mr-2"></i> Imprimer facture A4
-                </a>
-                <a href="{{ gboutik_url }}" target="_blank"
-                   class="bg-[#0b1d35] text-teal-300 py-3 rounded-lg text-center hover:opacity-90 transition">
-                    <i class="fas fa-cash-register mr-2"></i> Enregistrer la vente sur MB Boutique
-                </a>
-                <a href="{{ url_for('boutique.commandes') }}"
-                   class="bg-gray-200 text-gray-700 py-3 rounded-lg text-center hover:bg-gray-300 transition">
-                    <i class="fas fa-arrow-left mr-2"></i> Retour
-                </a>
-            </div>
-            {% if lien_suivi %}
-            <div class="mt-4 flex items-center gap-2 text-sm">
-                <span class="text-gray-500 whitespace-nowrap"><i class="fas fa-location-crosshairs mr-1"></i> Suivi client :</span>
-                <input type="text" readonly value="{{ lien_suivi }}" onclick="this.select()" class="flex-1 min-w-0 border border-gray-200 px-2 py-1 text-xs">
-                <button type="button" onclick="navigator.clipboard.writeText('{{ lien_suivi }}'); this.textContent='Copié !'" class="text-purple-600 font-semibold">Copier</button>
-            </div>
-            {% endif %}
-            {% if commande.statut in ['nouvelle', 'confirmee', 'en_livraison', 'echec'] %}
-            <form method="POST" action="{{ url_for('boutique.changer_statut_commande', commande_id=commande.id) }}" class="mt-4 text-center"
-                  data-question="Annuler la commande n°{{ commande.numero }} de {{ commande.client_nom }} ?"
-                  onsubmit="return confirm(this.dataset.question)">
-                <button type="submit" name="statut" value="annulee" class="text-sm text-red-600 hover:underline">
-                    <i class="fas fa-ban mr-1"></i> Annuler la commande
-                </button>
-            </form>
-            {% endif %}
-            </div>
             </div>
         </div>
     </div>
+
+    {% if c.retours %}
+    <div class="bg-orange-50 border border-orange-200 rounded-2xl p-4">
+        <p class="font-semibold text-gray-800 mb-1"><i class="fas fa-rotate-left text-orange-500 mr-1"></i> Retours</p>
+        {% for r in c.retours %}
+        <p class="text-sm"><strong>{{ r.type_libelle }}</strong> le {{ r.date.strftime('%d/%m/%Y') }} :
+            {% for l in r.lignes %}{{ l.nom }} ×{{ l.quantite }}{{ ', ' if not loop.last }}{% endfor %} · {{ fcfa(r.montant) }}{% if r.motif %} · <em>{{ r.motif }}</em>{% endif %}</p>
+        {% endfor %}
+    </div>
+    {% endif %}
+
+    <!-- ===== Autres actions (rangées) ===== -->
+    <details class="bg-white rounded-2xl shadow-sm border border-gray-200">
+        <summary class="cursor-pointer px-4 py-3 font-semibold text-gray-700"><i class="fas fa-ellipsis mr-1"></i> Autres actions</summary>
+        <div class="px-4 pb-4 grid grid-cols-1 sm:grid-cols-2 gap-2 text-sm">
+            <a href="{{ url_for('boutique.imprimer_commande', commande_id=c.id, format='80') }}" class="flex items-center gap-2 border border-gray-200 rounded-xl px-3 py-2.5 hover:bg-gray-50"><i class="fas fa-receipt w-5 text-center"></i> Imprimer ticket 80 mm</a>
+            <a href="{{ url_for('boutique.imprimer_commande', commande_id=c.id, format='a4') }}" class="flex items-center gap-2 border border-gray-200 rounded-xl px-3 py-2.5 hover:bg-gray-50"><i class="fas fa-file-invoice w-5 text-center"></i> Imprimer facture A4</a>
+            {% if c.statut == 'en_livraison' and wa_client %}
+            <a href="{{ wa_client }}" target="_blank" class="flex items-center gap-2 border border-gray-200 rounded-xl px-3 py-2.5 hover:bg-gray-50"><i class="fab fa-whatsapp w-5 text-center text-green-600"></i> Prévenir le client (WhatsApp)</a>
+            <a href="{{ wa_livreur }}" target="_blank" class="flex items-center gap-2 border border-gray-200 rounded-xl px-3 py-2.5 hover:bg-gray-50"><i class="fab fa-whatsapp w-5 text-center text-green-700"></i> Envoyer la course au livreur (WhatsApp)</a>
+            {% elif c.statut in ['nouvelle', 'confirmee'] %}
+            <a href="{{ url_for('boutique.envoyer_confirmation_client', commande_id=c.id) }}" target="_blank" class="flex items-center gap-2 border border-gray-200 rounded-xl px-3 py-2.5 hover:bg-gray-50"><i class="fab fa-whatsapp w-5 text-center text-green-600"></i> Envoyer la confirmation (WhatsApp)</a>
+            {% endif %}
+            {% if lien_suivi %}
+            <button type="button" onclick="navigator.clipboard.writeText({{ lien_suivi|tojson }}); this.querySelector('span').textContent = 'Lien copié !'"
+                    class="flex items-center gap-2 border border-gray-200 rounded-xl px-3 py-2.5 hover:bg-gray-50 text-left"><i class="fas fa-location-crosshairs w-5 text-center"></i> <span>Copier le lien de suivi du client</span></button>
+            {% endif %}
+            {% if c.statut in ['livree', 'retournee'] %}
+            <a href="{{ url_for('boutique.retour_commande', commande_id=c.id) }}" class="flex items-center gap-2 border border-gray-200 rounded-xl px-3 py-2.5 hover:bg-gray-50"><i class="fas fa-rotate-left w-5 text-center"></i> Retour / échange d'articles</a>
+            {% endif %}
+            <a href="{{ gboutik_url }}" target="_blank" class="flex items-center gap-2 border border-gray-200 rounded-xl px-3 py-2.5 hover:bg-gray-50"><i class="fas fa-cash-register w-5 text-center"></i> Enregistrer la vente sur MB Boutique</a>
+            {% if c.statut not in ['livree', 'annulee', 'retournee'] and zones %}
+            <form method="POST" action="{{ url_for('boutique.changer_zone_commande', commande_id=c.id) }}" class="flex items-center gap-2 border border-gray-200 rounded-xl px-3 py-2">
+                <i class="fas fa-map-pin w-5 text-center"></i>
+                <select name="zone_id" onchange="this.form.submit()" class="flex-1 border-0 bg-transparent text-sm py-0.5" aria-label="Zone">
+                    <option value="">Zone : non précisée</option>
+                    {% for z in zones %}<option value="{{ z.id }}" {{ 'selected' if c.zone_id == z.id }}>Zone : {{ z.nom }}</option>{% endfor %}
+                </select>
+            </form>
+            {% endif %}
+            {% if c.statut == 'en_livraison' and livreurs %}
+            <form method="POST" action="{{ url_for('boutique.attribuer_livreur', commande_id=c.id) }}" class="flex items-center gap-2 border border-gray-200 rounded-xl px-3 py-2"
+                  data-question="Confier la commande n°{{ c.numero }} à un autre livreur ?" onsubmit="return confirm(this.dataset.question)">
+                <i class="fas fa-motorcycle w-5 text-center"></i>
+                <select name="livreur_id" required class="flex-1 border-0 bg-transparent text-sm py-0.5" aria-label="Livreur">
+                    {% for l in livreurs %}<option value="{{ l.id }}" {{ 'selected' if c.livreur_id == l.id }}>{{ l.nom }}</option>{% endfor %}
+                </select>
+                <button type="submit" class="text-purple-700 font-semibold">Changer de livreur</button>
+            </form>
+            {% endif %}
+            {% if c.statut in ['nouvelle', 'confirmee', 'en_livraison', 'echec'] %}
+            <form method="POST" action="{{ url_for('boutique.changer_statut_commande', commande_id=c.id) }}"
+                  data-question="Annuler la commande n°{{ c.numero }} de {{ c.client_nom }} ?" onsubmit="return confirm(this.dataset.question)">
+                <button type="submit" name="statut" value="annulee" class="w-full flex items-center gap-2 border border-red-200 text-red-600 rounded-xl px-3 py-2.5 hover:bg-red-50"><i class="fas fa-ban w-5 text-center"></i> Annuler la commande</button>
+            </form>
+            {% endif %}
+        </div>
+    </details>
 </div>
 {% endblock %}
