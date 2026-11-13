@@ -1029,6 +1029,10 @@ def changer_mode_reception(commande_id):
         return redirect(url_for('boutique.commande_details', commande_id=commande_id))
     b = boutique_connectee()
     if request.form.get('mode') == 'retrait':
+        if not commande.est_retrait and not commande.client_adresse.startswith('Retrait en boutique'):
+            # On garde l'adresse, la zone et la position : si le client veut finalement être livré
+            commande.livraison_avant_retrait = {'adresse': commande.client_adresse, 'zone_id': commande.zone_id,
+                                                'lat': commande.latitude, 'lng': commande.longitude}
         commande.zone = zone_retrait_boutique(b)
         commande.frais_livraison = 0
         commande.client_adresse = 'Retrait en boutique' + (f' ({b.adresse})' if b.adresse else '')
@@ -1038,12 +1042,16 @@ def changer_mode_reception(commande_id):
             commande.statut = 'confirmee'
         message = 'Le client passe récupérer sa commande à la boutique.'
     else:
-        adresse = (request.form.get('client_adresse') or '').strip()
+        avant = (commande.livraison_avant_retrait or {}) if commande.est_retrait else {}
+        adresse = (request.form.get('client_adresse') or '').strip() or avant.get('adresse') or ''
         if commande.est_retrait and not adresse:
             flash("Indiquez l'adresse de livraison du client.", 'danger')
             return redirect(url_for('boutique.commande_details', commande_id=commande_id))
+        if commande.est_retrait and adresse == avant.get('adresse') and avant.get('lat') is not None:
+            commande.latitude, commande.longitude = avant['lat'], avant['lng']   # même adresse : on remet sa position GPS
         if adresse:
             commande.client_adresse = adresse[:500]
+        commande.livraison_avant_retrait = None
         zone = Zone.query.filter_by(id=request.form.get('zone_id', type=int), boutique_id=b.id, active=True).first()
         if zone is None or zone.est_retrait:
             zone, _ = zone_pour_adresse(commande.client_adresse, [z for z in zones_actives() if not z.est_retrait])

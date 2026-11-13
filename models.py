@@ -385,6 +385,9 @@ class Commande(db.Model):
     # Code promo : réduction sur les articles (total = articles - remise + livraison)
     code_promo = db.Column(db.String(30), nullable=True)
     remise = db.Column(db.Float, nullable=False, default=0, server_default='0')
+    # Livraison mise de côté quand le client « passe à la boutique » : {adresse, zone_id, lat, lng}
+    # (remise telle quelle s'il est finalement livré)
+    livraison_avant_retrait = db.Column(db.JSON, nullable=True)
 
     boutique = db.relationship('Boutique', backref=db.backref('commandes', cascade='all, delete-orphan'))
     livreur = db.relationship('Livreur', backref='commandes')

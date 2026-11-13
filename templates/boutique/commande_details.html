@@ -44,29 +44,44 @@
     <div class="bg-white rounded-2xl shadow-sm border border-gray-200 p-3">
         <p class="text-xs font-bold uppercase tracking-wide text-gray-500 mb-2">Comment le client reçoit sa commande ?</p>
         <div class="grid grid-cols-2 gap-2">
-            <button type="button" onclick="document.getElementById('formLivrer').classList.toggle('hidden')"
-                    class="rounded-xl border-2 py-2.5 text-sm font-semibold {{ 'border-gray-200 text-gray-600' if c.est_retrait else 'border-purple-600 bg-purple-50 text-purple-800' }}">
-                🛵 Livraison<span class="block text-[11px] font-normal">livreur interne ou externe</span></button>
+            <button type="button" onclick="ouvrirLivraison({{ 'true' if c.est_retrait else 'false' }})"
+                    class="rounded-xl border-2 py-2.5 text-sm font-semibold {{ 'border-gray-200 text-gray-600 hover:bg-gray-50' if c.est_retrait else 'border-purple-600 bg-purple-50 text-purple-800' }}">
+                🛵 Livraison<span class="block text-[11px] font-normal">{{ 'toucher pour revenir à la livraison' if c.est_retrait else 'livreur interne ou externe' }}</span></button>
             <form method="POST" action="{{ url_for('boutique.changer_mode_reception', commande_id=c.id) }}">
                 <button type="submit" name="mode" value="retrait" {{ 'disabled' if c.est_retrait }}
                         class="w-full rounded-xl border-2 py-2.5 text-sm font-semibold {{ 'border-green-600 bg-green-50 text-green-800' if c.est_retrait else 'border-gray-200 text-gray-600 hover:bg-gray-50' }}">
                     🛍 Passe à la boutique<span class="block text-[11px] font-normal">le client vient récupérer</span></button>
             </form>
         </div>
+        {% set avant = (c.livraison_avant_retrait or {}) if c.est_retrait else {} %}
         <form id="formLivrer" method="POST" action="{{ url_for('boutique.changer_mode_reception', commande_id=c.id) }}"
-              class="{{ '' if c.est_retrait else 'hidden' }} mt-2 space-y-2 text-sm">
+              class="hidden mt-2 space-y-2 text-sm {{ 'bg-purple-50 rounded-xl p-3' if c.est_retrait }}">
             <input type="hidden" name="mode" value="livraison">
             {% if c.est_retrait %}
-            <input type="text" name="client_adresse" required placeholder="Adresse de livraison du client (quartier, repère)" class="w-full border border-gray-300 rounded-lg px-3 py-2">
+            <p class="font-semibold text-purple-900">🛵 Livrer finalement le client</p>
+            <label class="block text-xs text-gray-600">Adresse de livraison
+                <input type="text" name="client_adresse" required value="{{ avant.adresse or '' }}" placeholder="Quartier, repère…"
+                       class="w-full border border-gray-300 rounded-lg px-3 py-2 mt-0.5 text-sm text-gray-900"></label>
+            {% if avant.lat %}<p class="text-xs text-green-700">📍 Sa position GPS sera remise (si vous gardez la même adresse).</p>{% endif %}
             {% endif %}
             <div class="flex gap-2">
-                <select name="zone_id" class="flex-1 border border-gray-300 rounded-lg px-3 py-2">
+                <select name="zone_id" class="flex-1 min-w-0 border border-gray-300 rounded-lg px-3 py-2">
                     <option value="">Zone : selon l'adresse</option>
-                    {% for z in zones if not z.est_retrait %}<option value="{{ z.id }}" {{ 'selected' if c.zone_id == z.id }}>{{ z.nom }} · {{ fcfa(z.frais or 0) }}</option>{% endfor %}
+                    {% set zone_choisie = avant.zone_id if c.est_retrait else c.zone_id %}
+                    {% for z in zones if not z.est_retrait %}<option value="{{ z.id }}" {{ 'selected' if zone_choisie == z.id }}>{{ z.nom }} · {{ fcfa(z.frais or 0) }}</option>{% endfor %}
                 </select>
-                <button type="submit" class="bg-purple-600 text-white px-4 rounded-lg font-semibold">{{ 'Passer en livraison' if c.est_retrait else 'Changer la zone' }}</button>
+                <button type="submit" class="bg-purple-600 text-white px-4 rounded-lg font-semibold whitespace-nowrap">{{ 'Passer en livraison' if c.est_retrait else 'Changer la zone' }}</button>
             </div>
+            {% if c.est_retrait %}<p class="text-xs text-gray-500">Ensuite, vous choisirez le livreur : un de vos livreurs (avec l'application) ou un livreur externe.</p>{% endif %}
         </form>
+        <script>
+        function ouvrirLivraison(depuisRetrait) {
+            const f = document.getElementById('formLivrer');
+            // Depuis « Passe à la boutique » : on ouvre toujours (jamais refermer par erreur)
+            if (depuisRetrait) { f.classList.remove('hidden'); (f.querySelector('[name="client_adresse"]') || f).focus(); f.scrollIntoView({ block: 'nearest' }); }
+            else f.classList.toggle('hidden');
+        }
+        </script>
     </div>
     {% endif %}
 
