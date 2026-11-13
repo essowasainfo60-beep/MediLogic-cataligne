@@ -169,9 +169,9 @@
             <div>
                 <p class="font-bold text-gray-900">🚕 Un livreur externe <span class="font-normal text-gray-600 text-sm">(taxi-moto, coursier… sans application)</span></p>
                 <ol class="mt-2 text-xs text-amber-900 space-y-0.5 list-decimal list-inside">
-                    <li>Vous lui remettez le colis et l'adresse du client.</li>
-                    <li>Il livre et encaisse l'argent.</li>
-                    <li>À son retour, <strong>c'est vous</strong> qui appuyez sur « Livrée » et récupérez l'argent.</li>
+                    <li>Vous lui remettez le colis et le <strong>bon de course</strong> imprimé (adresse, montant à encaisser).</li>
+                    <li>L'heure de départ est notée automatiquement.</li>
+                    <li>À son retour, vous appuyez sur « Livré, il m'a remis l'argent » : l'argent entre directement en caisse.</li>
                 </ol>
             </div>
             <div class="space-y-1.5">
@@ -194,6 +194,9 @@
                     <p class="sm:col-span-2 text-xs text-gray-500">Il sera gardé pour les prochaines fois.</p>
                 </div>
             </div>
+            <label class="flex items-center gap-2 text-sm text-amber-900">Parti à
+                <input type="time" name="heure_depart" class="border border-gray-300 rounded-lg px-2 py-1.5 bg-white">
+                <span class="text-xs text-gray-500">(vide = maintenant)</span></label>
             <button type="submit" class="w-full bg-amber-500 hover:bg-amber-600 text-white py-3 rounded-xl font-bold">
                 <i class="fas fa-box mr-1"></i> {% if c.statut == 'echec' %}Relancer avec ce livreur externe{% else %}Remettre le colis au livreur externe{% endif %}</button>
         </form>
@@ -207,21 +210,53 @@
 
         {% elif c.statut == 'en_livraison' %}
         <p class="text-xs font-bold uppercase tracking-wide text-purple-700">Étape 3 sur 3 — En livraison</p>
-        <p class="font-semibold text-gray-900 mt-1">🛵 {{ c.livreur.nom }} · {{ c.livreur.telephone }}
+        <p class="font-semibold text-gray-900 mt-1 {{ 'hidden' if c.livreur.externe }}">🛵 {{ c.livreur.nom }} · {{ c.livreur.telephone }}
             {% if c.date_arrivee %}<span class="block text-sm text-green-700"><i class="fas fa-location-dot"></i> arrivé chez le client à {{ c.date_arrivee.strftime('%H:%M') }}</span>{% endif %}</p>
         {% if c.livreur.externe %}
-        <div class="mt-2 rounded-xl border-2 border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">
-            <p class="font-bold">🚕 Livraison par un livreur externe : {{ c.livreur.nom }}{% if c.livreur.telephone %} · <a href="tel:{{ c.livreur.telephone|replace(' ', '') }}" class="underline">{{ c.livreur.telephone }}</a>{% endif %}</p>
-            <p class="text-xs mt-1">Il n'a pas l'application. Quand il revient vous remettre l'argent du client, appuyez sur le bouton vert ci-dessous.</p>
+        {% set minutes = ((maintenant - c.date_depart).total_seconds() // 60)|int if c.date_depart else None %}
+        <div class="mt-2 rounded-2xl border-2 border-amber-300 bg-amber-50 p-4 text-sm text-amber-900 space-y-3">
+            <div class="flex items-start justify-between gap-2">
+                <p class="font-bold">🚕 Livreur externe : {{ c.livreur.nom }}{% if c.livreur.telephone %}<br><a href="tel:{{ c.livreur.telephone|replace(' ', '') }}" class="underline font-normal"><i class="fas fa-phone mr-1"></i>{{ c.livreur.telephone }}</a>{% endif %}</p>
+                <a href="{{ url_for('boutique.bon_course', commande_id=c.id) }}" target="_blank" class="shrink-0 bg-white border border-amber-300 rounded-lg px-3 py-1.5 font-semibold"><i class="fas fa-print mr-1"></i> Bon de course</a>
+            </div>
+            {% if c.date_depart %}<p><i class="fas fa-clock mr-1"></i> Parti avec le colis à <strong>{{ c.date_depart.strftime('%H:%M') }}</strong>
+                {% if minutes is not none %}<span class="{{ 'text-red-700 font-bold' if minutes > 120 else '' }}">(il y a {% if minutes >= 60 %}{{ minutes // 60 }} h {% endif %}{{ minutes % 60 }} min)</span>{% endif %}</p>{% endif %}
+            <div class="bg-white rounded-xl border border-amber-200 divide-y divide-amber-100">
+                <p class="flex justify-between px-3 py-2"><span>À encaisser chez le client</span><strong>{{ fcfa(c.total) }}</strong></p>
+                {% if a_rapporter < c.total %}<p class="flex justify-between px-3 py-2 text-gray-600"><span>Il garde sa course</span><span>-{{ fcfa(c.total - a_rapporter) }}</span></p>{% endif %}
+                <p class="flex justify-between px-3 py-2 text-base"><span class="font-bold">Il doit vous rapporter</span><strong class="text-green-700">{{ fcfa(a_rapporter) }}</strong></p>
+            </div>
+            <form method="POST" action="{{ url_for('boutique.changer_statut_commande', commande_id=c.id) }}"
+                  data-question="Confirmer : {{ c.livreur.nom }} a livré la commande n°{{ c.numero }} et vous a remis {{ fcfa(a_rapporter) }} ?"
+                  onsubmit="return confirm(this.dataset.question)">
+                <input type="hidden" name="argent_remis" value="1">
+                <button type="submit" name="statut" value="livree" class="w-full bg-green-600 text-white py-3.5 rounded-xl font-bold text-lg hover:bg-green-700">
+                    ✅ Livré, il m'a remis {{ fcfa(a_rapporter) }}<span class="block text-xs font-normal">l'argent entre en caisse</span></button>
+            </form>
+            <form method="POST" action="{{ url_for('boutique.changer_statut_commande', commande_id=c.id) }}"
+                  data-question="Confirmer : la commande n°{{ c.numero }} est livrée mais {{ c.livreur.nom }} vous remettra l'argent plus tard ?"
+                  onsubmit="return confirm(this.dataset.question)">
+                <button type="submit" name="statut" value="livree" class="w-full bg-white border-2 border-green-600 text-green-700 py-2.5 rounded-xl font-semibold">Livré, il rapportera l'argent plus tard</button>
+            </form>
+            <details class="bg-white rounded-xl border border-red-200">
+                <summary class="px-3 py-2.5 font-semibold text-red-700 cursor-pointer">↩ Pas livré : il a rapporté le colis</summary>
+                <form method="POST" action="{{ url_for('boutique.changer_statut_commande', commande_id=c.id) }}" class="p-3 pt-0 flex gap-2">
+                    <select name="motif" class="flex-1 min-w-0 border border-gray-300 rounded-lg px-2 py-2">
+                        <option>Client absent</option><option>Client injoignable</option><option>Client a refusé</option>
+                        <option>Adresse introuvable</option><option>Reportée par le client</option><option>Autre</option>
+                    </select>
+                    <button type="submit" name="statut" value="echec" class="bg-red-600 text-white px-4 rounded-lg font-semibold">Valider</button>
+                </form>
+            </details>
         </div>
         {% else %}
         <p class="text-xs text-gray-600 mt-1">Le livreur marque « Livrée » depuis son téléphone (avec la photo du colis). Vous pouvez aussi le faire ici :</p>
-        {% endif %}
         <form method="POST" action="{{ url_for('boutique.changer_statut_commande', commande_id=c.id) }}" class="mt-3"
               data-question="Confirmer : {{ c.livreur.nom }} a livré la commande n°{{ c.numero }} et a l'argent (à remettre à la caisse) ?"
               onsubmit="return confirm(this.dataset.question)">
-            <button type="submit" name="statut" value="livree" class="w-full bg-green-600 text-white py-3.5 rounded-xl font-bold text-lg hover:bg-green-700">✅ Livrée par {{ c.livreur.nom }}{% if c.livreur.externe %} <span class="block text-xs font-normal">il vous remettra l'argent</span>{% endif %}</button>
+            <button type="submit" name="statut" value="livree" class="w-full bg-green-600 text-white py-3.5 rounded-xl font-bold text-lg hover:bg-green-700">✅ Livrée par {{ c.livreur.nom }}</button>
         </form>
+        {% endif %}
         <form method="POST" action="{{ url_for('boutique.changer_statut_commande', commande_id=c.id) }}" class="mt-2"
               data-question="Confirmer : la boutique a remis elle-même la commande n°{{ c.numero }} et encaissé l'argent ?"
               onsubmit="return confirm(this.dataset.question)">

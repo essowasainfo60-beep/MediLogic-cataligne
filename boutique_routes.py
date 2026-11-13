@@ -727,7 +727,8 @@ def commande_details(commande_id):
     livreurs = Livreur.query.filter_by(boutique_id=current_user.id, actif=True).order_by(Livreur.nom).all()
     # Livreur proposé : celui déjà choisi, sinon le livreur attitré de la zone
     livreur_propose = commande.livreur_id or (commande.zone.livreur_id if commande.zone else None)
-    return render_template('boutique/commande_details.html', commande=commande, statuts=Commande.STATUTS,
+    return render_template('boutique/commande_details.html', a_rapporter=a_rapporter_externe(commande),
+                           maintenant=datetime.utcnow(), commande=commande, statuts=Commande.STATUTS,
                            discussion_non_lus=discussions.non_lus(commande.discussion, 'boutique') if commande.discussion else 0,
                            livreurs=livreurs, zones=zones_actives(), livreur_propose=livreur_propose,
                            wa_client=wa_client, wa_livreur=wa_livreur, wa_echec=wa_echec,
@@ -995,6 +996,15 @@ def attribuer_livreur(commande_id):
     deja_en_route = commande.statut == 'en_livraison'
     relance = commande.statut == 'echec'
     confier_au_livreur(commande, livreur)
+    heure = (request.form.get('heure_depart') or '').strip()
+    if heure:
+        try:
+            h, m = (int(x) for x in heure.split(':')[:2])
+            depart = datetime.utcnow().replace(hour=h, minute=m, second=0, microsecond=0)
+            if depart <= datetime.utcnow():
+                commande.date_depart = depart
+        except ValueError:
+            pass
     if not deja_en_route and not relance:
         commande.confirmee_par = qui()
     db.session.commit()
@@ -1017,6 +1027,24 @@ def imprimer_commande(commande_id):
     format_papier = '80' if request.args.get('format') == '80' else 'a4'
     return render_template('boutique/imprimer_commande.html', commande=commande, boutique=current_user,
                            format_papier=format_papier, fcfa=msg.fcfa)
+
+def a_rapporter_externe(commande):
+    """Ce que le livreur externe rapporte quand il revient : il garde sa course,
+    il remet le prix des articles (la caisse enregistre la même chose)."""
+    if not commande.livreur:
+        return 0
+    return commande.net_articles if commande.livreur.externe else caisse.a_remettre(commande)
+
+
+@boutique_bp.route('/commande/<int:commande_id>/bon-course')
+@login_required
+def bon_course(commande_id):
+    """Petit bon remis au livreur externe : où livrer, combien encaisser, combien rapporter."""
+    commande = commande_de_la_boutique(commande_id)
+    if not commande or not commande.livreur:
+        return redirect(url_for('boutique.commandes'))
+    return render_template('boutique/bon_course.html', c=commande, boutique=current_user, fcfa=msg.fcfa,
+                           a_rapporter=a_rapporter_externe(commande))
 
 # ==================== LIVREURS ====================
 
@@ -1069,9 +1097,20 @@ def changer_statut_commande(commande_id):
             commande.livre_par = 'boutique' if par_boutique else None
         stock.changer_statut(commande, statut)
         commande.lu = True
+        verse = 0
+        if statut == 'livree' and request.form.get('argent_remis') and commande.livree_par_livreur and not commande.reglee:
+            # Livreur externe revenu avec l'argent : il entre en caisse tout de suite
+            verse = caisse.enregistrer_versement(commande.livreur, [commande])
+            if commande.boutique.mode_frais == 'boutique_collecte' and not commande.frais_payes:
+                verse -= caisse.payer_livreur(commande.livreur, [commande])
+        if statut == 'echec':
+            commande.date_echec = datetime.utcnow()
+            commande.motif_echec = (request.form.get('motif') or 'Non livrée')[:200]
         db.session.commit()
         if statut == 'livree':
-            flash(f'Commande n°{commande.numero} : {commande.statut_libelle}. Vous pouvez imprimer le reçu (tampon PAYÉ).', 'success')
+            flash(f'Commande n°{commande.numero} : {commande.statut_libelle}.'
+                  + (f' {msg.fcfa(verse)} ajoutés à la caisse.' if verse else '')
+                  + ' Vous pouvez imprimer le reçu (tampon PAYÉ).', 'success')
             return redirect(url_for('boutique.commande_details', commande_id=commande.id))
         flash(f'Commande n°{commande.numero} : {commande.statut_libelle}', 'success')
     return redirect(request.referrer or url_for('boutique.commandes'))

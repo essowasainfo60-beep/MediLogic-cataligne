@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bon de course n°{{ c.numero }} - {{ boutique.nom_boutique }}</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: Arial, Helvetica, sans-serif; color: #111; background: #e5e7eb; }
+        .barre { display: flex; gap: 8px; justify-content: center; padding: 12px; background: #0b1d35; }
+        .barre a, .barre button { font: 600 14px Arial; padding: 8px 14px; border-radius: 8px; border: none; cursor: pointer; text-decoration: none; color: #0b1d35; background: #e2eaf5; }
+        .ticket { width: 80mm; margin: 16px auto; background: #fff; padding: 4mm 3mm; font-size: 12px; box-shadow: 0 2px 10px rgba(0,0,0,.15); }
+        .centre { text-align: center; }
+        h1 { font-size: 15px; }
+        h2 { font-size: 13px; margin-top: 4px; }
+        .sep { border-top: 1px dashed #000; margin: 6px 0; }
+        td { padding: 2px 0; vertical-align: top; }
+        .r { text-align: right; }
+        .gros { font-size: 15px; font-weight: bold; }
+        .cadre { border: 2px solid #000; padding: 4px; margin-top: 4px; }
+        .signe { margin-top: 14px; display: flex; justify-content: space-between; font-size: 11px; }
+        @media print { body { background: #fff; } .barre { display: none; } .ticket { margin: 0; box-shadow: none; } }
+    </style>
+</head>
+<body>
+<div class="barre">
+    <a href="{{ url_for('boutique.commande_details', commande_id=c.id) }}">← Retour à la commande</a>
+    <button onclick="window.print()">🖨 Imprimer</button>
+</div>
+<div class="ticket">
+    <div class="centre">
+        <h1>{{ boutique.nom_boutique }}</h1>
+        <h2>BON DE COURSE n°{{ c.numero }}</h2>
+        <p>Livreur : <b>{{ c.livreur.nom }}</b></p>
+        <p>Départ : {{ (c.date_depart or c.date_commande).strftime('%d/%m/%Y à %H:%M') }}</p>
+    </div>
+    <div class="sep"></div>
+    <p><b>Client :</b> {{ c.client_nom }}</p>
+    <p><b>Tél :</b> {{ c.client_telephone }}</p>
+    <p><b>Adresse :</b> {{ c.client_adresse }}{% if c.zone %} ({{ c.zone.nom }}){% endif %}</p>
+    {% if c.creneau %}<p><b>Heure :</b> {{ c.creneau }}</p>{% endif %}
+    {% if c.instructions %}<p><b>Note :</b> {{ c.instructions }}</p>{% endif %}
+    <div class="sep"></div>
+    <table>
+        {% for a in c.articles_json %}<tr><td>{{ a.quantite }} × {{ a.nom }}</td></tr>{% endfor %}
+    </table>
+    <div class="sep"></div>
+    <table>
+        <tr><td>À ENCAISSER chez le client</td><td class="r gros">{{ fcfa(c.total) }}</td></tr>
+        {% if a_rapporter < c.total %}<tr><td>Votre course (vous la gardez)</td><td class="r">{{ fcfa(c.total - a_rapporter) }}</td></tr>{% endif %}
+    </table>
+    <div class="cadre"><table><tr><td><b>À RAPPORTER à la boutique</b></td><td class="r gros">{{ fcfa(a_rapporter) }}</td></tr></table></div>
+    <div class="signe"><span>Remis par : ............</span><span>Livreur : ............</span></div>
+    <p class="centre" style="margin-top:8px;font-size:10px">Retour à la boutique : ......h......</p>
+</div>
+<script>if (!location.hash.includes('nop')) setTimeout(() => window.print(), 400);</script>
+</body>
+</html>
