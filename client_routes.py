@@ -1,5 +1,5 @@
 import hashlib
-from datetime import datetime
+from datetime import datetime, timedelta
 from urllib.parse import quote
 
 from flask import (Blueprint, Response, abort, after_this_request, flash, jsonify, redirect,
@@ -393,6 +393,83 @@ def espace_livreur(code):
                            non_lus={c.id: discussions.non_lus(c.discussion, f'livreur:{livreur.id}') for c in a_livrer if c.discussion},
                            non_lus_total=sum(discussions.non_lus(d, f'livreur:{livreur.id}') for d in discussions.discussions_livreur(livreur)),
                            cle_push=notifications.cles_vapid()[0], proposees=proposees)
+
+MOIS_NOMS = ['janvier', 'février', 'mars', 'avril', 'mai', 'juin', 'juillet', 'août',
+             'septembre', 'octobre', 'novembre', 'décembre']
+
+
+@client_bp.route('/l/<code>/gains')
+def espace_livreur_gains(code):
+    """Ce que le livreur a gagné (ses frais de livraison) : aujourd'hui, hier, semaine,
+    mois, année, ou une période qu'il choisit."""
+    livreur = livreur_par_code(code)
+    courses = (Commande.query.filter(Commande.livreur_id == livreur.id, Commande.statut.in_(['livree', 'retournee']),
+                                     Commande.date_livraison.isnot(None),
+                                     db.or_(Commande.livre_par.is_(None), Commande.livre_par != 'boutique'))
+               .order_by(Commande.date_livraison.desc()).all())
+    maintenant = datetime.utcnow()
+    jour = maintenant.replace(hour=0, minute=0, second=0, microsecond=0)
+
+    def bilan(debut, fin):
+        cs = [c for c in courses if debut <= c.date_livraison < fin]
+        return {'gains': sum(c.frais_livraison or 0 for c in cs), 'courses': len(cs), 'liste': cs,
+                'encaisse': sum(c.total for c in cs)}
+
+    debut_semaine = jour - timedelta(days=jour.weekday())
+    debut_mois = jour.replace(day=1)
+    debut_annee = jour.replace(month=1, day=1)
+    resumes = [
+        ("Aujourd'hui", bilan(jour, jour + timedelta(days=1))),
+        ('Hier', bilan(jour - timedelta(days=1), jour)),
+        ('Cette semaine', bilan(debut_semaine, jour + timedelta(days=1))),
+        ('Ce mois', bilan(debut_mois, jour + timedelta(days=1))),
+        ("Cette année", bilan(debut_annee, jour + timedelta(days=1))),
+        ('Depuis le début', bilan(datetime(2000, 1, 1), jour + timedelta(days=1))),
+    ]
+
+    # Période choisie (par défaut : ce mois)
+    def lire_jour(valeur, defaut):
+        try:
+            return datetime.strptime(valeur, '%Y-%m-%d')
+        except (TypeError, ValueError):
+            return defaut
+    du = lire_jour(request.args.get('du'), debut_mois)
+    au = lire_jour(request.args.get('au'), jour)
+    if au < du:
+        du, au = au, du
+    periode = bilan(du, au + timedelta(days=1))
+    par_jour = {}
+    for c in periode['liste']:
+        cle = c.date_livraison.strftime('%Y-%m-%d')
+        par_jour.setdefault(cle, {'gains': 0, 'courses': 0})
+        par_jour[cle]['gains'] += c.frais_livraison or 0
+        par_jour[cle]['courses'] += 1
+    jours = []
+    j = du
+    while j <= au and len(jours) < 400:
+        cle = j.strftime('%Y-%m-%d')
+        jours.append({'jour': j, 'cle': j.strftime('%d/%m'), **par_jour.get(cle, {'gains': 0, 'courses': 0})})
+        j += timedelta(days=1)
+    meilleur = max(jours, key=lambda x: x['gains']) if jours and any(x['gains'] for x in jours) else None
+    jours_travailles = sum(1 for x in jours if x['courses'])
+
+    # Mois par mois sur l'année en cours
+    annee = request.args.get('annee', type=int) or maintenant.year
+    mois = []
+    for m in range(1, 13):
+        debut = datetime(annee, m, 1)
+        fin = datetime(annee + (m == 12), (m % 12) + 1, 1)
+        b = bilan(debut, fin)
+        mois.append({'nom': MOIS_NOMS[m - 1], 'gains': b['gains'], 'courses': b['courses']})
+    annees = sorted({c.date_livraison.year for c in courses} | {maintenant.year}, reverse=True)
+
+    garde_frais = livreur.boutique.mode_frais != 'boutique_collecte'
+    a_recevoir = 0 if garde_frais else sum(c.frais_livraison or 0 for c in courses if not c.frais_payes)
+    return render_template('client/livreur_gains.html', livreur=livreur, resumes=resumes, periode=periode,
+                           du=du, au=au, jours=jours, meilleur=meilleur, jours_travailles=jours_travailles,
+                           mois=mois, annee=annee, annees=annees, garde_frais=garde_frais, a_recevoir=a_recevoir,
+                           fcfa=msg.fcfa)
+
 
 @client_bp.route('/l/<code>/livree/<int:commande_id>', methods=['POST'])
 def espace_livreur_livree(code, commande_id):

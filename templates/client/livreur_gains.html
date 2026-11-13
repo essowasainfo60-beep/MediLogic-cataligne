@@ -1,0 +1,112 @@
+{% extends "base.html" %}
+
+{% block title %}Mes gains · {{ livreur.nom }}{% endblock %}
+{% block manifest %}<link rel="manifest" href="{{ url_for('client.manifest_livreur', code=livreur.code_acces) }}">{% endblock %}
+
+{% block content %}
+<div class="max-w-[820px] mx-auto px-4 space-y-4">
+    <div class="bg-gradient-to-br from-[#0b1d35] to-[#1c3358] text-white rounded-2xl p-5">
+        <div class="flex items-center justify-between gap-3">
+            <div>
+                <p class="text-sm text-white/60">{{ livreur.boutique.nom_boutique }}</p>
+                <h1 class="text-2xl font-extrabold">💰 Mes gains · {{ livreur.nom }}</h1>
+            </div>
+            <a href="{{ url_for('client.espace_livreur', code=livreur.code_acces) }}" class="h-10 px-3 rounded-xl bg-white/10 flex items-center gap-1.5 text-sm font-semibold hover:bg-white/20">
+                <i class="fas fa-arrow-left"></i> Mes livraisons</a>
+        </div>
+        <p class="text-xs text-white/70 mt-2">Vos gains = vos frais de livraison sur les commandes que vous avez livrées
+            ({{ 'vous les gardez quand vous encaissez' if garde_frais else 'la boutique vous les paie' }}).</p>
+        {% if a_recevoir %}<p class="mt-3 bg-white/10 rounded-xl p-3 text-sm flex justify-between"><span>À recevoir de la boutique</span><strong>{{ fcfa(a_recevoir) }}</strong></p>{% endif %}
+    </div>
+
+    <!-- Résumés rapides -->
+    <div class="grid grid-cols-2 sm:grid-cols-3 gap-3">
+        {% for titre, b in resumes %}
+        <div class="bg-white rounded-2xl shadow-sm p-4 {{ 'ring-2 ring-green-500' if loop.first }}">
+            <p class="text-xs text-gray-500">{{ titre }}</p>
+            <p class="text-xl font-extrabold text-green-700">{{ fcfa(b.gains) }}</p>
+            <p class="text-xs text-gray-500">{{ b.courses }} course{{ 's' if b.courses > 1 }}</p>
+        </div>
+        {% endfor %}
+    </div>
+
+    <!-- Période au choix -->
+    <form method="GET" class="bg-white rounded-2xl shadow-sm p-4 space-y-3">
+        <p class="font-bold text-gray-900">📅 Choisir une période</p>
+        <div class="grid grid-cols-2 gap-2 text-sm">
+            <label class="text-gray-500">Du<input type="date" name="du" value="{{ du.strftime('%Y-%m-%d') }}" class="mt-1 w-full border border-gray-300 rounded-lg px-2 py-2"></label>
+            <label class="text-gray-500">Au<input type="date" name="au" value="{{ au.strftime('%Y-%m-%d') }}" class="mt-1 w-full border border-gray-300 rounded-lg px-2 py-2"></label>
+        </div>
+        <button type="submit" class="w-full bg-purple-600 text-white py-2.5 rounded-xl font-semibold">Voir mes gains</button>
+    </form>
+
+    <div class="bg-white rounded-2xl shadow-sm p-4">
+        <p class="text-sm text-gray-500">Du {{ du.strftime('%d/%m/%Y') }} au {{ au.strftime('%d/%m/%Y') }}</p>
+        <div class="grid grid-cols-3 gap-2 mt-2 text-center">
+            <div class="bg-green-50 rounded-xl py-3"><p class="text-lg font-extrabold text-green-700">{{ fcfa(periode.gains) }}</p><p class="text-[11px] text-gray-500">gagnés</p></div>
+            <div class="bg-gray-50 rounded-xl py-3"><p class="text-lg font-extrabold">{{ periode.courses }}</p><p class="text-[11px] text-gray-500">courses</p></div>
+            <div class="bg-gray-50 rounded-xl py-3"><p class="text-lg font-extrabold">{{ fcfa(periode.gains / periode.courses) if periode.courses else '—' }}</p><p class="text-[11px] text-gray-500">par course</p></div>
+        </div>
+        <p class="text-xs text-gray-500 mt-2">
+            {{ jours_travailles }} jour(s) travaillé(s){% if jours_travailles %} · moyenne {{ fcfa(periode.gains / jours_travailles) }} par jour travaillé{% endif %}
+            {% if meilleur %} · meilleur jour : <strong>{{ meilleur.jour.strftime('%d/%m') }}</strong> ({{ fcfa(meilleur.gains) }}){% endif %}
+            · argent encaissé chez les clients : {{ fcfa(periode.encaisse) }}</p>
+        {% if jours|length > 1 and periode.courses %}
+        <div class="mt-3 h-48"><canvas id="graphGains"></canvas></div>
+        {% endif %}
+    </div>
+
+    <!-- Mois par mois -->
+    <div class="bg-white rounded-2xl shadow-sm p-4">
+        <div class="flex items-center justify-between gap-2 mb-2">
+            <p class="font-bold text-gray-900">📆 Mois par mois</p>
+            <form method="GET" class="flex gap-1">
+                <input type="hidden" name="du" value="{{ du.strftime('%Y-%m-%d') }}"><input type="hidden" name="au" value="{{ au.strftime('%Y-%m-%d') }}">
+                <select name="annee" onchange="this.form.submit()" class="border border-gray-300 rounded-lg px-2 py-1 text-sm">
+                    {% for a in annees %}<option value="{{ a }}" {{ 'selected' if a == annee }}>{{ a }}</option>{% endfor %}
+                </select>
+            </form>
+        </div>
+        {% set max_mois = (mois|map(attribute='gains')|max) or 1 %}
+        <div class="space-y-1.5">
+            {% for m in mois %}
+            <div class="flex items-center gap-2 text-sm">
+                <span class="w-20 text-gray-600 capitalize">{{ m.nom }}</span>
+                <div class="flex-1 bg-gray-100 rounded-full h-3 overflow-hidden"><div class="bg-green-500 h-3" style="width: {{ (m.gains / max_mois * 100)|round(1) }}%"></div></div>
+                <span class="w-28 text-right font-semibold {{ 'text-gray-300' if not m.gains }}">{{ fcfa(m.gains) }}</span>
+                <span class="w-10 text-right text-xs text-gray-400">{{ m.courses }}</span>
+            </div>
+            {% endfor %}
+        </div>
+        <p class="text-right text-sm mt-2">Total {{ annee }} : <strong class="text-green-700">{{ fcfa(mois|sum(attribute='gains')) }}</strong> · {{ mois|sum(attribute='courses') }} courses</p>
+    </div>
+
+    <!-- Détail -->
+    <div class="bg-white rounded-2xl shadow-sm p-4">
+        <p class="font-bold text-gray-900 mb-2">🧾 Mes courses de la période</p>
+        {% for c in periode.liste %}
+        <div class="flex justify-between gap-2 py-2 border-b border-gray-100 text-sm">
+            <span class="min-w-0"><span class="text-gray-500">{{ c.date_livraison.strftime('%d/%m %H:%M') }}</span> · n°{{ c.numero }}
+                <span class="block text-xs text-gray-500 truncate">{% if c.zone %}{{ c.zone.nom }} · {% endif %}{{ c.client_adresse }}</span></span>
+            <strong class="text-green-700 shrink-0">{{ fcfa(c.frais_livraison or 0) }}</strong>
+        </div>
+        {% else %}
+        <p class="text-sm text-gray-500 text-center py-4">Aucune course livrée sur cette période.</p>
+        {% endfor %}
+    </div>
+</div>
+
+{% if jours|length > 1 and periode.courses %}
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script>
+new Chart(document.getElementById('graphGains'), {
+    type: 'bar',
+    data: {
+        labels: {{ jours|map(attribute='cle')|list|tojson }},
+        datasets: [{ label: 'Gains (FCFA)', data: {{ jours|map(attribute='gains')|list|tojson }}, backgroundColor: '#16a34a', borderRadius: 4 }]
+    },
+    options: { maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true } } }
+});
+</script>
+{% endif %}
+{% endblock %}
