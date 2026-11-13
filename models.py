@@ -1,3 +1,4 @@
+import itertools
 import secrets
 from urllib.parse import quote
 
@@ -187,18 +188,141 @@ class Article(db.Model):
     photos_urls = db.Column(db.JSON, default=list)
     stock = db.Column(db.Integer, nullable=True)  # None = stock non suivi pour cet article
     numero = db.Column(db.Integer, nullable=True)  # n° propre à la boutique : 1, 2, 3…
-    # Choix proposés au client, ex. {"Taille": ["S", "M", "L"], "Couleur": ["Rouge", "Bleu"]}
+    # Choix proposés au client, ex. {"Pointure": ["24", "25"], "Couleur": ["Vert", "Noir"]}
     options = db.Column(db.JSON, nullable=True)
+    # Variantes = chaque combinaison des choix, avec son stock (et son prix s'il diffère) :
+    #   {"Couleur=Vert|Pointure=24": {"stock": 2, "prix": null}, …}
+    variantes = db.Column(db.JSON, nullable=True)
+    # Vrai = le stock est compté variante par variante (le stock de l'article est alors leur somme)
+    stock_par_variante = db.Column(db.Boolean, nullable=False, default=False, server_default='0')
+    # Photo à montrer quand le client choisit une valeur : {"Couleur": {"Noir": "<url de la photo>"}}
+    photos_choix = db.Column(db.JSON, nullable=True)
 
-    def lire_choix(self, choisis):
-        """Valide les choix du client ({option: valeur}) ; renvoie le texte « Taille M, Rouge » ou lève ValueError."""
+    # ---------- Variantes ----------
+    @staticmethod
+    def cle_de(choisis):
+        """Clé d'une variante, indépendante de l'ordre des choix : « Couleur=Vert|Pointure=24 »."""
+        return '|'.join(f'{o}={choisis[o]}' for o in sorted(choisis))
+
+    @staticmethod
+    def choix_de_cle(cle):
+        return dict(p.split('=', 1) for p in (cle or '').split('|') if '=' in p)
+
+    def libelle_choix(self, choisis):
+        """« Pointure 24, Vert » (dans l'ordre des choix de l'article)."""
         morceaux = []
+        for option in (self.options or {}):
+            valeur = choisis.get(option, '')
+            nom = option.lower()
+            morceaux.append(f'{option} {valeur}' if nom.startswith(('taille', 'pointure', 'contenance', 'mémoire', 'memoire'))
+                            else valeur)
+        return ', '.join(morceaux)
+
+    def libelle_cle(self, cle):
+        return self.libelle_choix(self.choix_de_cle(cle))
+
+    def combinaisons(self):
+        """Toutes les variantes possibles : [(clé, {option: valeur}), …] dans l'ordre des choix."""
+        options = self.options or {}
+        if not options:
+            return []
+        noms = list(options)
+        resultat = []
+        for valeurs in itertools.product(*(options[n] for n in noms)):
+            choisis = dict(zip(noms, valeurs))
+            resultat.append((self.cle_de(choisis), choisis))
+        return resultat
+
+    @property
+    def suit_variantes(self):
+        """Le stock est-il suivi variante par variante ?"""
+        return bool(self.options) and bool(self.stock_par_variante)
+
+    def variante(self, cle):
+        return (self.variantes or {}).get(cle) or {}
+
+    def stock_variante(self, cle):
+        """Stock de la variante (None si le stock n'est pas suivi par variante)."""
+        if not self.suit_variantes:
+            return None
+        return int(self.variante(cle).get('stock') or 0)
+
+    def prix_de(self, cle=None):
+        prix = self.variante(cle).get('prix') if cle else None
+        return float(prix) if prix is not None else self.prix
+
+    @property
+    def prix_min(self):
+        prix = [self.prix_de(c) for c, _ in self.combinaisons()] or [self.prix]
+        return min(prix)
+
+    @property
+    def prix_differents(self):
+        return len({self.prix_de(c) for c, _ in self.combinaisons()}) > 1
+
+    def lignes_variantes(self):
+        """Pour l'affichage : [{cle, libelle, stock, prix}] de toutes les combinaisons."""
+        return [{'cle': c, 'choix': ch, 'libelle': self.libelle_choix(ch), 'stock': self.stock_variante(c),
+                 'prix': self.prix_de(c)} for c, ch in self.combinaisons()]
+
+    @property
+    def variantes_epuisees(self):
+        if not self.suit_variantes:
+            return 0
+        return sum(1 for c, _ in self.combinaisons() if self.stock_variante(c) <= 0)
+
+    def cle_depuis_texte(self, texte):
+        """Retrouve la variante d'une ancienne ligne de commande à partir de son texte « Pointure 24, Vert »."""
+        if not texte:
+            return None
+        for cle, choisis in self.combinaisons():
+            if self.libelle_choix(choisis) == texte:
+                return cle
+        return None
+
+    def recalculer_stock(self):
+        if self.suit_variantes:
+            self.stock = sum(self.stock_variante(c) for c, _ in self.combinaisons())
+
+    def photos_valeurs(self):
+        """{option: {valeur: index de la photo}} pour changer la photo quand le client choisit."""
+        photos = [p for p in (self.photos_urls or []) if p]
+        resultat = {}
+        for option, valeurs in (self.photos_choix or {}).items():
+            for valeur, url in (valeurs or {}).items():
+                if url in photos:
+                    resultat.setdefault(option, {})[valeur] = photos.index(url)
+        return resultat
+
+    def donnees_variantes(self):
+        """Ce dont la page a besoin pour griser les variantes épuisées et changer prix / photo."""
+        v = {}
+        for cle, _ in self.combinaisons():
+            e = {}
+            if self.suit_variantes:
+                e['s'] = self.stock_variante(cle)
+            prix = self.variante(cle).get('prix')
+            if prix is not None:
+                e['p'] = float(prix)
+            v[cle] = e
+        return {'options': self.options or {}, 'suivi': self.suit_variantes, 'prix': self.prix, 'v': v,
+                'photos': self.photos_valeurs()}
+
+    def choisir(self, choisis):
+        """Valide les choix ({option: valeur}) ; renvoie (texte « Pointure 24, Vert », clé) ou lève ValueError."""
+        propres = {}
         for option, valeurs in (self.options or {}).items():
             valeur = (choisis.get(option) or '').strip()
             if valeur not in valeurs:
                 raise ValueError(f'Choisissez : {option.lower()}')
-            morceaux.append(f'{option} {valeur}' if option.lower().startswith('taille') or option.lower().startswith('pointure') else valeur)
-        return ', '.join(morceaux)
+            propres[option] = valeur
+        if not propres:
+            return '', None
+        return self.libelle_choix(propres), self.cle_de(propres)
+
+    def lire_choix(self, choisis):
+        """Valide les choix du client ({option: valeur}) ; renvoie le texte « Taille M, Rouge » ou lève ValueError."""
+        return self.choisir(choisis)[0]
 
     @staticmethod
     def prochain_numero(boutique_id):
@@ -497,6 +621,9 @@ class MouvementStock(db.Model):
     quantite = db.Column(db.Integer, nullable=False)  # + entrée, - sortie
     stock_apres = db.Column(db.Integer, nullable=False)
     note = db.Column(db.String(255))
+    # Variante concernée (« Pointure 24, Vert ») et son stock après le mouvement
+    variante = db.Column(db.String(150), nullable=True)
+    stock_variante_apres = db.Column(db.Integer, nullable=True)
     date = db.Column(db.DateTime, default=datetime.utcnow, index=True)
 
     boutique = db.relationship('Boutique', backref=db.backref('mouvements_stock', cascade='all, delete-orphan', lazy='dynamic'))

@@ -201,7 +201,7 @@
 
             <div class="p-5 flex-1 flex flex-col">
                 <h3 class="text-lg font-bold text-gray-800">{% if article.numero %}<span class="text-sm font-semibold text-purple-600 bg-purple-50 rounded px-1.5 py-0.5 mr-1 align-middle">n°{{ article.numero }}</span>{% endif %}{{ article.nom }}</h3>
-                <p class="text-2xl font-bold text-purple-700 mt-1">{{ "{:,.0f}".format(article.prix).replace(',', ' ') }} FCFA</p>
+                <p class="prix-article text-2xl font-bold text-purple-700 mt-1">{% if article.prix_differents %}<span class="text-sm font-semibold">dès </span>{{ "{:,.0f}".format(article.prix_min).replace(',', ' ') }}{% else %}{{ "{:,.0f}".format(article.prix).replace(',', ' ') }}{% endif %} FCFA</p>
 
                 {% if article.description %}
                 <div class="mt-3">
@@ -215,7 +215,8 @@
                 {% if article.stock is not none and article.stock <= 0 %}
                 <p class="mt-auto pt-4"><span class="block text-center bg-gray-100 text-gray-500 py-2.5 rounded-xl font-semibold">Épuisé pour le moment</span></p>
                 {% else %}
-                <form method="POST" action="{{ url_for('client.ajouter_panier') }}" class="ajout-panier mt-auto pt-4 space-y-2">
+                <form method="POST" action="{{ url_for('client.ajouter_panier') }}" class="ajout-panier mt-auto pt-4 space-y-2"
+                      {% if article.options %}data-variantes='{{ article.donnees_variantes()|tojson }}'{% endif %}>
                     <input type="hidden" name="article_id" value="{{ article.id }}">
                     <input type="hidden" name="photo_index" value="0">
                     {% if photos|length > 1 %}
@@ -225,13 +226,14 @@
                     {% if article.options %}
                     <div class="grid grid-cols-{{ 2 if article.options|length > 1 else 1 }} gap-2">
                         {% for option, valeurs in article.options.items() %}
-                        <select name="option_{{ option }}" required aria-label="{{ option }}"
+                        <select name="option_{{ option }}" data-option="{{ option }}" required aria-label="{{ option }}"
                                 class="w-full border-2 border-gray-100 rounded-xl px-2 py-2 text-sm">
                             <option value="">{{ option }}…</option>
-                            {% for v in valeurs %}<option>{{ v }}</option>{% endfor %}
+                            {% for v in valeurs %}<option value="{{ v }}">{{ v }}</option>{% endfor %}
                         </select>
                         {% endfor %}
                     </div>
+                    <p class="info-variante hidden text-xs rounded-lg px-2 py-1.5"></p>
                     {% endif %}
                     <div class="flex gap-2">
                         <div class="flex items-center border-2 border-gray-100 rounded-xl">
@@ -291,6 +293,7 @@
     <div class="galerie-points"></div>
 </div>
 
+<script src="{{ url_for('static', filename='variantes.js') }}"></script>
 <script>
 (function () {
     // ---------- Carrousel ----------
@@ -440,6 +443,45 @@
         document.body.appendChild(t);
         setTimeout(() => t.remove(), 3500);
     }
+    // ---------- Variantes : prix, stock et photo selon la pointure / couleur choisie ----------
+    const fcfaTexte = (v) => Math.round(v).toLocaleString('fr-FR').replace(/\u202f|\u00a0/g, ' ');
+    document.querySelectorAll('.ajout-panier[data-variantes]').forEach((form) => {
+        const d = JSON.parse(form.dataset.variantes);
+        const carte = form.closest('.carte');
+        const prixEl = carte.querySelector('.prix-article');
+        const prixInitial = prixEl.innerHTML;
+        const info = form.querySelector('.info-variante');
+        const bouton = form.querySelector('button[type="submit"]');
+        let dernierChoix = {};
+        Variantes.brancher(form, d, (etat) => {
+            // Photo de la valeur qui vient d'être choisie (ex. la chaussure noire)
+            Object.entries(etat.choisis).forEach(([o, v]) => {
+                if (dernierChoix[o] === v) return;
+                const i = (d.photos[o] || {})[v];
+                const piste = carte.querySelector('.galerie-piste');
+                if (i != null && piste) piste.scrollTo({ left: i * piste.clientWidth });
+            });
+            dernierChoix = etat.choisis;
+            prixEl.innerHTML = etat.complet ? fcfaTexte(etat.prix) + ' FCFA' : prixInitial;
+            bouton.disabled = false;
+            bouton.classList.remove('opacity-50');
+            if (!etat.complet || etat.stock === null) { info.classList.add('hidden'); return; }
+            info.classList.remove('hidden');
+            if (etat.stock <= 0) {
+                info.className = 'info-variante text-xs rounded-lg px-2 py-1.5 bg-red-50 text-red-700 font-semibold';
+                info.textContent = 'Épuisé dans ce choix : choisissez une autre ' + [...form.querySelectorAll('select[data-option]')].map((x) => x.dataset.option.toLowerCase()).join(' ou ') + '.';
+                bouton.disabled = true;
+                bouton.classList.add('opacity-50');
+            } else if (etat.stock <= 3) {
+                info.className = 'info-variante text-xs rounded-lg px-2 py-1.5 bg-orange-50 text-orange-700 font-semibold';
+                info.textContent = etat.stock === 1 ? 'Plus qu\'un seul dans ce choix !' : 'Plus que ' + etat.stock + ' dans ce choix !';
+            } else {
+                info.className = 'info-variante text-xs rounded-lg px-2 py-1.5 bg-green-50 text-green-700';
+                info.textContent = '✓ Disponible';
+            }
+        });
+    });
+
     document.querySelectorAll('.ajout-panier').forEach((form) => {
         const champ = form.querySelector('input[name="quantite"]');
         form.querySelector('.moins').addEventListener('click', () => { champ.value = Math.max(1, (+champ.value || 1) - 1); });

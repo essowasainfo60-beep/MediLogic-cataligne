@@ -1,0 +1,191 @@
+{# Variantes d'un article : choix (pointure, taille, couleur…) + stock et prix de chaque combinaison.
+   Inclus dans ajouter_article.html et modifier_article.html (variable « article » facultative). #}
+{% set art = article if article is defined else none %}
+{% set options_existantes = (art.options.items()|list) if art and art.options else [] %}
+<div id="blocVariantes" class="border-2 border-purple-100 rounded-xl p-3 space-y-3">
+    <div>
+        <p class="font-bold text-gray-800">🎨 Variantes : pointures, tailles, couleurs…</p>
+        <p class="text-xs text-gray-500">L'article existe en plusieurs pointures, tailles, couleurs, contenances… ?
+            Ajoutez un <b>choix</b> et ses valeurs. Le client devra choisir avant de commander, et vous suivrez le stock de chaque variante.</p>
+    </div>
+
+    <div id="listeChoix" class="space-y-2">
+        {% for i in [1, 2, 3] %}
+        {% set paire = options_existantes[i - 1] if options_existantes|length >= i else none %}
+        <div class="choix-ligne bg-gray-50 rounded-lg p-2 {{ '' if paire or i == 1 else 'hidden' }}" data-i="{{ i }}">
+            <div class="flex gap-2">
+                <input type="text" name="option_nom_{{ i }}" value="{{ paire[0] if paire else '' }}" maxlength="30" list="nomsChoix"
+                       placeholder="Nom du choix : {{ ['Pointure, Taille…', 'Couleur…', 'Autre (Modèle, Parfum…)'][i - 1] }}"
+                       class="nom-choix flex-1 min-w-0 px-3 py-2 border border-gray-300 rounded-lg text-sm font-semibold">
+                <button type="button" class="vider-choix px-3 text-gray-400 hover:text-red-600" title="Retirer ce choix"><i class="fas fa-trash"></i></button>
+            </div>
+            <input type="text" name="option_valeurs_{{ i }}" value="{{ paire[1]|join(', ') if paire else '' }}"
+                   placeholder="Valeurs séparées par des virgules. Ex. 24-30 ou Noir, Vert, Rouge"
+                   class="valeurs-choix w-full mt-1.5 px-3 py-2 border border-gray-300 rounded-lg text-sm">
+            <div class="flex flex-wrap gap-1 mt-1.5 text-xs">
+                <span class="text-gray-400 self-center">Raccourcis :</span>
+                <button type="button" class="raccourci bg-white border rounded-full px-2 py-0.5" data-nom="Taille" data-valeurs="S, M, L, XL, XXL">Tailles S→XXL</button>
+                <button type="button" class="raccourci bg-white border rounded-full px-2 py-0.5" data-nom="Pointure" data-valeurs="36-45">Pointures 36→45</button>
+                <button type="button" class="raccourci bg-white border rounded-full px-2 py-0.5" data-nom="Pointure" data-valeurs="24-35">Pointures enfant 24→35</button>
+                <button type="button" class="raccourci bg-white border rounded-full px-2 py-0.5" data-nom="Couleur" data-valeurs="Noir, Blanc, Rouge, Bleu, Vert">Couleurs</button>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    <datalist id="nomsChoix">
+        {% for n in ['Pointure', 'Taille', 'Couleur', 'Contenance', 'Mémoire', 'Modèle', 'Parfum', 'Goût', 'Matière', 'Longueur'] %}<option value="{{ n }}">{% endfor %}
+    </datalist>
+    <button type="button" id="ajouterChoix" class="w-full border-2 border-dashed border-purple-300 text-purple-700 rounded-lg py-2 text-sm font-semibold hover:bg-purple-50">
+        <i class="fas fa-plus mr-1"></i> Ajouter un choix (pointure, couleur, taille…)</button>
+    <p class="text-xs text-gray-500">Astuce : « 24-30 » donne toutes les pointures de 24 à 30.</p>
+
+    <div id="zoneVariantes" class="hidden space-y-2 border-t pt-3">
+        <label class="flex items-start gap-2 text-sm">
+            <input type="checkbox" name="suivre_variantes" id="suivreVariantes" class="mt-1"
+                   {{ 'checked' if (not art or not art.options or art.suit_variantes) }}>
+            <span><b>Compter le stock de chaque variante</b><br>
+                <span class="text-xs text-gray-500">Ex. Pointure 24 Vert : 2, Pointure 24 Noir : 3… Une variante à 0 n'est plus proposée au client.</span></span>
+        </label>
+        <label class="flex items-start gap-2 text-sm">
+            <input type="checkbox" name="prix_variantes" id="prixVariantes" class="mt-1"
+                   {{ 'checked' if art and art.prix_differents }}>
+            <span><b>Certaines variantes ont un prix différent</b><br>
+                <span class="text-xs text-gray-500">Laissez vide pour garder le prix de l'article.</span></span>
+        </label>
+        <p id="resumeVariantes" class="text-sm font-semibold text-purple-800 bg-purple-50 rounded-lg px-3 py-2"></p>
+        <div id="tableauVariantes" class="space-y-2"></div>
+    </div>
+</div>
+
+<script>
+(function () {
+    const EXISTANTES = {{ ((art.variantes if art else none) or {})|tojson }};
+    const MAX = 400;
+    const bloc = document.getElementById('blocVariantes');
+    const lignesChoix = [...bloc.querySelectorAll('.choix-ligne')];
+    const zone = document.getElementById('zoneVariantes');
+    const tableau = document.getElementById('tableauVariantes');
+    const suivre = document.getElementById('suivreVariantes');
+    const prixCase = document.getElementById('prixVariantes');
+    const stockGlobal = document.getElementById('champStockGlobal');
+    const echapper = (t) => String(t).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+    // Valeurs déjà saisies (gardées quand on modifie les choix)
+    const memo = {};
+    Object.entries(EXISTANTES).forEach(([cle, v]) => {
+        memo['vs::' + cle] = v.stock != null ? String(v.stock) : '';
+        memo['vp::' + cle] = v.prix != null ? String(Math.round(v.prix)) : '';
+    });
+
+    const propre = (t) => t.replace(/\|/g, '/').replace(/=/g, '-').replace(/\s+/g, ' ').trim().slice(0, 30);
+    function valeurs(texte) {
+        const res = [];
+        texte.split(',').forEach((m) => {
+            const p = m.match(/^\s*(\d{1,4})\s*(?:-|à|a)\s*(\d{1,4})\s*$/);
+            if (p && +p[1] < +p[2] && +p[2] <= +p[1] + 60) { for (let n = +p[1]; n <= +p[2]; n++) res.push(String(n)); }
+            else if (propre(m)) res.push(propre(m));
+        });
+        return [...new Set(res)].slice(0, 60);
+    }
+    function choix() {
+        const res = [];
+        lignesChoix.forEach((l) => {
+            const nom = propre(l.querySelector('.nom-choix').value);
+            const vals = valeurs(l.querySelector('.valeurs-choix').value);
+            if (nom && vals.length && !res.some((c) => c.nom === nom)) res.push({ nom, vals });
+        });
+        return res;
+    }
+    const cleDe = (ch) => Object.keys(ch).sort().map((o) => o + '=' + ch[o]).join('|');
+    const court = (nom) => /^(taille|pointure|contenance|m[ée]moire)/i.test(nom);
+    const libelle = (nom, v) => court(nom) ? nom + ' ' + v : v;
+
+    function saisie(cle, nomStock) {
+        const s = memo['vs::' + cle] ?? '';
+        const p = memo['vp::' + cle] ?? '';
+        return `<input type="number" min="0" inputmode="numeric" name="vs::${echapper(cle)}" value="${echapper(s)}" placeholder="0"
+                       class="champ-stock w-16 border border-gray-300 rounded-lg px-2 py-1 text-center ${suivre.checked ? '' : 'hidden'}" aria-label="${echapper(nomStock)} : quantité">
+                <input type="number" min="0" step="any" name="vp::${echapper(cle)}" value="${echapper(p)}" placeholder="prix"
+                       class="champ-prix w-24 border border-gray-300 rounded-lg px-2 py-1 text-right ${prixCase.checked ? '' : 'hidden'}" aria-label="${echapper(nomStock)} : prix">`;
+    }
+
+    function dessiner() {
+        // On mémorise ce qui est déjà tapé
+        tableau.querySelectorAll('input').forEach((i) => { memo[i.name] = i.value; });
+        const ch = choix();
+        zone.classList.toggle('hidden', !ch.length);
+        if (stockGlobal) stockGlobal.classList.toggle('hidden', ch.length > 0 && suivre.checked);
+        if (!ch.length) { tableau.innerHTML = ''; return; }
+        const nb = ch.reduce((n, c) => n * c.vals.length, 1);
+        if (nb > MAX) {
+            tableau.innerHTML = `<p class="text-sm text-red-600">${nb} combinaisons : c'est trop (${MAX} au maximum). Réduisez le nombre de valeurs.</p>`;
+            majResume();
+            return;
+        }
+        const [premier, ...autres] = ch;
+        // Toutes les combinaisons des autres choix (ex. les couleurs)
+        let combos = [{}];
+        autres.forEach((c) => { combos = combos.flatMap((x) => c.vals.map((v) => ({ ...x, [c.nom]: v }))); });
+        const entete = (suivre.checked ? '<span class="w-16 text-center">Quantité</span>' : '') + (prixCase.checked ? '<span class="w-24 text-right">Prix</span>' : '');
+        tableau.innerHTML = premier.vals.map((v) => {
+            const lignes = combos.map((x) => {
+                const tout = { [premier.nom]: v, ...x };
+                const nomLigne = autres.length ? autres.map((c) => libelle(c.nom, x[c.nom])).join(' · ') : libelle(premier.nom, v);
+                return `<div class="flex items-center gap-2 py-1"><span class="flex-1 min-w-0 text-sm truncate">${echapper(nomLigne)}</span>${saisie(cleDe(tout), libelle(premier.nom, v) + ' ' + nomLigne)}</div>`;
+            }).join('');
+            if (!autres.length) return lignes;
+            return `<details class="groupe bg-white border border-gray-200 rounded-lg px-3 py-1" open>
+                <summary class="cursor-pointer py-1.5 flex items-center gap-2"><b class="flex-1">${echapper(libelle(premier.nom, v))}</b>
+                    <span class="total-groupe text-xs text-gray-500"></span></summary>
+                ${suivre.checked ? `<div class="flex items-center gap-2 text-xs text-gray-500 pb-1 border-b">
+                    <span class="flex-1">Mettre la même quantité partout :</span>
+                    <input type="number" min="0" class="tout-mettre w-16 border border-dashed border-gray-300 rounded-lg px-2 py-1 text-center" placeholder="…"></div>` : ''}
+                <div class="flex justify-end gap-2 text-xs text-gray-400 pt-1">${entete}</div>${lignes}</details>`;
+        }).join('');
+        if (!autres.length) tableau.innerHTML = `<div class="bg-white border border-gray-200 rounded-lg px-3 py-1"><div class="flex justify-end gap-2 text-xs text-gray-400 pt-1">${entete}</div>${tableau.innerHTML}</div>`;
+        tableau.querySelectorAll('.tout-mettre').forEach((t) => t.addEventListener('input', () => {
+            t.closest('details').querySelectorAll('.champ-stock').forEach((c) => { c.value = t.value; });
+            majResume();
+        }));
+        tableau.querySelectorAll('.champ-stock').forEach((c) => c.addEventListener('input', majResume));
+        majResume();
+    }
+    function majResume() {
+        const ch = choix();
+        const nb = ch.reduce((n, c) => n * c.vals.length, 1);
+        let total = 0, vides = 0;
+        tableau.querySelectorAll('.champ-stock').forEach((c) => { const n = parseInt(c.value, 10) || 0; total += n; if (!n) vides++; });
+        tableau.querySelectorAll('details.groupe').forEach((g) => {
+            let t = 0; g.querySelectorAll('.champ-stock').forEach((c) => { t += parseInt(c.value, 10) || 0; });
+            g.querySelector('.total-groupe').textContent = suivre.checked ? t + ' en stock' : '';
+        });
+        document.getElementById('resumeVariantes').textContent = nb + ' variante' + (nb > 1 ? 's' : '')
+            + (suivre.checked ? ' · ' + total + ' en stock au total' + (vides ? ' · ' + vides + ' à 0 (non proposée' + (vides > 1 ? 's' : '') + ')' : '') : '');
+    }
+
+    let attente;
+    lignesChoix.forEach((l) => {
+        l.querySelectorAll('input').forEach((i) => i.addEventListener('input', () => { clearTimeout(attente); attente = setTimeout(dessiner, 350); }));
+        l.querySelector('.vider-choix').addEventListener('click', () => {
+            l.querySelectorAll('input').forEach((i) => { i.value = ''; });
+            if (l.dataset.i !== '1') l.classList.add('hidden');
+            dessiner();
+        });
+        l.querySelectorAll('.raccourci').forEach((b) => b.addEventListener('click', () => {
+            const nom = l.querySelector('.nom-choix');
+            const vals = l.querySelector('.valeurs-choix');
+            if (!nom.value.trim()) nom.value = b.dataset.nom;
+            vals.value = vals.value.trim() ? vals.value.replace(/,\s*$/, '') + ', ' + b.dataset.valeurs : b.dataset.valeurs;
+            dessiner();
+        }));
+    });
+    document.getElementById('ajouterChoix').addEventListener('click', () => {
+        const cachee = lignesChoix.find((l) => l.classList.contains('hidden'));
+        if (!cachee) { alert('3 choix au maximum.'); return; }
+        cachee.classList.remove('hidden');
+        cachee.querySelector('.nom-choix').focus();
+    });
+    suivre.addEventListener('change', dessiner);
+    prixCase.addEventListener('change', dessiner);
+    dessiner();
+})();
+</script>

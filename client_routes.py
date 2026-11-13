@@ -144,16 +144,35 @@ def ajouter_panier():
 
     # Choix du client (taille, couleur…) : chaque combinaison est une ligne du panier
     try:
-        choix = article.lire_choix({o: request.form.get(f'option_{o}') for o in (article.options or {})})
+        choix, variante = article.choisir({o: request.form.get(f'option_{o}') for o in (article.options or {})})
     except ValueError as e:
         if veut_json:
             return jsonify(success=False, message=str(e)), 400
         flash(str(e), 'danger')
         return redirect(url_for('client.catalogue', code=visitee.lien_public))
+    # Stock de la variante choisie (pointure 24 verte…)
+    dispo = article.stock_variante(variante) if variante else None
+    if dispo is not None:
+        deja = sum(int(i['quantite']) for i in panier.values()
+                   if i.get('article_id') == article.id and i.get('variante') == variante)
+        if deja + quantite > dispo:
+            message = (f'{choix} : épuisé pour le moment' if dispo <= 0 else
+                       f'{choix} : il n\'en reste que {dispo}' + (f' (déjà {deja} dans votre panier)' if deja else ''))
+            if veut_json:
+                return jsonify(success=False, message=message), 400
+            flash(message, 'danger')
+            return redirect(url_for('client.catalogue', code=visitee.lien_public))
     # Photo affichée quand le client a ajouté l'article (ex. le modèle rouge parmi 4 photos)
     photos = [p for p in (article.photos_urls or []) if p]
     index_photo = request.form.get('photo_index', 0, type=int) or 0
     index_photo = index_photo if 0 <= index_photo < len(photos) else 0
+    if variante:
+        # La photo associée au choix (ex. la chaussure noire) l'emporte
+        photos_valeurs = article.photos_valeurs()
+        for option, valeur in article.choix_de_cle(variante).items():
+            if photos_valeurs.get(option, {}).get(valeur) is not None:
+                index_photo = photos_valeurs[option][valeur]
+                break
     cle = str(article.id) + (('-' + hashlib.md5(choix.encode()).hexdigest()[:8]) if choix else '') \
         + (f'-p{index_photo}' if index_photo else '')
     if cle in panier:
@@ -162,7 +181,8 @@ def ajouter_panier():
         panier[cle] = {
             'nom': article.nom + (f' ({choix})' if choix else ''),
             'options': choix or None,
-            'prix': article.prix,
+            'variante': variante,
+            'prix': article.prix_de(variante),
             'quantite': quantite,
             'boutique_id': article.boutique_id,
             'article_id': article.id,

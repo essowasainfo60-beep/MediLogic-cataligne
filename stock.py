@@ -16,28 +16,88 @@ def article_de_ligne(ligne, boutique_id):
     return Article.query.filter_by(boutique_id=boutique_id, nom=ligne.get('nom')).first()
 
 
-def mouvement(article, quantite, type_mouvement, commande=None, note=None):
-    """Applique +quantite / -quantite au stock d'un article suivi."""
+def variante_de_ligne(article, ligne):
+    """Clé de la variante d'une ligne de commande (ou de retour), si l'article suit ses variantes."""
+    if article is None or not article.suit_variantes:
+        return None
+    cle = ligne.get('variante')
+    if cle and cle in dict(article.combinaisons()):
+        return cle
+    return article.cle_depuis_texte(ligne.get('options'))
+
+
+def mouvement(article, quantite, type_mouvement, commande=None, note=None, variante=None):
+    """Applique +quantite / -quantite au stock d'un article suivi (et de sa variante)."""
     if article is None or article.stock is None or not quantite:
         return
-    article.stock += quantite
+    libelle = stock_var = None
+    if variante and article.suit_variantes:
+        tableau = {c: dict(v) for c, v in (article.variantes or {}).items()}   # copie : SQLAlchemy voit le changement
+        e = tableau.setdefault(variante, {})
+        e['stock'] = int(e.get('stock') or 0) + quantite
+        article.variantes = tableau
+        article.recalculer_stock()
+        libelle, stock_var = article.libelle_cle(variante), e['stock']
+    else:
+        article.stock += quantite
     db.session.add(MouvementStock(
         boutique_id=article.boutique_id, article=article, commande=commande, type=type_mouvement,
         quantite=quantite, stock_apres=article.stock, note=(note or '')[:255] or None,
+        variante=(libelle or '')[:150] or None, stock_variante_apres=stock_var,
     ))
+
+
+def mouvement_ligne(ligne, boutique_id, quantite, type_mouvement, commande=None, note=None):
+    """Mouvement de stock pour une ligne de commande (bonne variante comprise)."""
+    article = article_de_ligne(ligne, boutique_id)
+    mouvement(article, quantite, type_mouvement, commande, note, variante_de_ligne(article, ligne))
+
+
+def regler_variantes(article, nouveaux, type_mouvement, note):
+    """Fixe le stock de chaque variante ({clé: quantité}) en traçant chaque écart.
+    Les variantes qui n'existent plus sont vidées (trace aussi)."""
+    if not article.suit_variantes:
+        # Début du suivi par variante : l'ancien total est remplacé par le détail
+        ancien = article.stock
+        article.stock_par_variante = True
+        article.variantes = {c: {k: x for k, x in v.items() if k != 'stock'} for c, v in (article.variantes or {}).items()}
+        if ancien:
+            article.stock = ancien
+            mouvement(article, -ancien, 'inventaire', note=f'Stock détaillé par variante (ancien total : {ancien})')
+        article.stock = 0
+    existantes = dict(article.combinaisons())
+    tableau = {c: dict(v) for c, v in (article.variantes or {}).items()}
+    for cle in list(tableau):
+        if cle not in existantes:
+            reste = int(tableau[cle].get('stock') or 0)
+            if reste:
+                article.stock -= reste
+                db.session.add(MouvementStock(
+                    boutique_id=article.boutique_id, article=article, type='inventaire', quantite=-reste,
+                    stock_apres=article.stock, note='Variante retirée de l\'article',
+                    variante=cle.replace('|', ', ').replace('=', ' ')[:150], stock_variante_apres=0))
+            del tableau[cle]
+    article.variantes = tableau
+    article.recalculer_stock()
+    for cle in existantes:
+        if cle not in nouveaux:
+            continue
+        ecart = int(nouveaux[cle]) - article.stock_variante(cle)
+        if ecart:
+            mouvement(article, ecart, type_mouvement, note=note, variante=cle)
 
 
 def _sortir_stock(commande):
     for ligne in commande.articles_json:
-        mouvement(article_de_ligne(ligne, commande.boutique_id), -int(ligne['quantite']), 'vente',
-                  commande, f'Commande n°{commande.numero}')
+        mouvement_ligne(ligne, commande.boutique_id, -int(ligne['quantite']), 'vente',
+                        commande, f'Commande n°{commande.numero}')
     commande.stock_deduit = True
 
 
 def _remettre_stock(commande):
     for ligne in commande.articles_json:
-        mouvement(article_de_ligne(ligne, commande.boutique_id), int(ligne['quantite']), 'annulation',
-                  commande, f'Commande n°{commande.numero} : livraison annulée')
+        mouvement_ligne(ligne, commande.boutique_id, int(ligne['quantite']), 'annulation',
+                        commande, f'Commande n°{commande.numero} : livraison annulée')
     commande.stock_deduit = False
 
 

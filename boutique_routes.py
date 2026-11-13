@@ -124,15 +124,78 @@ def lire_prix(valeur):
         return None
 
 
+MAX_VARIANTES = 400
+
+
+def _propre(texte):
+    """Nom ou valeur de choix : sans « | » ni « = » (réservés aux clés des variantes)."""
+    return ' '.join((texte or '').replace('|', '/').replace('=', '-').split())[:30]
+
+
+def valeurs_option(texte):
+    """« 24-30, 32 » → 24, 25, …, 30, 32 ; « Noir, Vert » → Noir, Vert."""
+    valeurs = []
+    for morceau in (texte or '').split(','):
+        plage = re.fullmatch(r'\s*(\d{1,4})\s*(?:-|à|a)\s*(\d{1,4})\s*', morceau)
+        if plage and int(plage[1]) < int(plage[2]) <= int(plage[1]) + 60:
+            valeurs += [str(n) for n in range(int(plage[1]), int(plage[2]) + 1)]
+        elif _propre(morceau):
+            valeurs.append(_propre(morceau))
+    return list(dict.fromkeys(valeurs))[:60]
+
+
 def lire_options_article(form):
-    """Jusqu'à 3 options : « option_nom_1 = Taille », « option_valeurs_1 = S, M, L »."""
+    """Jusqu'à 3 choix : « option_nom_1 = Pointure », « option_valeurs_1 = 24-30 »."""
     options = {}
     for i in (1, 2, 3):
-        nom = (form.get(f'option_nom_{i}') or '').strip()[:30]
-        valeurs = [v.strip()[:30] for v in (form.get(f'option_valeurs_{i}') or '').split(',') if v.strip()]
-        if nom and valeurs:
-            options[nom] = list(dict.fromkeys(valeurs))[:20]
+        nom = _propre(form.get(f'option_nom_{i}'))
+        valeurs = valeurs_option(form.get(f'option_valeurs_{i}'))
+        if nom and valeurs and nom not in options:
+            options[nom] = valeurs
     return options or None
+
+
+def enregistrer_variantes(article, form, type_mouvement, note):
+    """Prix et stock de chaque variante, saisis dans le tableau de l'article.
+    Renvoie un message d'erreur, ou None."""
+    combinaisons = article.combinaisons()
+    if len(combinaisons) > MAX_VARIANTES:
+        article.stock_par_variante = False
+        return (f'Trop de combinaisons ({len(combinaisons)}) : {MAX_VARIANTES} au maximum. '
+                'Réduisez le nombre de valeurs.')
+    existantes = {c for c, _ in combinaisons}
+    prix_differents = bool(form.get('prix_variantes'))
+    tableau = {c: dict(v) for c, v in (article.variantes or {}).items()}
+    for cle in existantes:
+        e = tableau.setdefault(cle, {})
+        prix = lire_prix(form.get('vp::' + cle)) if prix_differents and (form.get('vp::' + cle) or '').strip() else None
+        e['prix'] = prix if prix is not None and prix != article.prix else None
+    article.variantes = tableau
+    if article.options and form.get('suivre_variantes'):
+        stocks = {}
+        for cle in existantes:
+            valeur = (form.get('vs::' + cle) or '').strip()
+            stocks[cle] = int(valeur) if valeur.isdigit() else 0
+        stock.regler_variantes(article, stocks, type_mouvement, note)
+    elif article.stock_par_variante:
+        article.stock_par_variante = False   # retour à un stock global (le total est gardé)
+    # On oublie les variantes qui n'existent plus
+    article.variantes = {c: v for c, v in (article.variantes or {}).items() if c in existantes} or None
+    return None
+
+
+def enregistrer_photos_choix(article, form):
+    """Photo associée à chaque valeur d'un choix (ex. la photo de la chaussure noire)."""
+    if not form.get('photos_choix_present'):
+        return
+    photos = [p for p in (article.photos_urls or []) if p]
+    resultat = {}
+    for option, valeurs in (article.options or {}).items():
+        for valeur in valeurs:
+            index = form.get(f'pc::{option}::{valeur}', type=int)
+            if index is not None and 0 <= index < len(photos):
+                resultat.setdefault(option, {})[valeur] = photos[index]
+    article.photos_choix = resultat or None
 
 
 def article_de_la_boutique(article_id):
@@ -490,15 +553,23 @@ def ajouter_article():
             options=lire_options_article(request.form),
         )
         enregistrer_avec_numero(article, 'numero', Article.prochain_numero)
+        if article.options:
+            erreur = enregistrer_variantes(article, request.form, 'entree', 'Stock initial')
+            if erreur:
+                flash(erreur, 'warning')
         stock_initial = request.form.get('stock', type=int)
-        if stock_initial is not None and stock_initial >= 0:
+        if not article.suit_variantes and stock_initial is not None and stock_initial >= 0:
             article.stock = 0
             stock.mouvement(article, stock_initial, 'entree', note='Stock initial')
-            db.session.commit()
+        db.session.commit()
 
-        flash(f'Article n°{article.numero} ajouté avec succès !', 'success')
+        flash(f'Article n°{article.numero} ajouté avec succès !'
+              + (f' {len(article.combinaisons())} variantes, {article.stock} en stock.' if article.suit_variantes else ''), 'success')
         if echecs:
             flash(f'{echecs} fichier(s) ignoré(s) : ce ne sont pas des images valides', 'warning')
+        if article.options and len(urls) > 1:
+            flash('Vous pouvez maintenant associer une photo à chaque couleur / modèle (en bas de la page).', 'info')
+            return redirect(url_for('boutique.modifier_article', article_id=article.id) + '#photosChoix')
         return redirect(url_for('boutique.articles'))
 
     return render_template('boutique/ajouter_article.html')
@@ -522,6 +593,10 @@ def modifier_article(article_id):
         article.description = (request.form.get('description') or '').strip()
         article.prix = prix
         article.options = lire_options_article(request.form)
+        erreur = enregistrer_variantes(article, request.form, 'inventaire', "Modification de l'article")
+        if erreur:
+            flash(erreur, 'warning')
+        enregistrer_photos_choix(article, request.form)
 
         urls, echecs = enregistrer_photos(request.files.getlist('nouvelles_photos'), current_user.id)
         if urls:
@@ -546,8 +621,12 @@ def supprimer_photo(article_id, photo_index):
 
     photos = list(article.photos_urls or [])
     if 0 <= photo_index < len(photos):
-        supprimer_photo_stockee(photos.pop(photo_index), current_user.id)
+        retiree = photos.pop(photo_index)
+        supprimer_photo_stockee(retiree, current_user.id)
         article.photos_urls = [url for url in photos if url and url.strip()]
+        if article.photos_choix:
+            article.photos_choix = {o: {v: u for v, u in vals.items() if u != retiree}
+                                    for o, vals in article.photos_choix.items()} or None
         db.session.commit()
         flash('Photo supprimée', 'success')
     else:
@@ -779,17 +858,24 @@ def nouvelle_commande():
                 # « Taille=M|Couleur=Rouge » envoyé par la page
                 choisis = dict(p.split('=', 1) for p in (choix_texte or '').split('|') if '=' in p)
                 try:
-                    choix = article.lire_choix(choisis)
+                    choix, cle = article.choisir(choisis)
                 except ValueError as e:
                     flash(f'« {article.nom} » : {e}', 'danger')
                     return render_template('boutique/nouvelle_commande.html', catalogue=catalogue,
                                            sources=Commande.SOURCES, zones=zones_actives(), form=f,
                                            index_quartiers=index_quartiers(zones_actives()), creneaux=creneaux_disponibles() + [CRENEAU_AUTRE],
                                            livreurs=Livreur.query.filter_by(boutique_id=current_user.id, actif=True).order_by(Livreur.nom).all())
+                dispo = article.stock_variante(cle) if cle else None
+                if dispo is not None and quantite > dispo:
+                    flash(f'Attention : « {article.nom} ({choix}) » : il n\'en reste que {max(dispo, 0)} en stock.', 'warning')
+                photos_art = [p for p in (article.photos_urls or []) if p]
+                index_photo = next((i for o, v in (cle and article.choix_de_cle(cle) or {}).items()
+                                    for i in [article.photos_valeurs().get(o, {}).get(v)] if i is not None), 0)
                 lignes.append({'nom': article.nom + (f' ({choix})' if choix else ''), 'options': choix or None,
-                               'prix': article.prix, 'quantite': quantite, 'article_id': article.id,
+                               'variante': cle,
+                               'prix': article.prix_de(cle), 'quantite': quantite, 'article_id': article.id,
                                'numero': article.numero,
-                               'boutique_id': current_user.id, 'photo': (article.photos_urls or [None])[0]})
+                               'boutique_id': current_user.id, 'photo': photos_art[index_photo] if photos_art else None})
         # Articles hors catalogue (montrés en live mais pas encore en ligne)
         for nom, prix, qte in zip(f.getlist('libre_nom'), f.getlist('libre_prix'), f.getlist('libre_quantite')):
             prix = lire_prix(prix)
@@ -1297,7 +1383,8 @@ def retour_commande(commande_id):
             qte = min(max(request.form.get(f'qte_{i}', 0, type=int) or 0, 0), restant.get(i, 0))
             if qte:
                 lignes.append({'index': i, 'nom': ligne['nom'], 'prix': ligne['prix'], 'quantite': qte,
-                               'article_id': ligne.get('article_id')})
+                               'article_id': ligne.get('article_id'), 'options': ligne.get('options'),
+                               'variante': ligne.get('variante')})
         if not lignes:
             flash('Indiquez au moins un article rapporté', 'danger')
             return redirect(url_for('boutique.retour_commande', commande_id=commande.id))
@@ -1307,8 +1394,8 @@ def retour_commande(commande_id):
                         montant=sum(l['prix'] * l['quantite'] for l in lignes))
         db.session.add(retour)
         for l in lignes:  # les articles rapportés reviennent en stock
-            stock.mouvement(stock.article_de_ligne(l, commande.boutique_id), l['quantite'], 'retour', commande,
-                            f"{retour.type_libelle} - commande n°{commande.numero}" + (f" : {motif}" if motif else ''))
+            stock.mouvement_ligne(l, commande.boutique_id, l['quantite'], 'retour', commande,
+                                  f"{retour.type_libelle} - commande n°{commande.numero}" + (f" : {motif}" if motif else ''))
         if type_retour == 'retour':
             caisse.ajouter(commande.boutique_id, 'remboursement', -retour.montant,
                            f'Remboursement retour commande n°{commande.numero} ({commande.client_nom})',
@@ -1338,6 +1425,17 @@ def inventaire():
     if request.method == 'POST':
         changements = 0
         for article in articles_list:
+            if article.suit_variantes:
+                # Comptage variante par variante (cases laissées vides : inchangées)
+                comptes = {}
+                for cle, _ in article.combinaisons():
+                    valeur = (request.form.get(f'compte_{article.id}::{cle}') or '').strip()
+                    if valeur.isdigit() and int(valeur) != article.stock_variante(cle):
+                        comptes[cle] = int(valeur)
+                if comptes:
+                    stock.regler_variantes(article, comptes, 'inventaire', 'Inventaire')
+                    changements += 1
+                continue
             valeur = (request.form.get(f'compte_{article.id}') or '').strip()
             if valeur == '' or not valeur.isdigit():
                 continue
@@ -1359,25 +1457,34 @@ def inventaire():
     resume = {
         'suivis': len(suivis),
         'unites': sum(max(a.stock, 0) for a in suivis),
-        'valeur': sum(max(a.stock, 0) * a.prix for a in suivis),
+        'valeur': sum(sum(max(v['stock'], 0) * v['prix'] for v in a.lignes_variantes()) if a.suit_variantes
+                      else max(a.stock, 0) * a.prix for a in suivis),
         'ruptures': sum(a.stock <= 0 for a in suivis),
         'faibles': sum(0 < a.stock <= 3 for a in suivis),
+        'variantes_epuisees': sum(a.variantes_epuisees for a in suivis if not a.archive and a.stock > 0),
     }
     return render_template('boutique/inventaire.html', articles=articles_list, resume=resume, fcfa=msg.fcfa)
 
 @boutique_bp.route('/inventaire/entree', methods=['POST'])
 @login_required
 def entree_stock():
-    article = Article.query.filter_by(id=request.form.get('article_id', type=int), boutique_id=current_user.id).first_or_404()
+    # « 12 » = l'article n°id 12 ; « 12::Couleur=Noir|Pointure=26 » = une de ses variantes
+    article_id, _, cle = (request.form.get('article_id') or '').partition('::')
+    article = Article.query.filter_by(id=int(article_id) if article_id.isdigit() else 0,
+                                      boutique_id=current_user.id).first_or_404()
     quantite = request.form.get('quantite', type=int) or 0
-    if quantite <= 0:
+    if article.suit_variantes and cle not in dict(article.combinaisons()):
+        flash(f'« {article.nom} » : choisissez la variante reçue (pointure, couleur…).', 'danger')
+    elif quantite <= 0:
         flash('Quantité invalide', 'danger')
     else:
         if article.stock is None:
             article.stock = 0
-        stock.mouvement(article, quantite, 'entree', note=(request.form.get('note') or 'Réception de marchandise'))
+        stock.mouvement(article, quantite, 'entree', note=(request.form.get('note') or 'Réception de marchandise'),
+                        variante=cle or None)
         db.session.commit()
-        flash(f'+{quantite} « {article.nom} » : stock {article.stock}', 'success')
+        detail = f' ({article.libelle_cle(cle)} : {article.stock_variante(cle)})' if cle else ''
+        flash(f'+{quantite} « {article.nom} »{detail} : stock total {article.stock}', 'success')
     return redirect(url_for('boutique.inventaire'))
 
 @boutique_bp.route('/inventaire/mouvements')

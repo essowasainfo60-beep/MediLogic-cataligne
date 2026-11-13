@@ -69,6 +69,7 @@
                         <p class="text-primary font-bold text-xl mb-1">{{ "{:,.0f}".format(article.prix).replace(',', ' ') }} FCFA</p>
                         <p class="text-xs mb-3 {{ 'text-red-600 font-bold' if article.stock is not none and article.stock <= 0 else 'text-gray-500' }}">
                             {% if article.stock is none %}Stock non suivi{% elif article.stock <= 0 %}Rupture de stock{% else %}{{ article.stock }} en stock{% endif %}
+                            {% if article.options %}<span class="block text-purple-700 font-normal">{{ article.combinaisons()|length }} variantes ({{ article.options.keys()|join(', ')|lower }}){% if article.variantes_epuisees and article.stock and article.stock > 0 %} · <span class="text-red-600">{{ article.variantes_epuisees }} épuisée{{ 's' if article.variantes_epuisees > 1 }}</span>{% endif %}</span>{% endif %}
                         </p>
 
                         <!-- Actions -->

@@ -26,9 +26,9 @@
             </thead>
             <tbody class="divide-y" id="lignesMouvements">
                 {% for m in mouvements %}
-                <tr data-item="{{ m.article.nom }} {{ m.type_libelle }} {{ m.note or '' }} {{ m.date.strftime('%d/%m/%Y') }}">
+                <tr data-item="{{ m.article.nom }} {{ m.variante or '' }} {{ m.type_libelle }} {{ m.note or '' }} {{ m.date.strftime('%d/%m/%Y') }}">
                     <td class="px-3 py-2 whitespace-nowrap">{{ m.date.strftime('%d/%m/%Y %H:%M') }}</td>
-                    <td class="px-3 py-2">{{ m.article.nom }}</td>
+                    <td class="px-3 py-2">{{ m.article.nom }}{% if m.variante %}<span class="block text-xs text-purple-700">{{ m.variante }}{% if m.stock_variante_apres is not none %} · reste {{ m.stock_variante_apres }}{% endif %}</span>{% endif %}</td>
                     <td class="px-3 py-2">{{ m.type_libelle }}</td>
                     <td class="px-3 py-2 text-right font-bold {{ 'text-green-600' if m.quantite > 0 else 'text-red-600' }}">{{ '%+d'|format(m.quantite) }}</td>
                     <td class="px-3 py-2 text-right">{{ m.stock_apres }}</td>

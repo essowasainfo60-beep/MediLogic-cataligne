@@ -21,6 +21,11 @@
         <div class="bg-white rounded-xl shadow p-4"><p class="text-xs text-gray-500">En rupture</p><p class="text-2xl font-bold text-red-600">{{ resume.ruptures }}</p></div>
         <div class="bg-white rounded-xl shadow p-4"><p class="text-xs text-gray-500">Stock faible (≤ 3)</p><p class="text-2xl font-bold text-orange-500">{{ resume.faibles }}</p></div>
     </div>
+    {% if resume.variantes_epuisees %}
+    <p class="-mt-3 mb-5 text-sm bg-orange-50 text-orange-800 rounded-lg px-3 py-2">
+        <i class="fas fa-triangle-exclamation mr-1"></i> {{ resume.variantes_epuisees }} variante{{ 's' if resume.variantes_epuisees > 1 }} épuisée{{ 's' if resume.variantes_epuisees > 1 }}
+        (une pointure, une couleur…) dans des articles encore en stock : voir le détail ci-dessous (en rouge).</p>
+    {% endif %}
 
     <!-- Entrée de marchandise -->
     {% if articles %}
@@ -28,7 +33,15 @@
         <div class="md:col-span-3">
             <label class="block text-sm font-bold text-gray-700 mb-1"><i class="fas fa-truck-ramp-box mr-1"></i> Réception de marchandise</label>
             <select name="article_id" class="w-full border border-gray-300 rounded-lg px-3 py-2">
-                {% for a in articles if not a.archive %}<option value="{{ a.id }}">n°{{ a.numero }} · {{ a.nom }}{% if a.stock is not none %} (stock : {{ a.stock }}){% endif %}</option>{% endfor %}
+                {% for a in articles if not a.archive %}
+                {% if a.suit_variantes %}
+                <optgroup label="n°{{ a.numero }} · {{ a.nom }} (stock : {{ a.stock }})">
+                    {% for v in a.lignes_variantes() %}<option value="{{ a.id }}::{{ v.cle }}">{{ a.nom }} · {{ v.libelle }} (stock : {{ v.stock }})</option>{% endfor %}
+                </optgroup>
+                {% else %}
+                <option value="{{ a.id }}">n°{{ a.numero }} · {{ a.nom }}{% if a.stock is not none %} (stock : {{ a.stock }}){% endif %}</option>
+                {% endif %}
+                {% endfor %}
             </select>
         </div>
         <div><label class="block text-sm text-gray-600 mb-1">Quantité reçue</label>
@@ -66,8 +79,31 @@
                         {% else %}<span class="font-bold">{{ a.stock }}</span>{% endif %}
                     </td>
                     <td class="px-3 py-2 text-right whitespace-nowrap">{{ fcfa(a.stock * a.prix) if a.stock and a.stock > 0 else '—' }}</td>
-                    <td class="px-3 py-2"><input type="number" name="compte_{{ a.id }}" min="0" placeholder="{{ a.stock if a.stock is not none else '' }}" class="w-24 border border-gray-300 rounded-lg px-2 py-1"></td>
+                    <td class="px-3 py-2">
+                        {% if a.suit_variantes %}<span class="text-xs text-purple-700">détail ci-dessous ↓</span>
+                        {% else %}<input type="number" name="compte_{{ a.id }}" min="0" placeholder="{{ a.stock if a.stock is not none else '' }}" class="w-24 border border-gray-300 rounded-lg px-2 py-1">{% endif %}
+                    </td>
                 </tr>
+                {% if a.suit_variantes %}
+                <tr data-item="n°{{ a.numero }} {{ a.nom }}" class="{{ 'opacity-60' if a.archive }}">
+                    <td colspan="5" class="px-3 pb-3 pt-0">
+                        <details class="sticky left-0 max-w-[calc(100vw-3rem)] md:max-w-none bg-purple-50/50 rounded-lg px-3 py-2" {{ 'open' if a.variantes_epuisees and a.stock > 0 and not a.archive }}>
+                            <summary class="cursor-pointer text-xs font-semibold text-purple-700">
+                                {{ a.lignes_variantes()|length }} variantes{% if a.variantes_epuisees %} · <span class="text-red-600">{{ a.variantes_epuisees }} épuisée{{ 's' if a.variantes_epuisees > 1 }}</span>{% endif %} · compter chaque variante</summary>
+                            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-x-4 gap-y-1 mt-2">
+                                {% for v in a.lignes_variantes() %}
+                                <label class="flex items-center gap-2 text-sm">
+                                    <span class="flex-1 min-w-0 truncate">{{ v.libelle }}</span>
+                                    <span class="w-10 text-right font-bold {{ 'text-red-600' if v.stock <= 0 else 'text-orange-500' if v.stock <= 2 else '' }}">{{ v.stock }}</span>
+                                    <input type="number" name="compte_{{ a.id }}::{{ v.cle }}" min="0" placeholder="{{ v.stock }}" aria-label="{{ v.libelle }} : compté"
+                                           class="w-16 border border-gray-300 rounded-lg px-2 py-0.5">
+                                </label>
+                                {% endfor %}
+                            </div>
+                        </details>
+                    </td>
+                </tr>
+                {% endif %}
                 {% else %}
                 <tr><td colspan="5" class="px-3 py-10 text-center text-gray-500">Aucun article dans le catalogue.</td></tr>
                 {% endfor %}

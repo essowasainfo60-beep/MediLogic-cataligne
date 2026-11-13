@@ -157,11 +157,12 @@
     </div>
 </template>
 
+<script src="{{ url_for('static', filename='variantes.js') }}"></script>
 <script>
 const CATALOGUE = [
     {% for a in catalogue %}{ id: {{ a.id }}, numero: {{ a.numero or 0 }}, nom: {{ a.nom|tojson }}, prix: {{ a.prix }},
       stock: {{ a.stock if a.stock is not none else 'null' }}, photo: {{ ((a.photos_urls or [])|select|first or '')|tojson }},
-      options: {{ (a.options or {})|tojson }} },
+      options: {{ (a.options or {})|tojson }}, variantes: {{ (a.donnees_variantes() if a.options else none)|tojson }} },
     {% endfor %}];
 const lignes = document.getElementById('lignes');
 const fcfa = (v) => Math.round(v).toLocaleString('fr-FR') + ' FCFA';
@@ -199,7 +200,7 @@ function ajouterArticle(a) {
             <span class="block text-xs text-gray-500">${fcfa(a.prix)}${a.stock !== null ? ' · stock ' + a.stock : ''}</span>
             ${aDesOptions ? '<span class="flex flex-wrap gap-1 mt-1">' + Object.entries(a.options).map(([o, vals]) =>
                 `<select data-option="${echapper(o)}" required class="choix border border-gray-300 px-1 py-1 text-xs"><option value="">${echapper(o)}…</option>` +
-                vals.map((v) => `<option>${echapper(v)}</option>`).join('') + '</select>').join('') + '</span>' : ''}
+                vals.map((v) => `<option value="${echapper(v)}">${echapper(v)}</option>`).join('') + '</select>').join('') + '</span><span class="etat-variante block text-xs mt-0.5"></span>' : ''}
         </span>
         <input type="number" name="quantite" value="1" min="1" class="w-16 border border-gray-300 px-2 py-1.5 text-sm text-center" aria-label="Quantité">
         <button type="button" class="retirer text-red-500 px-2" aria-label="Retirer"><i class="fas fa-trash"></i></button>`;
@@ -207,6 +208,16 @@ function ajouterArticle(a) {
         div.querySelector('[name="article_choix"]').value = [...div.querySelectorAll('select.choix')]
             .map((x) => x.dataset.option + '=' + x.value).join('|');
     }));
+    if (aDesOptions && a.variantes && window.Variantes) {
+        // Prix et stock de la variante choisie (pointure 24 verte…)
+        Variantes.brancher(div, a.variantes, (etat) => {
+            div.dataset.prix = etat.prix;
+            const el = div.querySelector('.etat-variante');
+            el.textContent = !etat.complet ? '' : fcfa(etat.prix) + (etat.stock === null ? '' : etat.stock <= 0 ? ' · ÉPUISÉ dans ce choix' : ' · reste ' + etat.stock);
+            el.className = 'etat-variante block text-xs mt-0.5 ' + (etat.complet && etat.stock !== null && etat.stock <= 0 ? 'text-red-600 font-bold' : 'text-gray-600');
+            calculer();
+        });
+    }
     brancher(div);
 }
 

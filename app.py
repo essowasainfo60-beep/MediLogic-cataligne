@@ -164,6 +164,16 @@ def mettre_a_jour_schema():
             conn.execute(text("ALTER TABLE articles ADD COLUMN options JSON"))
         if 'numero' not in colonnes_articles:
             conn.execute(text("ALTER TABLE articles ADD COLUMN numero INTEGER"))
+        for nom in ('variantes', 'photos_choix'):
+            if nom not in colonnes_articles:
+                conn.execute(text(f"ALTER TABLE articles ADD COLUMN {nom} JSON"))
+        if 'stock_par_variante' not in colonnes_articles:
+            conn.execute(text("ALTER TABLE articles ADD COLUMN stock_par_variante BOOLEAN NOT NULL DEFAULT FALSE"))
+        colonnes_mvt = {c['name'] for c in inspecteur.get_columns('mouvements_stock')}
+        if 'variante' not in colonnes_mvt:
+            conn.execute(text("ALTER TABLE mouvements_stock ADD COLUMN variante VARCHAR(150)"))
+        if 'stock_variante_apres' not in colonnes_mvt:
+            conn.execute(text("ALTER TABLE mouvements_stock ADD COLUMN stock_variante_apres INTEGER"))
         # Numérotation propre à chaque boutique (articles et commandes) : 1, 2, 3…
         for table, ordre in [('articles', 'created_at, id'), ('commandes', 'date_commande, id')]:
             champ = 'numero' if table == 'articles' else 'numero_commande'

@@ -32,25 +32,12 @@
                 </div>
 
                 <div class="bg-gray-50 rounded-lg p-3 text-sm flex justify-between items-center">
-                    <span>Stock : <strong>{{ article.stock if article.stock is not none else 'non suivi' }}</strong></span>
+                    <span>Stock : <strong>{{ article.stock if article.stock is not none else 'non suivi' }}</strong>
+                        {% if article.suit_variantes %}<span class="block text-xs text-gray-500">Détail par variante ci-dessous : chaque changement est noté dans l'historique du stock.</span>{% endif %}</span>
                     <a href="{{ url_for('boutique.inventaire') }}" class="text-primary hover:underline">Gérer dans l'inventaire</a>
                 </div>
 
-                <div>
-                    <label class="block text-gray-700 text-sm font-bold mb-1">Options proposées au client</label>
-                    <p class="text-xs text-gray-500 mb-2">Ex. Taille : S, M, L, XL — Couleur : Rouge, Bleu. Le client devra choisir avant d'ajouter au panier.</p>
-                    {% for i in [1, 2, 3] %}
-                    {% set options_existantes = ((article.options if article is defined and article.options else {})|dictsort) %}
-                    {% set paire = options_existantes[i - 1] if options_existantes|length >= i else none %}
-                    <div class="grid grid-cols-3 gap-2 mb-2">
-                        <input type="text" name="option_nom_{{ i }}" value="{{ paire[0] if paire else '' }}" maxlength="30"
-                               placeholder="{{ ['Taille', 'Couleur', 'Autre option'][i - 1] }}" class="px-3 py-2 border border-gray-300 rounded-lg text-sm">
-                        <input type="text" name="option_valeurs_{{ i }}" value="{{ paire[1]|join(', ') if paire else '' }}"
-                               placeholder="{{ ['S, M, L, XL', 'Rouge, Bleu, Noir', 'Valeurs séparées par des virgules'][i - 1] }}"
-                               class="col-span-2 px-3 py-2 border border-gray-300 rounded-lg text-sm">
-                    </div>
-                    {% endfor %}
-                </div>
+                {% include 'boutique/_variantes.html' %}
 
                 <!-- Photos existantes avec suppression -->
                 {% if article.photos_urls and article.photos_urls|length > 0 %}
@@ -76,6 +63,39 @@
                         {% endfor %}
                     </div>
                     <p class="text-xs text-gray-500 mt-2">× : supprimer la photo · <i class="fas fa-star"></i> : en faire la photo principale (affichée dans le catalogue)</p>
+                </div>
+                {% endif %}
+
+                {% set photos_ok = (article.photos_urls or [])|select|list %}
+                {% if article.options and photos_ok|length > 1 %}
+                <!-- Photo de chaque couleur / modèle -->
+                {% set actuelles = article.photos_valeurs() %}
+                <div id="photosChoix" class="border-2 border-purple-100 rounded-xl p-3">
+                    <input type="hidden" name="photos_choix_present" value="1">
+                    <p class="font-bold text-gray-800">📸 Une photo pour chaque choix (facultatif)</p>
+                    <p class="text-xs text-gray-500 mb-2">Quand le client choisit « Noir », le catalogue lui montre la photo de la chaussure noire.</p>
+                    <div class="flex gap-2 overflow-x-auto pb-2">
+                        {% for url in photos_ok %}
+                        <div class="relative flex-shrink-0"><img src="{{ url }}" alt="" class="h-16 w-16 object-cover rounded-lg border">
+                            <span class="absolute top-0.5 left-0.5 bg-black/70 text-white text-xs rounded px-1">{{ loop.index }}</span></div>
+                        {% endfor %}
+                    </div>
+                    {% for option, valeurs in article.options.items() %}
+                    <details class="mt-1" {{ 'open' if actuelles.get(option) or not (option|lower).startswith(('pointure', 'taille')) }}>
+                        <summary class="cursor-pointer text-sm font-semibold text-purple-700">{{ option }}</summary>
+                        <div class="grid grid-cols-2 sm:grid-cols-3 gap-2 mt-1">
+                            {% for v in valeurs %}
+                            <label class="text-sm flex items-center gap-1 bg-gray-50 rounded-lg px-2 py-1">
+                                <span class="flex-1 truncate">{{ v }}</span>
+                                <select name="pc::{{ option }}::{{ v }}" class="border border-gray-300 rounded px-1 py-0.5 text-sm">
+                                    <option value="">—</option>
+                                    {% for url in photos_ok %}<option value="{{ loop.index0 }}" {{ 'selected' if actuelles.get(option, {}).get(v) == loop.index0 }}>Photo {{ loop.index }}</option>{% endfor %}
+                                </select>
+                            </label>
+                            {% endfor %}
+                        </div>
+                    </details>
+                    {% endfor %}
                 </div>
                 {% endif %}
 
