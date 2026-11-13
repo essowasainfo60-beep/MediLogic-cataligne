@@ -24,6 +24,24 @@
     <p id="fraisInfo" class="text-xs mt-1.5"></p>
     <p class="text-sm mt-1 bg-green-50 rounded-lg px-2 py-1.5">Total à encaisser chez le client :
         <b id="fraisTotal" class="text-green-800"></b> <span class="text-xs text-gray-500">(articles {{ fcfa(c.net_articles) }} + livraison)</span></p>
+
+    {% set mode_choisi = c.mode_frais or current_user.mode_frais or 'livreur_garde' %}
+    <p class="text-xs font-bold uppercase tracking-wide text-gray-500 mt-3 mb-1.5">Les frais, qui les garde ?</p>
+    <div class="space-y-1.5" id="choixModeFrais">
+        <label class="flex items-start gap-2 rounded-xl border-2 px-3 py-2 cursor-pointer has-[:checked]:border-green-500 has-[:checked]:bg-green-50">
+            <input type="radio" name="mode_frais_choix" value="livreur_garde" class="mt-1 h-4 w-4" {{ 'checked' if mode_choisi != 'boutique_collecte' }}>
+            <span class="text-sm"><b>🛵 Le livreur garde ses frais</b> <span class="text-xs text-green-700 font-semibold">(par défaut)</span>
+                <span class="block text-xs text-gray-600">Il encaisse <b class="mf-total"></b> chez le client, garde <b class="mf-frais"></b>
+                    et vous rapporte <b class="mf-net">{{ fcfa(c.net_articles) }}</b> (les articles).</span></span>
+        </label>
+        <label class="flex items-start gap-2 rounded-xl border-2 px-3 py-2 cursor-pointer has-[:checked]:border-orange-500 has-[:checked]:bg-orange-50">
+            <input type="radio" name="mode_frais_choix" value="boutique_collecte" class="mt-1 h-4 w-4" {{ 'checked' if mode_choisi == 'boutique_collecte' }}>
+            <span class="text-sm"><b>💼 Il rapporte tout, je le paie après</b>
+                <span class="block text-xs text-gray-600">Il vous rapporte <b class="mf-total"></b>. Vous lui payez ensuite ses <b class="mf-frais"></b>
+                    de frais (bouton « Payer ses frais » sur la commande, ou dans la Caisse).</span></span>
+        </label>
+    </div>
+    <p id="fraisResume" class="text-sm mt-2 rounded-lg px-2 py-1.5 font-semibold"></p>
 </div>
 <script>
 document.addEventListener('DOMContentLoaded', function () {
@@ -34,7 +52,7 @@ document.addEventListener('DOMContentLoaded', function () {
     const formulaires = () => document.querySelectorAll('#livraison form.avec-frais');
     // Chaque formulaire « Confier / Proposer / Valider » emporte la zone et les frais choisis
     formulaires().forEach((f) => {
-        ['zone_id', 'frais_livraison'].forEach((n) => {
+        ['zone_id', 'frais_livraison', 'mode_frais'].forEach((n) => {
             const i = document.createElement('input'); i.type = 'hidden'; i.name = n; f.appendChild(i);
         });
         if (f.dataset.question) f.dataset.base = f.dataset.question;
@@ -47,12 +65,26 @@ document.addEventListener('DOMContentLoaded', function () {
         else if (+tarif === frais) { info.className = 'text-xs mt-1.5 text-gray-500'; info.textContent = '✓ Tarif de la zone. Vous pouvez le modifier pour cette commande.'; }
         else { info.className = 'text-xs mt-1.5 text-purple-700 font-semibold'; info.textContent = 'Frais modifiés pour cette commande (tarif de la zone : ' + fcfa(+tarif) + ').'; }
         document.getElementById('fraisTotal').textContent = fcfa(NET + frais);
+        const mode = document.querySelector('input[name="mode_frais_choix"]:checked').value;
+        const garde = mode !== 'boutique_collecte';
+        document.querySelectorAll('#choixModeFrais .mf-total').forEach((e) => { e.textContent = fcfa(NET + frais); });
+        document.querySelectorAll('#choixModeFrais .mf-frais').forEach((e) => { e.textContent = fcfa(frais); });
+        const resume = document.getElementById('fraisResume');
+        resume.className = 'text-sm mt-2 rounded-lg px-2 py-1.5 font-semibold ' + (garde ? 'bg-green-100 text-green-900' : 'bg-orange-100 text-orange-900');
+        resume.textContent = garde
+            ? '➜ Le livreur vous rapportera ' + fcfa(NET) + ' (il garde ' + fcfa(frais) + ').'
+            : '➜ Le livreur vous rapportera ' + fcfa(NET + frais) + ' ; vous lui devrez ' + fcfa(frais) + '.';
         formulaires().forEach((f) => {
             f.elements.zone_id.value = zone.value;
             f.elements.frais_livraison.value = montant.value === '' ? '' : frais;
-            if (f.dataset.base) f.dataset.question = f.dataset.base + '\n\nFrais de livraison : ' + fcfa(frais) + '\nÀ encaisser chez le client : ' + fcfa(NET + frais);
+            f.elements.mode_frais.value = mode;
+            if (f.dataset.base) f.dataset.question = f.dataset.base + '\n\nFrais de livraison : ' + fcfa(frais)
+                + '\nÀ encaisser chez le client : ' + fcfa(NET + frais)
+                + (garde ? '\nLe livreur garde ses frais et vous rapporte ' + fcfa(NET)
+                         : '\nLe livreur rapporte tout (' + fcfa(NET + frais) + ') : vous lui payez ensuite ' + fcfa(frais));
         });
     }
+    document.querySelectorAll('input[name="mode_frais_choix"]').forEach((r) => r.addEventListener('change', maj));
     zone.addEventListener('change', () => {
         const tarif = zone.selectedOptions[0].dataset.frais;
         if (tarif !== '') montant.value = tarif;   // les frais de la zone sont proposés

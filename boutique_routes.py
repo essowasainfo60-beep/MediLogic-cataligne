@@ -36,6 +36,7 @@ GERANT_SEUL = {
     'biometrie_retirer',
 }
 CAISSE = {'page_caisse', 'caisse_versement', 'caisse_paiement_livreur', 'caisse_mouvement', 'caisse_supprimer',
+          'payer_frais_commande', 'versement_commande',
           'abonnement_payer'}
 GESTION = {
     'inventaire', 'entree_stock', 'mouvements_stock', 'ajouter_article', 'modifier_article', 'supprimer_photo',
@@ -817,7 +818,11 @@ def commande_details(commande_id):
 def appliquer_zone_frais(commande, form):
     """Zone et frais de livraison choisis au moment de confier la course
     (proposés selon la zone, modifiables). Ne valide pas la transaction."""
-    if 'frais_livraison' not in form or commande.est_retrait or commande.statut in ('livree', 'retournee', 'annulee'):
+    if commande.est_retrait or commande.statut in ('livree', 'retournee', 'annulee'):
+        return
+    if form.get('mode_frais') in ('livreur_garde', 'boutique_collecte'):
+        commande.mode_frais = form['mode_frais']
+    if 'frais_livraison' not in form:
         return
     zone = Zone.query.filter_by(id=form.get('zone_id', type=int), boutique_id=commande.boutique_id).first()
     if zone and not zone.est_retrait:
@@ -1149,11 +1154,62 @@ def imprimer_commande(commande_id):
                            format_papier=format_papier, fcfa=msg.fcfa)
 
 def a_rapporter_externe(commande):
-    """Ce que le livreur externe rapporte quand il revient : il garde sa course,
-    il remet le prix des articles (la caisse enregistre la même chose)."""
+    """Ce que le livreur rapporte à la boutique : les articles s'il garde sa course,
+    tout sinon (la caisse enregistre la même chose)."""
     if not commande.livreur:
         return 0
-    return commande.net_articles if commande.livreur.externe else caisse.a_remettre(commande)
+    return caisse.a_remettre(commande)
+
+
+@boutique_bp.route('/commande/<int:commande_id>/mode-frais', methods=['POST'])
+@login_required
+def changer_mode_frais(commande_id):
+    """Le livreur garde ses frais, ou il rapporte tout et la boutique le paie après."""
+    commande = commande_de_la_boutique(commande_id)
+    mode = request.form.get('mode_frais')
+    if not commande or mode not in ('livreur_garde', 'boutique_collecte'):
+        return redirect(url_for('boutique.commandes'))
+    if commande.reglee and commande.statut in ('livree', 'retournee'):
+        flash("L'argent de cette commande est déjà en caisse : le choix des frais ne peut plus changer.", 'warning')
+        return redirect(url_for('boutique.commande_details', commande_id=commande.id) + '#livraison')
+    commande.mode_frais = mode
+    if commande.statut in ('livree', 'retournee') and commande.livree_par_livreur:
+        commande.frais_payes = commande.garde_frais
+    db.session.commit()
+    flash(f'{commande.livreur.nom if commande.livreur else "Le livreur"} '
+          + (f'garde ses frais ({msg.fcfa(commande.frais_livraison or 0)}) : il rapporte {msg.fcfa(caisse.a_remettre(commande))}.'
+             if commande.garde_frais else
+             f'rapporte tout ({msg.fcfa(commande.total)}) : vous lui payez ensuite ses {msg.fcfa(commande.frais_livraison or 0)} de frais.'),
+          'success')
+    return redirect(url_for('boutique.commande_details', commande_id=commande.id) + '#livraison')
+
+
+@boutique_bp.route('/commande/<int:commande_id>/versement', methods=['POST'])
+@login_required
+def versement_commande(commande_id):
+    """Le livreur remet l'argent de CETTE commande (depuis la fiche commande)."""
+    commande = commande_de_la_boutique(commande_id)
+    if commande and commande.statut in ('livree', 'retournee') and commande.livree_par_livreur and not commande.reglee:
+        montant = caisse.enregistrer_versement(commande.livreur, [commande])
+        paye = 0
+        if request.form.get('payer_frais') and commande.frais_a_payer_livreur:
+            paye = caisse.payer_livreur(commande.livreur, [commande])
+        db.session.commit()
+        flash(f'{msg.fcfa(montant)} remis par {commande.livreur.nom} : entrés en caisse.'
+              + (f' {msg.fcfa(paye)} de frais payés au livreur.' if paye else ''), 'success')
+    return redirect(url_for('boutique.commande_details', commande_id=commande_id) + '#livraison')
+
+
+@boutique_bp.route('/commande/<int:commande_id>/payer-frais', methods=['POST'])
+@login_required
+def payer_frais_commande(commande_id):
+    """Payer au livreur ses frais de livraison pour CETTE commande (il avait tout rapporté)."""
+    commande = commande_de_la_boutique(commande_id)
+    if commande and commande.frais_a_payer_livreur:
+        paye = caisse.payer_livreur(commande.livreur, [commande])
+        db.session.commit()
+        flash(f'{msg.fcfa(paye)} de frais de livraison payés à {commande.livreur.nom} (sortie de caisse).', 'success')
+    return redirect(url_for('boutique.commande_details', commande_id=commande_id) + '#livraison')
 
 
 @boutique_bp.route('/commande/<int:commande_id>/bon-course')
@@ -1238,9 +1294,9 @@ def changer_statut_commande(commande_id):
         commande.lu = True
         verse = 0
         if statut == 'livree' and request.form.get('argent_remis') and commande.livree_par_livreur and not commande.reglee:
-            # Livreur externe revenu avec l'argent : il entre en caisse tout de suite
+            # Livreur revenu avec l'argent : il entre en caisse tout de suite
             verse = caisse.enregistrer_versement(commande.livreur, [commande])
-            if commande.boutique.mode_frais == 'boutique_collecte' and not commande.frais_payes:
+            if request.form.get('payer_frais') and commande.frais_a_payer_livreur:
                 verse -= caisse.payer_livreur(commande.livreur, [commande])
         if statut == 'echec':
             commande.date_echec = datetime.utcnow()
@@ -1614,8 +1670,6 @@ def _livrees_non_reglees():
 
 
 def _frais_a_payer():
-    if current_user.mode_frais != 'boutique_collecte':
-        return []
     return (Commande.query.filter(Commande.boutique_id == current_user.id, Commande.statut.in_(['livree', 'retournee']),
                                   Commande.livreur_id.isnot(None), Commande.frais_payes.is_(False),
                                   Commande.frais_livraison > 0)

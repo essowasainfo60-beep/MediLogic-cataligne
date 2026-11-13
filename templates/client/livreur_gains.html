@@ -15,7 +15,7 @@
                 <i class="fas fa-arrow-left"></i> Mes livraisons</a>
         </div>
         <p class="text-xs text-white/70 mt-2">Vos gains = vos frais de livraison sur les commandes que vous avez livrées
-            ({{ 'vous les gardez quand vous encaissez' if garde_frais else 'la boutique vous les paie' }}).</p>
+            (vous les gardez en encaissant, ou la boutique vous les paie quand vous avez tout rapporté).</p>
         {% if a_recevoir %}<p class="mt-3 bg-white/10 rounded-xl p-3 text-sm flex justify-between"><span>À recevoir de la boutique</span><strong>{{ fcfa(a_recevoir) }}</strong></p>{% endif %}
     </div>
 

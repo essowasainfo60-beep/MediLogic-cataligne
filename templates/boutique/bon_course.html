@@ -47,7 +47,7 @@
     <div class="sep"></div>
     <table>
         <tr><td>À ENCAISSER chez le client</td><td class="r gros">{{ fcfa(c.total) }}</td></tr>
-        {% if a_rapporter < c.total %}<tr><td>Votre course (vous la gardez)</td><td class="r">{{ fcfa(c.total - a_rapporter) }}</td></tr>{% endif %}
+        {% if c.frais_livraison %}<tr><td>{{ 'Votre course (vous la gardez)' if c.garde_frais else 'Votre course : la boutique vous la paie au retour' }}</td><td class="r">{{ fcfa(c.frais_livraison) }}</td></tr>{% endif %}
     </table>
     <div class="cadre"><table><tr><td><b>À RAPPORTER à la boutique</b></td><td class="r gros">{{ fcfa(a_rapporter) }}</td></tr></table></div>
     <div class="signe"><span>Remis par : ............</span><span>Livreur : ............</span></div>

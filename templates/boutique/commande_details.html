@@ -93,8 +93,58 @@
         {% elif c.statut in ['livree', 'retournee'] %}
         <p class="text-xs font-bold uppercase tracking-wide text-green-700">Terminée</p>
         <p class="font-bold text-gray-900 mt-1"><i class="fas fa-circle-check text-green-600 mr-1"></i>
-            {{ ('Livrée par ' ~ c.livreur.nom) if c.livree_par_livreur else 'Commande remise par la boutique' }}{% if c.date_livraison %} le {{ c.date_livraison.strftime('%d/%m/%Y à %H:%M') }}{% endif %}
-            · <span class="text-green-700">payée</span></p>
+            {{ ('Livrée par ' ~ c.livreur.nom) if c.livree_par_livreur else 'Commande remise par la boutique' }}{% if c.date_livraison %} le {{ c.date_livraison.strftime('%d/%m/%Y à %H:%M') }}{% endif %}</p>
+        {% if c.livree_par_livreur %}
+        <div class="mt-3 bg-white rounded-xl border border-gray-200 divide-y divide-gray-100 text-sm">
+            <p class="flex justify-between px-3 py-2"><span>Encaissé chez le client</span><strong>{{ fcfa(c.total) }}</strong></p>
+            {% if c.frais_livraison %}
+            <p class="flex justify-between px-3 py-2 text-gray-600"><span>Frais de livraison</span>
+                <span>{{ fcfa(c.frais_livraison) }} · {{ 'gardés par le livreur' if c.garde_frais else ('payés au livreur ✓' if c.frais_payes else 'à payer au livreur') }}</span></p>
+            {% endif %}
+            {% if c.reglee %}
+            <p class="flex justify-between px-3 py-2 text-green-800 bg-green-50"><span>✓ Argent remis par {{ c.livreur.nom }}</span>
+                <strong>{{ fcfa(a_rapporter) }}{% if c.date_reglement %} · {{ c.date_reglement.strftime('%d/%m %H:%M') }}{% endif %}</strong></p>
+            {% else %}
+            <div class="px-3 py-2 bg-amber-50">
+                <p class="flex justify-between text-amber-900"><span>⏳ Encore chez {{ c.livreur.nom }}</span><strong>{{ fcfa(a_rapporter) }}</strong></p>
+                {% if peut('boutique.versement_commande') %}
+                <form method="POST" action="{{ url_for('boutique.versement_commande', commande_id=c.id) }}" class="mt-2"
+                      data-question="Confirmer : {{ c.livreur.nom }} vous a remis {{ fcfa(a_rapporter) }} pour la commande n°{{ c.numero }} ?"
+                      onsubmit="return confirm(this.dataset.question)">
+                    <button type="submit" class="w-full bg-green-600 text-white py-2.5 rounded-xl font-bold">✅ Il m'a remis {{ fcfa(a_rapporter) }}</button>
+                    {% if c.frais_a_payer_livreur %}
+                    <label class="mt-1.5 flex items-center gap-2 text-xs"><input type="checkbox" name="payer_frais" value="1" class="h-4 w-4">
+                        Je lui paie aussi ses {{ fcfa(c.frais_livraison) }} de frais maintenant</label>
+                    {% endif %}
+                </form>
+                {% endif %}
+            </div>
+            {% endif %}
+            {% if c.frais_a_payer_livreur and (c.reglee or not peut('boutique.versement_commande')) %}
+            <div class="px-3 py-2 bg-orange-50">
+                <p class="flex justify-between text-orange-900"><span>💼 Frais à payer à {{ c.livreur.nom }}</span><strong>{{ fcfa(c.frais_a_payer_livreur) }}</strong></p>
+                {% if peut('boutique.payer_frais_commande') %}
+                <form method="POST" action="{{ url_for('boutique.payer_frais_commande', commande_id=c.id) }}" class="mt-2"
+                      data-question="Payer {{ fcfa(c.frais_a_payer_livreur) }} de frais de livraison à {{ c.livreur.nom }} (sortie de caisse) ?"
+                      onsubmit="return confirm(this.dataset.question)">
+                    <button type="submit" class="w-full bg-orange-500 text-white py-2.5 rounded-xl font-bold">💵 Payer ses frais ({{ fcfa(c.frais_a_payer_livreur) }})</button>
+                </form>
+                {% endif %}
+            </div>
+            {% endif %}
+            {% if not c.reglee %}
+            <details class="px-3 py-2">
+                <summary class="text-xs text-purple-700 cursor-pointer">{{ '🛵 Le livreur garde ses frais' if c.garde_frais else '💼 Il rapporte tout, je le paie après' }} — changer</summary>
+                <form method="POST" action="{{ url_for('boutique.changer_mode_frais', commande_id=c.id) }}" class="mt-2 grid grid-cols-2 gap-2">
+                    <button type="submit" name="mode_frais" value="livreur_garde" {{ 'disabled' if c.garde_frais }} class="rounded-lg border px-2 py-2 text-xs {{ 'border-green-500 bg-green-50 font-semibold' if c.garde_frais }}">🛵 Il garde ses frais</button>
+                    <button type="submit" name="mode_frais" value="boutique_collecte" {{ 'disabled' if not c.garde_frais }} class="rounded-lg border px-2 py-2 text-xs {{ 'border-orange-500 bg-orange-50 font-semibold' if not c.garde_frais }}">💼 Il rapporte tout</button>
+                </form>
+            </details>
+            {% endif %}
+        </div>
+        {% else %}
+        <p class="text-sm text-green-700 mt-1">✓ Payée : {{ fcfa(c.total) }} encaissés en boutique.</p>
+        {% endif %}
         <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-3">
             <a href="{{ url_for('boutique.imprimer_commande', commande_id=c.id, format='80') }}" class="text-center bg-gray-900 text-white py-3 rounded-xl font-bold"><i class="fas fa-receipt mr-1"></i> Imprimer le reçu</a>
             <a href="{{ url_for('boutique.retour_commande', commande_id=c.id) }}" class="text-center bg-white border-2 border-orange-300 text-orange-700 py-3 rounded-xl font-semibold"><i class="fas fa-rotate-left mr-1"></i> Retour / échange d'articles</a>
@@ -248,22 +298,54 @@
             </div>
             {% if c.date_depart %}<p><i class="fas fa-clock mr-1"></i> Parti avec le colis à <strong>{{ c.date_depart.strftime('%H:%M') }}</strong>
                 {% if minutes is not none %}<span class="{{ 'text-red-700 font-bold' if minutes > 120 else '' }}">(il y a {% if minutes >= 60 %}{{ minutes // 60 }} h {% endif %}{{ minutes % 60 }} min)</span>{% endif %}</p>{% endif %}
-            <div class="bg-white rounded-xl border border-amber-200 divide-y divide-amber-100">
+
+        {% if c.livreur %}
+        <!-- Argent de la course : ce que le livreur encaisse, garde, rapporte -->
+        <div class="bg-white rounded-xl border {{ 'border-green-200' if c.garde_frais else 'border-orange-200' }} text-sm">
+            <div class="divide-y divide-gray-100">
                 <p class="flex justify-between px-3 py-2"><span>À encaisser chez le client</span><strong>{{ fcfa(c.total) }}</strong></p>
-                {% if a_rapporter < c.total %}<p class="flex justify-between px-3 py-2 text-gray-600"><span>Il garde sa course</span><span>-{{ fcfa(c.total - a_rapporter) }}</span></p>{% endif %}
+                {% if c.frais_livraison %}
+                <p class="flex justify-between px-3 py-2 text-gray-600"><span>{{ 'Il garde sa course' if c.garde_frais else 'Sa course (vous la lui payez après)' }}</span>
+                    <span>{{ '-' if c.garde_frais }}{{ fcfa(c.frais_livraison) }}</span></p>
+                {% endif %}
                 <p class="flex justify-between px-3 py-2 text-base"><span class="font-bold">Il doit vous rapporter</span><strong class="text-green-700">{{ fcfa(a_rapporter) }}</strong></p>
+                {% if not c.garde_frais and c.frais_livraison %}
+                <p class="flex justify-between px-3 py-2 text-orange-800 bg-orange-50"><span>Vous lui devrez ensuite</span><strong>{{ fcfa(c.frais_livraison) }}</strong></p>
+                {% endif %}
             </div>
+            <details class="border-t border-gray-100">
+                <summary class="px-3 py-2 text-xs text-purple-700 cursor-pointer">
+                    {{ '🛵 Le livreur garde ses frais' if c.garde_frais else '💼 Il rapporte tout, je le paie après' }} — changer</summary>
+                <form method="POST" action="{{ url_for('boutique.changer_mode_frais', commande_id=c.id) }}" class="px-3 pb-3 grid grid-cols-1 gap-1.5">
+                    <button type="submit" name="mode_frais" value="livreur_garde" {{ 'disabled' if c.garde_frais }}
+                            class="text-left rounded-lg border px-3 py-2 {{ 'border-green-500 bg-green-50 font-semibold' if c.garde_frais else 'border-gray-200 hover:bg-gray-50' }}">
+                        🛵 Le livreur garde ses frais <span class="block text-xs font-normal text-gray-500">il rapporte {{ fcfa(c.net_articles) }}</span></button>
+                    <button type="submit" name="mode_frais" value="boutique_collecte" {{ 'disabled' if not c.garde_frais }}
+                            class="text-left rounded-lg border px-3 py-2 {{ 'border-orange-500 bg-orange-50 font-semibold' if not c.garde_frais else 'border-gray-200 hover:bg-gray-50' }}">
+                        💼 Il rapporte tout, je le paie après <span class="block text-xs font-normal text-gray-500">il rapporte {{ fcfa(c.total) }}, vous lui devez {{ fcfa(c.frais_livraison or 0) }}</span></button>
+                </form>
+            </details>
+        </div>
+        {% endif %}
             <form method="POST" action="{{ url_for('boutique.changer_statut_commande', commande_id=c.id) }}"
                   data-question="Confirmer : {{ c.livreur.nom }} a livré la commande n°{{ c.numero }} et vous a remis {{ fcfa(a_rapporter) }} ?"
-                  onsubmit="return confirm(this.dataset.question)">
+                  onsubmit="return confirm(this.dataset.question + (this.payer_frais && this.payer_frais.checked ? '\n\nEt vous lui payez maintenant ses {{ fcfa(c.frais_livraison or 0) }} de frais.' : ''))">
                 <input type="hidden" name="argent_remis" value="1">
                 <button type="submit" name="statut" value="livree" class="w-full bg-green-600 text-white py-3.5 rounded-xl font-bold text-lg hover:bg-green-700">
                     ✅ Livré, il m'a remis {{ fcfa(a_rapporter) }}<span class="block text-xs font-normal">l'argent entre en caisse</span></button>
+                {% if not c.garde_frais and c.frais_livraison %}
+                <label class="mt-2 flex items-start gap-2 text-sm bg-white rounded-lg border border-orange-200 px-3 py-2">
+                    <input type="checkbox" name="payer_frais" value="1" class="mt-0.5 h-4 w-4">
+                    <span>Je lui paie aussi ses <b>{{ fcfa(c.frais_livraison) }}</b> de frais maintenant
+                        <span class="block text-xs text-gray-500">Sinon ils restent « à payer » (sur cette commande et dans la Caisse).</span></span>
+                </label>
+                {% endif %}
             </form>
             <form method="POST" action="{{ url_for('boutique.changer_statut_commande', commande_id=c.id) }}"
                   data-question="Confirmer : la commande n°{{ c.numero }} est livrée mais {{ c.livreur.nom }} vous remettra l'argent plus tard ?"
                   onsubmit="return confirm(this.dataset.question)">
-                <button type="submit" name="statut" value="livree" class="w-full bg-white border-2 border-green-600 text-green-700 py-2.5 rounded-xl font-semibold">Livré, il rapportera l'argent plus tard</button>
+                <button type="submit" name="statut" value="livree" class="w-full bg-white border-2 border-green-600 text-green-700 py-2.5 rounded-xl font-semibold">Livré, il rapportera l'argent plus tard
+                    <span class="block text-xs font-normal">{{ fcfa(a_rapporter) }} à récupérer (fiche commande ou Caisse)</span></button>
             </form>
             <details class="bg-white rounded-xl border border-red-200">
                 <summary class="px-3 py-2.5 font-semibold text-red-700 cursor-pointer">↩ Pas livré : il a rapporté le colis</summary>
@@ -277,19 +359,54 @@
             </details>
         </div>
         {% else %}
-        <p class="text-xs text-gray-600 mt-1">Le livreur marque « Livrée » depuis son téléphone (avec la photo du colis). Vous pouvez aussi le faire ici :</p>
+        {% if c.livreur %}
+        <!-- Argent de la course : ce que le livreur encaisse, garde, rapporte -->
+        <div class="mt-3 bg-white rounded-xl border {{ 'border-green-200' if c.garde_frais else 'border-orange-200' }} text-sm">
+            <div class="divide-y divide-gray-100">
+                <p class="flex justify-between px-3 py-2"><span>À encaisser chez le client</span><strong>{{ fcfa(c.total) }}</strong></p>
+                {% if c.frais_livraison %}
+                <p class="flex justify-between px-3 py-2 text-gray-600"><span>{{ 'Il garde sa course' if c.garde_frais else 'Sa course (vous la lui payez après)' }}</span>
+                    <span>{{ '-' if c.garde_frais }}{{ fcfa(c.frais_livraison) }}</span></p>
+                {% endif %}
+                <p class="flex justify-between px-3 py-2 text-base"><span class="font-bold">Il doit vous rapporter</span><strong class="text-green-700">{{ fcfa(a_rapporter) }}</strong></p>
+                {% if not c.garde_frais and c.frais_livraison %}
+                <p class="flex justify-between px-3 py-2 text-orange-800 bg-orange-50"><span>Vous lui devrez ensuite</span><strong>{{ fcfa(c.frais_livraison) }}</strong></p>
+                {% endif %}
+            </div>
+            <details class="border-t border-gray-100">
+                <summary class="px-3 py-2 text-xs text-purple-700 cursor-pointer">
+                    {{ '🛵 Le livreur garde ses frais' if c.garde_frais else '💼 Il rapporte tout, je le paie après' }} — changer</summary>
+                <form method="POST" action="{{ url_for('boutique.changer_mode_frais', commande_id=c.id) }}" class="px-3 pb-3 grid grid-cols-1 gap-1.5">
+                    <button type="submit" name="mode_frais" value="livreur_garde" {{ 'disabled' if c.garde_frais }}
+                            class="text-left rounded-lg border px-3 py-2 {{ 'border-green-500 bg-green-50 font-semibold' if c.garde_frais else 'border-gray-200 hover:bg-gray-50' }}">
+                        🛵 Le livreur garde ses frais <span class="block text-xs font-normal text-gray-500">il rapporte {{ fcfa(c.net_articles) }}</span></button>
+                    <button type="submit" name="mode_frais" value="boutique_collecte" {{ 'disabled' if not c.garde_frais }}
+                            class="text-left rounded-lg border px-3 py-2 {{ 'border-orange-500 bg-orange-50 font-semibold' if not c.garde_frais else 'border-gray-200 hover:bg-gray-50' }}">
+                        💼 Il rapporte tout, je le paie après <span class="block text-xs font-normal text-gray-500">il rapporte {{ fcfa(c.total) }}, vous lui devez {{ fcfa(c.frais_livraison or 0) }}</span></button>
+                </form>
+            </details>
+        </div>
+        {% endif %}
+        <p class="text-xs text-gray-600 mt-3">Le livreur marque « Livrée » depuis son téléphone (avec la photo du colis). Vous pouvez aussi le faire ici :</p>
         <form method="POST" action="{{ url_for('boutique.changer_statut_commande', commande_id=c.id) }}" class="mt-3"
               data-question="Confirmer : {{ c.livreur.nom }} a livré la commande n°{{ c.numero }} et a l'argent (à remettre à la caisse) ?"
               onsubmit="return confirm(this.dataset.question)">
             <button type="submit" name="statut" value="livree" class="w-full bg-green-600 text-white py-3.5 rounded-xl font-bold text-lg hover:bg-green-700">✅ Livrée par {{ c.livreur.nom }}</button>
         </form>
         {% endif %}
-        <form method="POST" action="{{ url_for('boutique.changer_statut_commande', commande_id=c.id) }}" class="mt-2"
-              data-question="Confirmer : la boutique a remis elle-même la commande n°{{ c.numero }} et encaissé l'argent ?"
-              onsubmit="return confirm(this.dataset.question)">
-            <input type="hidden" name="par" value="boutique">
-            <button type="submit" name="statut" value="livree" class="w-full bg-white border-2 border-green-600 text-green-700 py-2.5 rounded-xl font-semibold">🏪 Remise par la boutique</button>
-        </form>
+        <details class="mt-3 text-sm">
+            <summary class="cursor-pointer text-gray-500 text-xs">Autre cas : finalement, le livreur n'a pas livré et la boutique a remis le colis elle-même…</summary>
+            <div class="mt-2 bg-white rounded-xl border border-gray-200 p-3">
+                <p class="text-xs text-gray-600">À utiliser seulement si le client est venu chercher son colis à la boutique, ou si vous l'avez livré vous-même.
+                    L'argent ({{ fcfa(c.total) }}) entre directement en caisse et le livreur n'a rien à rapporter ni à recevoir pour cette commande.</p>
+                <form method="POST" action="{{ url_for('boutique.changer_statut_commande', commande_id=c.id) }}" class="mt-2"
+                      data-question="Confirmer : la boutique a remis elle-même la commande n°{{ c.numero }} et encaissé {{ fcfa(c.total) }} ?"
+                      onsubmit="return confirm(this.dataset.question)">
+                    <input type="hidden" name="par" value="boutique">
+                    <button type="submit" name="statut" value="livree" class="w-full bg-white border-2 border-gray-400 text-gray-700 py-2.5 rounded-xl font-semibold">🏪 Remise par la boutique (encaissé en boutique)</button>
+                </form>
+            </div>
+        </details>
         {% endif %}
     </div>
 

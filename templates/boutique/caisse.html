@@ -9,7 +9,7 @@
         <h1 class="text-2xl md:text-3xl font-extrabold text-gray-900"><i class="fas fa-cash-register text-purple-500 mr-2"></i> Caisse</h1>
         <p class="text-sm text-gray-500">
             Frais de livraison :
-            <strong>{{ 'le livreur garde ses frais' if current_user.mode_frais != 'boutique_collecte' else 'le livreur remet tout, la boutique le paie' }}</strong>
+            <strong>{{ 'le livreur garde ses frais' if current_user.mode_frais != 'boutique_collecte' else 'le livreur remet tout, la boutique le paie' }}</strong> (choix proposé par défaut, modifiable à chaque commande)
             · <a href="{{ url_for('boutique.profil') }}#frais" class="text-purple-600 hover:underline">changer</a>
         </p>
     </div>
@@ -45,8 +45,7 @@
                 <div class="px-5 py-4 border-b border-gray-100">
                     <h2 class="font-bold text-gray-900">À récupérer auprès des livreurs</h2>
                     <p class="text-xs text-gray-500">
-                        {% if current_user.mode_frais != 'boutique_collecte' %}Montant des articles seulement : le livreur garde ses frais de livraison.
-                        {% else %}Montant total (articles + frais) : vous payez ensuite ses frais au livreur.{% endif %}
+                        Articles seulement quand le livreur garde ses frais ; total (articles + frais) quand il rapporte tout et que vous le payez après.
                     </p>
                 </div>
                 {% for livreur, cmds in a_recuperer.items() %}
@@ -68,7 +67,7 @@
                             </a>
                             <span class="text-right whitespace-nowrap">
                                 <strong>{{ fcfa(a_remettre(c)) }}</strong>
-                                {% if current_user.mode_frais != 'boutique_collecte' and c.frais_livraison %}<span class="block text-[11px] text-gray-400">+ {{ fcfa(c.frais_livraison) }} gardés par le livreur</span>{% endif %}
+                                {% if c.frais_livraison %}<span class="block text-[11px] text-gray-400">{{ ('+ ' ~ fcfa(c.frais_livraison) ~ ' gardés par le livreur') if c.garde_frais else ('dont ' ~ fcfa(c.frais_livraison) ~ ' de frais à lui payer') }}</span>{% endif %}
                             </span>
                         </li>
                         {% endfor %}
@@ -80,7 +79,7 @@
             </div>
 
             {% if frais_dus %}
-            <!-- Frais à payer aux livreurs (mode « la boutique collecte tout ») -->
+            <!-- Frais à payer aux livreurs (commandes où le livreur a tout rapporté) -->
             <div class="bg-white rounded-2xl shadow-md">
                 <div class="px-5 py-4 border-b border-gray-100">
                     <h2 class="font-bold text-gray-900">Frais de livraison à payer aux livreurs</h2>

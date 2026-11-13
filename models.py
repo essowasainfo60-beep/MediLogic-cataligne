@@ -385,6 +385,9 @@ class Commande(db.Model):
     # Code promo : réduction sur les articles (total = articles - remise + livraison)
     code_promo = db.Column(db.String(30), nullable=True)
     remise = db.Column(db.Float, nullable=False, default=0, server_default='0')
+    # Frais de livraison de CETTE commande : 'livreur_garde' (il garde sa course, il rapporte les articles)
+    # ou 'boutique_collecte' (il rapporte tout, la boutique lui paie ses frais après). Vide = réglage de la boutique.
+    mode_frais = db.Column(db.String(20), nullable=True)
     # Livraison mise de côté quand le client « passe à la boutique » : {adresse, zone_id, lat, lng}
     # (remise telle quelle s'il est finalement livré)
     livraison_avant_retrait = db.Column(db.JSON, nullable=True)
@@ -485,6 +488,18 @@ class Commande(db.Model):
     def est_payee(self):
         """Le client a payé : la commande lui a été livrée ou remise."""
         return self.statut in ('livree', 'retournee')
+
+    @property
+    def garde_frais(self):
+        """Le livreur garde-t-il ses frais de livraison sur cette commande ?"""
+        return (self.mode_frais or self.boutique.mode_frais) != 'boutique_collecte'
+
+    @property
+    def frais_a_payer_livreur(self):
+        """Frais encore dus au livreur (il a tout rapporté, la boutique ne l'a pas encore payé)."""
+        if self.statut not in ('livree', 'retournee') or not self.livree_par_livreur or self.garde_frais or self.frais_payes:
+            return 0
+        return self.frais_livraison or 0
 
     @property
     def livree_par_livreur(self):

@@ -5,8 +5,8 @@ Commande livrée par un livreur (paiement à la livraison) :
   - le livreur encaisse le total chez le client ;
   - l'argent des ARTICLES appartient à la boutique : il entre en caisse quand
     le livreur le remet (« versement ») ;
-  - les FRAIS DE LIVRAISON appartiennent au livreur. Selon le réglage de la
-    boutique (Boutique.mode_frais) :
+  - les FRAIS DE LIVRAISON appartiennent au livreur. Choisi pour chaque commande
+    en confiant la course (Commande.mode_frais ; à défaut, réglage de la boutique) :
       * 'livreur_garde'    : il les garde, il ne remet que les articles ;
       * 'boutique_collecte' : il remet tout, la boutique le paie ensuite
                               (« paiement livreur »).
@@ -29,16 +29,14 @@ def ajouter(boutique_id, type_mouvement, montant, libelle, categorie=None, livre
 
 def a_remettre(commande):
     """Ce que le livreur doit remettre à la boutique pour cette commande."""
-    if commande.boutique.mode_frais == 'boutique_collecte':
-        return commande.total
-    return commande.net_articles
+    return commande.net_articles if commande.garde_frais else commande.total
 
 
 def commande_livree(commande):
     """Appelé quand une commande passe « livrée »."""
     if commande.livree_par_livreur:
         commande.reglee = False      # l'argent est chez le livreur jusqu'au versement
-        commande.frais_payes = commande.boutique.mode_frais != 'boutique_collecte'
+        commande.frais_payes = commande.garde_frais
     else:
         commande.reglee = True       # remise en main propre : encaissé tout de suite
         commande.frais_payes = True
@@ -72,7 +70,7 @@ def enregistrer_versement(livreur, commandes):
 
 
 def payer_livreur(livreur, commandes):
-    """Mode « la boutique collecte tout » : la boutique paie au livreur ses frais."""
+    """Le livreur a tout rapporté : la boutique lui paie ses frais."""
     total = sum(c.frais_livraison or 0 for c in commandes)
     if total <= 0:
         return 0

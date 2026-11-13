@@ -105,7 +105,8 @@
 
         <!-- Frais de livraison -->
         <div id="frais" class="bg-white rounded-xl shadow-md p-5 scroll-mt-24">
-            <p class="block text-sm font-bold text-gray-700 mb-2">Frais de livraison : à qui va l'argent ?</p>
+            <p class="block text-sm font-bold text-gray-700 mb-1">Frais de livraison : à qui va l'argent ? <span class="font-normal text-gray-500">(par défaut)</span></p>
+            <p class="text-xs text-gray-500 mb-2">C'est le choix proposé quand vous confiez une commande. Vous pouvez le changer pour chaque commande.</p>
             <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
                 <label class="cursor-pointer">
                     <input type="radio" name="mode_frais" value="livreur_garde" class="peer hidden" {{ 'checked' if current_user.mode_frais != 'boutique_collecte' }}>

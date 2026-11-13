@@ -402,10 +402,13 @@ def espace_livreur(code):
     non_reglees = (Commande.query.filter(Commande.livreur_id == livreur.id, Commande.statut.in_(['livree', 'retournee']),
                                          Commande.reglee.is_(False)).all())
     a_remettre = sum(caisse.a_remettre(c) for c in non_reglees)
-    mes_frais = sum(c.frais_livraison or 0 for c in non_reglees)
+    mes_frais = sum(c.frais_livraison or 0 for c in non_reglees if c.garde_frais)
+    frais_a_recevoir = sum(c.frais_livraison or 0 for c in Commande.query.filter(
+        Commande.livreur_id == livreur.id, Commande.statut.in_(['livree', 'retournee']), Commande.frais_payes.is_(False)).all()
+        if not c.garde_frais and c.livree_par_livreur)
     return render_template('client/espace_livreur.html', livreur=livreur, a_livrer=a_livrer, livrees=livrees,
                            livrees_jour=len(du_jour), encaisse_jour=sum(c.total for c in du_jour),
-                           a_remettre=a_remettre, mes_frais=mes_frais,
+                           a_remettre=a_remettre, mes_frais=mes_frais, frais_a_recevoir=frais_a_recevoir,
                            garde_frais=livreur.boutique.mode_frais != 'boutique_collecte',
                            onglet=request.args.get('onglet', 'a_livrer'), fcfa=msg.fcfa, motifs=Commande.MOTIFS_ECHEC,
                            lien_arrivee=lambda c: msg.lien_whatsapp(c.client_telephone, msg.arrivee_client(c)),
@@ -484,7 +487,7 @@ def espace_livreur_gains(code):
     annees = sorted({c.date_livraison.year for c in courses} | {maintenant.year}, reverse=True)
 
     garde_frais = livreur.boutique.mode_frais != 'boutique_collecte'
-    a_recevoir = 0 if garde_frais else sum(c.frais_livraison or 0 for c in courses if not c.frais_payes)
+    a_recevoir = sum(c.frais_livraison or 0 for c in courses if not c.garde_frais and not c.frais_payes)
     return render_template('client/livreur_gains.html', livreur=livreur, resumes=resumes, periode=periode,
                            du=du, au=au, jours=jours, meilleur=meilleur, jours_travailles=jours_travailles,
                            mois=mois, annee=annee, annees=annees, garde_frais=garde_frais, a_recevoir=a_recevoir,

@@ -153,7 +153,8 @@ def mettre_a_jour_schema():
                                 ('date_arrivee', 'TIMESTAMP'),
                                 ('livre_par', 'VARCHAR(20)'),
                                 ('proposee_at', 'TIMESTAMP'),
-                                ('livraison_avant_retrait', 'JSON')]:
+                                ('livraison_avant_retrait', 'JSON'),
+                                ('mode_frais', 'VARCHAR(20)')]:
             if nom not in colonnes_commandes:
                 conn.execute(text(f"ALTER TABLE commandes ADD COLUMN {nom} {definition}"))
         if 'frais' not in {c['name'] for c in inspecteur.get_columns('zones')}:

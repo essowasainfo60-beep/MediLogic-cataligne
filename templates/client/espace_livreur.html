@@ -28,10 +28,14 @@
             <strong class="text-lg">{{ fcfa(a_remettre) }}</strong>
         </div>
         {% if mes_frais %}
-        <p class="text-xs text-white/70 mt-1 text-right">
-            {{ ('Vos frais de livraison (à garder) : ' if garde_frais else 'Vos frais de livraison (payés par la boutique) : ') ~ fcfa(mes_frais) }}
-        </p>
+        <p class="text-xs text-white/70 mt-1 text-right">Vos frais de livraison (à garder) : {{ fcfa(mes_frais) }}</p>
         {% endif %}
+        {% endif %}
+        {% if frais_a_recevoir %}
+        <div class="mt-2 bg-white/10 rounded-xl p-3 text-sm flex justify-between items-center gap-2">
+            <span><i class="fas fa-coins mr-1 text-yellow-300"></i> Vos frais à recevoir de la boutique</span>
+            <strong class="text-lg">{{ fcfa(frais_a_recevoir) }}</strong>
+        </div>
         {% endif %}
         <div class="grid grid-cols-3 gap-2 mt-4 text-center">
             <div class="bg-white/10 rounded-xl py-2"><p class="text-2xl font-bold">{{ a_livrer|length }}</p><p class="text-[11px] text-white/70">à livrer</p></div>
@@ -130,6 +134,11 @@
                     <p class="text-xl font-extrabold text-green-700">{{ fcfa(c.total) }}</p>
                 </div>
             </div>
+            {% if c.frais_livraison %}
+            <p class="mx-4 mt-2 text-xs rounded-lg px-2 py-1.5 {{ 'bg-green-50 text-green-800' if c.garde_frais else 'bg-orange-50 text-orange-800' }}">
+                {% if c.garde_frais %}💵 Vous gardez vos frais ({{ fcfa(c.frais_livraison) }}) · remettez {{ fcfa(c.net_articles) }} à la boutique
+                {% else %}💼 Remettez tout ({{ fcfa(c.total) }}) à la boutique · elle vous paie ensuite vos frais ({{ fcfa(c.frais_livraison) }}){% endif %}</p>
+            {% endif %}
 
             <div class="px-4 mt-3">
                 <p class="text-sm text-gray-700"><i class="fas fa-location-dot text-red-500 mr-1"></i> {{ c.client_adresse }}</p>
