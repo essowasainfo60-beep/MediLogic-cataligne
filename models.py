@@ -31,6 +31,13 @@ class Boutique(UserMixin, db.Model):
     latitude = db.Column(db.Float, nullable=True)         # position exacte du point de départ
     message_statut = db.Column(db.Text, nullable=True)    # message pour le statut WhatsApp (sinon message proposé)
     longitude = db.Column(db.Float, nullable=True)
+    # Réduction client fidèle (voir promos.fidelite)
+    fidelite_actif = db.Column(db.Boolean, nullable=False, default=False, server_default='false')
+    fidelite_seuil = db.Column(db.Integer, nullable=True)          # nombre de commandes livrées
+    fidelite_type = db.Column(db.String(20), nullable=True)        # 'pourcentage' ou 'montant'
+    fidelite_valeur = db.Column(db.Float, nullable=True)
+    fidelite_mode = db.Column(db.String(20), nullable=True)        # 'toutes' ou 'palier'
+    fidelite_minimum = db.Column(db.Float, nullable=True)          # achat minimum (FCFA)
     # Frais de livraison : 'livreur_garde' (il garde ses frais et ne remet que les articles)
     # ou 'boutique_collecte' (il remet tout, la boutique le paie ensuite). Voir caisse.py.
     mode_frais = db.Column(db.String(20), nullable=False, default='livreur_garde', server_default='livreur_garde')
@@ -335,6 +342,10 @@ class Commande(db.Model):
         lat, lon, d = self.latitude, self.longitude, 0.004
         return (f"https://www.openstreetmap.org/export/embed.html?bbox={lon-d},{lat-d},{lon+d},{lat+d}"
                 f"&layer=mapnik&marker={lat},{lon}")
+
+    @property
+    def libelle_remise(self):
+        return 'Réduction client fidèle' if self.code_promo == 'FIDELITE' else f'Code {self.code_promo}'
 
     @property
     def statut_libelle(self):

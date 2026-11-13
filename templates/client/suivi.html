@@ -100,7 +100,7 @@
         {% for a in commande.articles_json %}
         <div class="flex justify-between py-1"><span>{{ a.nom }} × {{ a.quantite }}</span><span>{{ fcfa(a.prix * a.quantite) }}</span></div>
         {% endfor %}
-        {% if commande.remise %}<div class="flex justify-between py-1 text-green-700"><span>Code {{ commande.code_promo }}</span><span>-{{ fcfa(commande.remise) }}</span></div>{% endif %}
+        {% if commande.remise %}<div class="flex justify-between py-1 text-green-700"><span>{{ commande.libelle_remise }}</span><span>-{{ fcfa(commande.remise) }}</span></div>{% endif %}
         {% if commande.frais_livraison %}<div class="flex justify-between py-1 text-gray-600"><span>Livraison{% if commande.zone %} ({{ commande.zone.nom }}){% endif %}</span><span>{{ fcfa(commande.frais_livraison) }}</span></div>{% endif %}
         <div class="flex justify-between pt-2 mt-1 border-t font-bold text-base"><span>{{ 'À payer à la boutique' if commande.est_retrait else 'À payer à la livraison' }}</span><span>{{ fcfa(commande.total) }}</span></div>
         <div class="mt-3 pt-3 border-t text-gray-600 space-y-0.5">

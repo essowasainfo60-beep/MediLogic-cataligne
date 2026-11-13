@@ -41,7 +41,7 @@ GESTION = {
     'inventaire', 'entree_stock', 'mouvements_stock', 'ajouter_article', 'modifier_article', 'supprimer_photo',
     'photo_principale', 'archiver_article', 'restaurer_article', 'articles_archives', 'livreurs', 'basculer_livreur',
     'ajouter_zone', 'modifier_zone', 'zones_modele', 'envoyer_espace_livreur', 'nouveau_lien_livreur',
-    'statistiques', 'historique', 'message_statut', 'historique_csv', 'retour_commande', 'codes_promo', 'modifier_code_promo',
+    'statistiques', 'historique', 'message_statut', 'historique_csv', 'retour_commande', 'codes_promo', 'modifier_code_promo', 'regler_fidelite',
 }
 ROLES_AUTORISES = {'vendeur': set(), 'caissier': CAISSE, 'gestionnaire': CAISSE | GESTION}
 
@@ -810,8 +810,8 @@ def nouvelle_commande():
                                    livreurs=Livreur.query.filter_by(boutique_id=current_user.id, actif=True).order_by(Livreur.nom).all())
 
         sous_total_lignes = sum(l['prix'] * l['quantite'] for l in lignes)
-        promo, remise, erreur_promo = promos.verifier(current_user.id, f.get('code_promo'), sous_total_lignes,
-                                                   sum(l['quantite'] for l in lignes))
+        promo, code_promo, remise, erreur_promo = promos.meilleure_reduction(
+            boutique_connectee(), client_telephone, sous_total_lignes, f.get('code_promo'), sum(l['quantite'] for l in lignes))
         if erreur_promo:
             flash(erreur_promo + ' La commande a été enregistrée sans réduction.', 'warning')
         zone = Zone.query.filter_by(id=f.get('zone_id', type=int), boutique_id=current_user.id).first()
@@ -832,7 +832,7 @@ def nouvelle_commande():
             instructions=(f.get('instructions') or '').strip() or None,
             articles_json=lignes,
             total=sous_total_lignes - remise + frais,
-            code_promo=promo.code if promo else None,
+            code_promo=code_promo,
             remise=remise,
             frais_livraison=frais,
             statut='confirmee',  # la boutique l'a prise elle-même : déjà confirmée
@@ -1763,6 +1763,7 @@ def fiche_client(cle):
             for a in c.articles_json:
                 articles[a['nom']] = articles.get(a['nom'], 0) + int(a['quantite'])
     return render_template('boutique/fiche_client.html', f=fiche, commandes=commandes_client, fcfa=msg.fcfa,
+                           fidelite=promos.fidelite(boutique_connectee(), cle, 0),
                            articles_preferes=sorted(articles.items(), key=lambda x: -x[1])[:5])
 
 
@@ -1778,8 +1779,11 @@ def api_client():
     if not derniere:
         return jsonify(trouve=False)
     nb = sum(1 for c in Commande.query.filter_by(boutique_id=current_user.id).all() if _tel(c.client_telephone) == cle)
+    fid = promos.fidelite(boutique_connectee(), cle, request.args.get('sous_total', type=float) or 0)
     return jsonify(trouve=True, nom=derniere.client_nom, adresse=derniere.client_adresse,
-                   zone_id=derniere.zone_id, commandes=nb)
+                   zone_id=derniere.zone_id, commandes=nb,
+                   fidelite=(f"🎁 Client fidèle ({fid['livrees']} livrées) : {fid['regle']}, appliqué automatiquement."
+                             if fid['regle'] and fid['restant'] == 0 else ''))
 
 # ==================== STATISTIQUES ====================
 
@@ -1936,8 +1940,38 @@ def codes_promo():
     remises = dict(db.session.query(Commande.code_promo, db.func.sum(Commande.remise))
                    .filter(Commande.boutique_id == current_user.id, Commande.code_promo.isnot(None),
                            Commande.statut != 'annulee').group_by(Commande.code_promo).all())
-    return render_template('boutique/promos.html', codes=codes, remises=remises, fcfa=msg.fcfa,
+    b = boutique_connectee()
+    seuil = b.fidelite_seuil or 5
+    eligibles = sum(1 for f in _clients() if f['livrees'] >= seuil) if b.fidelite_actif else 0
+    return render_template('boutique/promos.html', codes=codes, remises=remises, fcfa=msg.fcfa, b=b,
+                           regle_fidelite=promos.regle_fidelite(b), clients_eligibles=eligibles,
+                           remise_fidelite=remises.get(promos.CODE_FIDELITE, 0),
+                           nb_fidelite=Commande.query.filter_by(boutique_id=current_user.id, code_promo=promos.CODE_FIDELITE).filter(Commande.statut != 'annulee').count(),
                            aujourdhui=datetime.utcnow().strftime('%Y-%m-%d'))
+
+
+@boutique_bp.route('/promos/fidelite', methods=['POST'])
+@login_required
+def regler_fidelite():
+    b = boutique_connectee()
+    f = request.form
+    seuil = f.get('seuil', type=int)
+    valeur = lire_prix(f.get('valeur'))
+    type_r = 'montant' if f.get('type') == 'montant' else 'pourcentage'
+    actif = f.get('actif') == '1'
+    if actif and (not seuil or seuil < 1 or not valeur or (type_r == 'pourcentage' and valeur > 100)):
+        flash('Indiquez un nombre de commandes (1 ou plus) et une réduction valide (pourcentage entre 1 et 100).', 'danger')
+        return redirect(url_for('boutique.codes_promo') + '#fidelite')
+    b.fidelite_actif = actif
+    if seuil:
+        b.fidelite_seuil = seuil
+    if valeur:
+        b.fidelite_valeur, b.fidelite_type = valeur, type_r
+    b.fidelite_mode = 'palier' if f.get('mode') == 'palier' else 'toutes'
+    b.fidelite_minimum = lire_prix(f.get('minimum')) or None
+    db.session.commit()
+    flash(f'Fidélité activée : {promos.regle_fidelite(b)}' if b.fidelite_actif else 'Réduction fidélité désactivée', 'success')
+    return redirect(url_for('boutique.codes_promo') + '#fidelite')
 
 
 @boutique_bp.route('/promos/<int:promo_id>', methods=['POST'])

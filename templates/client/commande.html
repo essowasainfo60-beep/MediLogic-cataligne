@@ -28,9 +28,9 @@
                             <span>Articles</span>
                             <span>{{ "%.0f"|format(total) }} FCFA</span>
                         </div>
-                        <div class="flex justify-between font-normal text-green-700" id="ligneRemise" hidden>
-                            <span id="libelleRemise">Réduction</span>
-                            <span id="remiseAffichee"></span>
+                        <div class="flex justify-between font-normal text-green-700" id="ligneRemise" {% if not (fidelite is defined and fidelite and fidelite.remise) %}hidden{% endif %}>
+                            <span id="libelleRemise">{% if fidelite is defined and fidelite and fidelite.remise %}🎁 Réduction client fidèle{% else %}Réduction{% endif %}</span>
+                            <span id="remiseAffichee">{% if fidelite is defined and fidelite and fidelite.remise %}-{{ "%.0f"|format(fidelite.remise) }} FCFA{% endif %}</span>
                         </div>
                         <div class="flex justify-between font-normal" id="ligneFrais" {% if not zones %}hidden{% endif %}>
                             <span>Livraison</span>
@@ -38,10 +38,18 @@
                         </div>
                         <div class="flex justify-between">
                             <span>Total à payer à la livraison</span>
-                            <span class="text-primary" id="totalAffiche" data-sous-total="{{ total }}">{{ "%.0f"|format(total) }} FCFA</span>
+                            {% set remise_fid = fidelite.remise if (fidelite is defined and fidelite) else 0 %}
+                            <span class="text-primary" id="totalAffiche" data-sous-total="{{ total }}" data-remise="{{ remise_fid }}" data-fidelite="{{ remise_fid }}">{{ "%.0f"|format(total - remise_fid) }} FCFA</span>
                         </div>
                     </div>
                 </div>
+                {% if fidelite is defined and fidelite and fidelite.regle %}
+                {% if fidelite.remise %}
+                <p class="mt-3 text-sm bg-amber-50 border border-amber-200 text-amber-900 rounded-lg px-3 py-2">🎁 <strong>Merci pour votre fidélité !</strong> {{ fidelite.livrees }} commande(s) déjà livrée(s) : vous avez droit à <strong>-{{ "%.0f"|format(fidelite.remise) }} FCFA</strong> sur cette commande.</p>
+                {% elif fidelite.restant and fidelite.livrees %}
+                <p class="mt-3 text-xs bg-amber-50 text-amber-900 rounded-lg px-3 py-2">🎁 Plus que <strong>{{ fidelite.restant }}</strong> commande(s) livrée(s) avant votre réduction fidélité ({{ fidelite.regle }}).</p>
+                {% endif %}
+                {% endif %}
                 <!-- Code promo -->
                 <div class="mt-3 flex gap-2">
                     <input type="text" id="champCode" placeholder="Code promo (facultatif)" maxlength="30"
@@ -234,6 +242,13 @@ async function appliquerCode() {
     const total = document.getElementById('totalAffiche');
     info.classList.remove('hidden');
     const d = await (await fetch("{{ url_for('client.api_promo') }}?code=" + encodeURIComponent(code))).json();
+    const fid = +total.dataset.fidelite || 0;
+    if (d.ok && d.remise <= fid) {
+        document.getElementById('codePromo').value = '';
+        info.className = 'text-xs mt-1 text-amber-700';
+        info.textContent = 'Votre réduction fidélité (-' + Math.round(fid).toLocaleString('fr-FR') + ' FCFA) est plus avantageuse : elle est gardée.';
+        return;
+    }
     if (d.ok) {
         document.getElementById('codePromo').value = d.code;
         total.dataset.remise = d.remise;
@@ -243,8 +258,12 @@ async function appliquerCode() {
         info.className = 'text-xs mt-1 text-green-700'; info.textContent = '✓ ' + d.message;
     } else {
         document.getElementById('codePromo').value = '';
-        total.dataset.remise = 0;
-        document.getElementById('ligneRemise').hidden = true;
+        total.dataset.remise = fid;
+        document.getElementById('ligneRemise').hidden = !fid;
+        if (fid) {
+            document.getElementById('libelleRemise').textContent = '🎁 Réduction client fidèle';
+            document.getElementById('remiseAffichee').textContent = '-' + Math.round(fid).toLocaleString('fr-FR') + ' FCFA';
+        }
         info.className = 'text-xs mt-1 text-red-600'; info.textContent = d.message;
     }
     if (document.getElementById('zoneClient')) majFrais();

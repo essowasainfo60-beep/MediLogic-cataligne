@@ -271,7 +271,7 @@ async function retrouverClient() {
         if (zone && d.zone_id && !zone.value) { zone.value = String(d.zone_id); appliquerFraisZone(); }
         let info = document.getElementById('clientConnu');
         if (!info) { info = document.createElement('p'); info.id = 'clientConnu'; info.className = 'text-xs text-green-700 mt-1'; document.getElementById('telSaisie').after(info); }
-        info.textContent = '✓ Client déjà connu (' + d.commandes + ' commande(s)) : informations reprises.';
+        info.textContent = '✓ Client déjà connu (' + d.commandes + ' commande(s)) : informations reprises.' + (d.fidelite ? ' ' + d.fidelite : '');
     } catch (e) {}
 }
 const QUARTIERS = {{ (index_quartiers or [])|tojson }};

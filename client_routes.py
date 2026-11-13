@@ -249,7 +249,9 @@ def valider_commande():
     total = sum(item['prix'] * item['quantite'] for item in panier.values())
 
     if request.method == 'GET':
-        return render_template('client/commande.html', panier=panier, total=total, boutique=boutique, client=client_connu(),
+        client = client_connu()
+        return render_template('client/commande.html', panier=panier, total=total, boutique=boutique, client=client,
+                               fidelite=promos.fidelite(boutique, client.get('telephone'), total),
                                zones=[z for z in boutique.zones if z.active and not z.est_retrait],
                                index_quartiers=index_quartiers([z for z in boutique.zones if z.active and not z.est_retrait]),
                                creneaux=creneaux_disponibles() + [CRENEAU_AUTRE])
@@ -278,8 +280,9 @@ def valider_commande():
     zone = retrait or Zone.query.filter_by(id=request.form.get('zone_id', type=int), boutique_id=boutique.id, active=True).first()
     # Le quartier écrit dans l'adresse fait foi : « Agoè Télessou » est livré en zone Agoè,
     # même si une autre zone (moins chère) a été choisie dans la liste.
-    promo, remise, _ = promos.verifier(boutique.id, request.form.get('code_promo'), total,
-                                     sum(int(i['quantite']) for i in panier.values()))
+    promo, code_promo, remise, _ = promos.meilleure_reduction(
+        boutique, client_telephone, total, request.form.get('code_promo'),
+        sum(int(i['quantite']) for i in panier.values()))
     zone_adresse, _ = zone_pour_adresse(client_adresse, zones_actives) if not retrait else (None, None)
     if zone_adresse:
         zone = zone_adresse
@@ -296,7 +299,7 @@ def valider_commande():
         instructions=instructions or None,
         articles_json=list(panier.values()),
         total=total - remise + frais,
-        code_promo=promo.code if promo else None,
+        code_promo=code_promo,
         remise=remise,
         statut='nouvelle',
         zone=zone,

@@ -39,7 +39,7 @@ def _recap(commande):
     lignes = [f"   • {a['nom']} x{a['quantite']} = {fcfa(a['prix'] * a['quantite'])}" for a in commande.articles_json]
     texte = "\n".join(lignes)
     if commande.remise:
-        texte += f"\n   🎁 Code {commande.code_promo} = -{fcfa(commande.remise)}"
+        texte += f"\n   🎁 {commande.libelle_remise} = -{fcfa(commande.remise)}"
     if commande.frais_livraison:
         texte += f"\n   🛵 Livraison{' (' + commande.zone.nom + ')' if commande.zone else ''} = {fcfa(commande.frais_livraison)}"
     return texte + f"\n\n💰 *TOTAL : {fcfa(commande.total)}*"
@@ -151,7 +151,7 @@ def nouvelle_commande_boutique(commande, lien_article=None, racine=''):
         m += "\n"
     m += f"{TRAIT}\n"
     if commande.remise:
-        m += f"🎁 *Code {commande.code_promo}:* -{fcfa(commande.remise)}\n"
+        m += f"🎁 *{commande.libelle_remise}:* -{fcfa(commande.remise)}\n"
     if commande.frais_livraison:
         m += f"🛵 *Livraison ({commande.zone.nom if commande.zone else ''}):* {fcfa(commande.frais_livraison)}\n"
     m += f"💰 *TOTAL: {fcfa(commande.total)}*" + (" (à payer à la boutique)" if commande.est_retrait else "") + f"\n{TRAIT}"

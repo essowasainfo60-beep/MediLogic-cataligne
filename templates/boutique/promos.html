@@ -5,9 +5,51 @@
 {% block content %}
 <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-5">
     <div>
-        <h1 class="text-2xl md:text-3xl font-extrabold text-gray-900"><i class="fas fa-ticket text-purple-500 mr-2"></i> Codes promo</h1>
+        <h1 class="text-2xl md:text-3xl font-extrabold text-gray-900"><i class="fas fa-ticket text-purple-500 mr-2"></i> Codes promo et fidélité</h1>
         <p class="text-sm text-gray-500">La réduction s'applique au prix des articles, jamais aux frais de livraison (qui reviennent au livreur).</p>
     </div>
+
+    <!-- Clients fidèles -->
+    <form id="fidelite" method="POST" action="{{ url_for('boutique.regler_fidelite') }}"
+          class="bg-gradient-to-br from-amber-50 to-white border border-amber-200 rounded-2xl shadow-md p-5 space-y-4">
+        <div class="flex flex-wrap items-start justify-between gap-3">
+            <div>
+                <h2 class="font-bold text-gray-900 text-lg">🎁 Réduction pour les clients fidèles</h2>
+                <p class="text-sm text-gray-600">Appliquée automatiquement quand le client commande avec le même numéro. Elle ne se cumule pas avec un code promo : le client reçoit la plus avantageuse.</p>
+            </div>
+            <span class="text-xs font-bold rounded-full px-3 py-1 {{ 'bg-green-100 text-green-800' if regle_fidelite else 'bg-gray-100 text-gray-600' }}">{{ 'ACTIVE' if regle_fidelite else 'DÉSACTIVÉE' }}</span>
+        </div>
+        {% if regle_fidelite %}
+        <p class="text-sm bg-white rounded-xl border border-amber-200 px-3 py-2">
+            <strong>Règle actuelle :</strong> {{ regle_fidelite }}.<br>
+            <span class="text-gray-500">{{ clients_eligibles }} client(s) ont déjà assez de commandes livrées · {{ nb_fidelite }} commande(s) réduite(s) · {{ fcfa(remise_fidelite) }} offerts</span>
+        </p>
+        {% endif %}
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 text-sm">
+            <label class="text-gray-600">À partir de combien de commandes livrées ?
+                <input type="number" name="seuil" min="1" value="{{ b.fidelite_seuil or 5 }}" class="mt-1 w-full border border-gray-300 rounded-lg px-3 py-2"></label>
+            <label class="text-gray-600">Réduction
+                <span class="mt-1 flex gap-1">
+                    <input type="number" name="valeur" min="1" value="{{ '%g'|format(b.fidelite_valeur) if b.fidelite_valeur else 10 }}" class="w-full min-w-0 border border-gray-300 rounded-lg px-3 py-2">
+                    <select name="type" class="border border-gray-300 rounded-lg px-2 py-2">
+                        <option value="pourcentage">%</option>
+                        <option value="montant" {{ 'selected' if b.fidelite_type == 'montant' }}>FCFA</option>
+                    </select>
+                </span></label>
+            <label class="text-gray-600">Quand ?
+                <select name="mode" class="mt-1 w-full border border-gray-300 rounded-lg px-3 py-2">
+                    <option value="toutes">Sur toutes les commandes suivantes</option>
+                    <option value="palier" {{ 'selected' if b.fidelite_mode == 'palier' }}>Une commande sur N (ex. la 6e, la 11e…)</option>
+                </select></label>
+            <label class="text-gray-600">Achat minimum (FCFA)
+                <input type="number" name="minimum" min="0" step="100" value="{{ '%d'|format(b.fidelite_minimum) if b.fidelite_minimum else '' }}" placeholder="Aucun" class="mt-1 w-full border border-gray-300 rounded-lg px-3 py-2"></label>
+        </div>
+        <p class="text-xs text-gray-500">Exemple : « 5 » + « 10 % » + « toutes » = dès sa 6e commande, le client paie 10 % de moins sur ses articles (jamais sur la livraison). Seules les commandes <strong>livrées</strong> comptent.</p>
+        <div class="flex flex-wrap gap-2">
+            <button type="submit" name="actif" value="1" class="bg-amber-500 hover:bg-amber-600 text-white px-5 py-2.5 rounded-xl font-semibold">{{ 'Enregistrer' if regle_fidelite else 'Activer la réduction fidélité' }}</button>
+            {% if regle_fidelite %}<button type="submit" name="actif" value="0" class="bg-white border border-gray-300 text-gray-700 px-5 py-2.5 rounded-xl font-semibold">Désactiver</button>{% endif %}
+        </div>
+    </form>
 
     <div class="grid grid-cols-1 xl:grid-cols-3 gap-5">
         <!-- Créer -->

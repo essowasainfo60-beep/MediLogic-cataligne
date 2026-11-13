@@ -204,7 +204,10 @@ def mettre_a_jour_schema():
                                 ('mode_frais', "VARCHAR(20) NOT NULL DEFAULT 'livreur_garde'"),
                                 ('abonnement_prix', 'FLOAT'), ('abonnement_debut', 'VARCHAR(7)'),
                                 ('derniere_activite', 'TIMESTAMP'), ('latitude', 'FLOAT'), ('longitude', 'FLOAT'),
-                                ('message_statut', 'TEXT')]:
+                                ('message_statut', 'TEXT'),
+                                ('fidelite_actif', 'BOOLEAN NOT NULL DEFAULT FALSE'), ('fidelite_seuil', 'INTEGER'),
+                                ('fidelite_type', 'VARCHAR(20)'), ('fidelite_valeur', 'FLOAT'),
+                                ('fidelite_mode', 'VARCHAR(20)'), ('fidelite_minimum', 'FLOAT')]:
             if nom not in colonnes_boutiques:
                 conn.execute(text(f"ALTER TABLE boutiques ADD COLUMN {nom} {definition}"))
         if 'lien_public' not in colonnes_boutiques:

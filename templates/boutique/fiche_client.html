@@ -25,6 +25,13 @@
         </div>
     </div>
 
+    {% if fidelite.regle %}
+    <div class="rounded-2xl px-4 py-3 text-sm {{ 'bg-amber-50 border border-amber-200 text-amber-900' if fidelite.restant == 0 else 'bg-white shadow-md text-gray-700' }}">
+        {% if fidelite.restant == 0 %}🎁 <strong>A droit à la réduction fidélité</strong> sur sa prochaine commande ({{ fidelite.regle }}).
+        {% else %}🎁 Réduction fidélité : encore <strong>{{ fidelite.restant }}</strong> commande(s) livrée(s) avant d'y avoir droit ({{ fidelite.regle }}).{% endif %}
+    </div>
+    {% endif %}
+
     <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
         <div class="bg-white rounded-2xl shadow-md p-4"><p class="text-xs text-gray-500">Commandes</p><p class="text-2xl font-extrabold">{{ f.commandes }}</p></div>
         <div class="bg-white rounded-2xl shadow-md p-4"><p class="text-xs text-gray-500">Livrées</p><p class="text-2xl font-extrabold text-green-600">{{ f.livrees }}</p></div>

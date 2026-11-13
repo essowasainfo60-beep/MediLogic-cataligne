@@ -305,7 +305,7 @@
             {% endfor %}
             <div class="mt-3 space-y-1 text-sm">
                 <div class="flex justify-between text-gray-600"><span>Sous-total articles</span><span>{{ fcfa(c.sous_total) }}</span></div>
-                {% if c.remise %}<div class="flex justify-between text-green-700"><span>Code {{ c.code_promo }}</span><span>-{{ fcfa(c.remise) }}</span></div>{% endif %}
+                {% if c.remise %}<div class="flex justify-between text-green-700"><span>{{ c.libelle_remise }}</span><span>-{{ fcfa(c.remise) }}</span></div>{% endif %}
                 <div class="flex justify-between items-center text-gray-600">
                     <span>Livraison{% if c.zone %} ({{ c.zone.nom }}){% endif %}</span>
                     {% if c.statut not in ['livree', 'retournee'] %}

@@ -135,7 +135,7 @@
                     <summary class="cursor-pointer">{{ c.articles_json|length }} article(s) — voir le détail</summary>
                     <ul class="mt-1 space-y-0.5">
                         {% for a in c.articles_json %}<li>• {% if a.numero %}n°{{ a.numero }} {% endif %}{{ a.nom }} × {{ a.quantite }}</li>{% endfor %}
-                        {% if c.remise %}<li>• Réduction (code {{ c.code_promo }}) : -{{ fcfa(c.remise) }}</li>{% endif %}
+                        {% if c.remise %}<li>• {{ c.libelle_remise }} : -{{ fcfa(c.remise) }}</li>{% endif %}
                         {% if c.frais_livraison %}<li>• Livraison : {{ fcfa(c.frais_livraison) }}</li>{% endif %}
                     </ul>
                 </details>
