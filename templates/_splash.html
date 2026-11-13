@@ -1,0 +1,77 @@
+{# Animation d'ouverture de LivraPlus : une fois par ouverture de l'application (touchez pour passer). #}
+<div id="lpSplash" role="presentation" aria-hidden="true">
+{% raw %}<style>
+#lpSplash{position:fixed;inset:0;z-index:9999;display:flex;align-items:center;justify-content:center;overflow:hidden;cursor:pointer;
+  background:radial-gradient(circle at 50% 42%,#123a5c 0%,#0b1d35 55%,#06111f 100%);color:#fff;font-family:'Inter',system-ui,Arial,sans-serif;
+  transition:opacity .45s ease,transform .45s ease}
+#lpSplash.lp-sortie{opacity:0;transform:scale(1.06);pointer-events:none}
+#lpSplash .lp-onde{position:absolute;left:50%;top:42%;width:120px;height:120px;margin:-60px 0 0 -60px;border-radius:50%;
+  border:2px solid rgba(45,212,191,.45);opacity:0;animation:lpOnde 2.4s ease-out .35s infinite}
+#lpSplash .lp-onde.b{animation-delay:1.15s}
+#lpSplash .lp-point{position:absolute;width:6px;height:6px;border-radius:50%;background:#2dd4bf;opacity:.0;animation:lpPoint 3s ease-in-out infinite}
+#lpSplash .lp-centre{position:relative;display:flex;flex-direction:column;align-items:center;margin-top:-6vh}
+#lpSplash .lp-logo{width:104px;height:104px;border-radius:28px;background:linear-gradient(145deg,#12345a,#0b1d35);
+  border:2px solid rgba(45,212,191,.55);display:flex;align-items:center;justify-content:center;
+  box-shadow:0 0 0 0 rgba(45,212,191,.5),0 18px 40px rgba(0,0,0,.45);animation:lpLogo .9s cubic-bezier(.34,1.56,.64,1) both,lpLueur 2.4s ease-in-out .9s infinite}
+#lpSplash .lp-logo span{font-weight:800;font-size:54px;line-height:1;color:#2dd4bf;letter-spacing:-2px}
+#lpSplash .lp-logo .lp-plus{display:inline-block;margin-left:2px;animation:lpTourne .8s cubic-bezier(.34,1.56,.64,1) .55s both}
+#lpSplash .lp-route{position:relative;width:210px;height:44px;margin-top:22px}
+#lpSplash .lp-route:before{content:'';position:absolute;left:0;right:0;bottom:8px;border-bottom:3px dashed rgba(255,255,255,.28);
+  transform-origin:left;animation:lpTrace 1.1s ease-out .6s both}
+#lpSplash .lp-moto{position:absolute;bottom:8px;left:-36px;font-size:30px;transform:scaleX(-1);animation:lpRoule 1.5s cubic-bezier(.45,.05,.3,1) .6s both}
+#lpSplash .lp-moto i{display:inline-block;animation:lpSaute .32s ease-in-out .6s 5 alternate}
+#lpSplash .lp-maison{position:absolute;right:-6px;bottom:6px;font-size:26px;opacity:0;animation:lpApparait .4s ease-out 1.75s both}
+#lpSplash .lp-ok{position:absolute;right:-14px;bottom:30px;font-size:16px;opacity:0;animation:lpPop .45s cubic-bezier(.34,1.56,.64,1) 2.0s both}
+#lpSplash .lp-nom{margin-top:14px;font-size:34px;font-weight:800;letter-spacing:.5px;display:flex}
+#lpSplash .lp-nom span{display:inline-block;opacity:0;animation:lpLettre .45s ease-out both}
+#lpSplash .lp-nom .t{color:#2dd4bf}
+#lpSplash .lp-slogan{margin-top:6px;font-size:14px;color:rgba(255,255,255,.75);opacity:0;animation:lpApparait .6s ease-out 1.55s both;text-align:center;padding:0 24px}
+#lpSplash .lp-barre{position:absolute;left:50%;bottom:calc(48px + env(safe-area-inset-bottom));width:150px;height:4px;margin-left:-75px;border-radius:4px;background:rgba(255,255,255,.12);overflow:hidden}
+#lpSplash .lp-barre i{display:block;height:100%;width:100%;background:linear-gradient(90deg,#2dd4bf,#a78bfa);transform-origin:left;animation:lpCharge 2.3s ease-in-out both}
+#lpSplash .lp-passer{position:absolute;bottom:calc(18px + env(safe-area-inset-bottom));font-size:11px;color:rgba(255,255,255,.4)}
+@keyframes lpLogo{0%{transform:scale(.3) rotate(-18deg);opacity:0}100%{transform:none;opacity:1}}
+@keyframes lpTourne{0%{transform:rotate(-180deg) scale(0)}100%{transform:none}}
+@keyframes lpLueur{0%,100%{box-shadow:0 0 0 0 rgba(45,212,191,.0),0 18px 40px rgba(0,0,0,.45)}50%{box-shadow:0 0 34px 6px rgba(45,212,191,.35),0 18px 40px rgba(0,0,0,.45)}}
+@keyframes lpOnde{0%{transform:scale(.8);opacity:.7}100%{transform:scale(3.4);opacity:0}}
+@keyframes lpTrace{0%{transform:scaleX(0)}100%{transform:scaleX(1)}}
+@keyframes lpRoule{0%{left:-36px}100%{left:150px}}
+@keyframes lpSaute{0%{transform:translateY(0)}100%{transform:translateY(-3px)}}
+@keyframes lpApparait{0%{opacity:0;transform:translateY(6px)}100%{opacity:1;transform:none}}
+@keyframes lpPop{0%{opacity:0;transform:scale(0)}100%{opacity:1;transform:scale(1)}}
+@keyframes lpLettre{0%{opacity:0;transform:translateY(14px)}100%{opacity:1;transform:none}}
+@keyframes lpCharge{0%{transform:scaleX(0)}100%{transform:scaleX(1)}}
+@keyframes lpPoint{0%,100%{opacity:0;transform:translateY(0)}50%{opacity:.7;transform:translateY(-18px)}}
+@media (prefers-reduced-motion:reduce){#lpSplash *{animation-duration:.01s!important;animation-delay:0s!important;animation-iteration-count:1!important}}
+</style>{% endraw %}
+    <span class="lp-onde"></span><span class="lp-onde b"></span>
+    <span class="lp-point" style="left:18%;top:30%;animation-delay:.2s"></span>
+    <span class="lp-point" style="left:80%;top:24%;animation-delay:.9s"></span>
+    <span class="lp-point" style="left:72%;top:68%;animation-delay:1.5s"></span>
+    <span class="lp-point" style="left:24%;top:72%;animation-delay:2.1s"></span>
+    <div class="lp-centre">
+        <div class="lp-logo"><span>L<span class="lp-plus">+</span></span></div>
+        <div class="lp-route"><span class="lp-moto"><i>🛵</i></span><span class="lp-maison">🏠</span><span class="lp-ok">✅</span></div>
+        <p class="lp-nom">{% for l in 'Livra' %}<span style="animation-delay:{{ 0.9 + loop.index0 * 0.06 }}s">{{ l }}</span>{% endfor %}{% for l in 'Plus' %}<span class="t" style="animation-delay:{{ 1.2 + loop.index0 * 0.06 }}s">{{ l }}</span>{% endfor %}</p>
+        <p class="lp-slogan">Commandes · Livraisons · Caisse<br>tout votre commerce dans la poche</p>
+    </div>
+    <div class="lp-barre"><i></i></div>
+    <p class="lp-passer">Touchez pour passer</p>
+</div>
+<script>
+(function () {
+    var s = document.getElementById('lpSplash');
+    try {
+        if (sessionStorage.getItem('lpOuverture')) { s.remove(); return; }   // déjà vue depuis l'ouverture de l'application
+        sessionStorage.setItem('lpOuverture', '1');
+    } catch (e) {}
+    var fini = false;
+    function terminer() {
+        if (fini) return; fini = true;
+        s.classList.add('lp-sortie');
+        setTimeout(function () { s.remove(); }, 480);
+    }
+    s.addEventListener('click', terminer);
+    var court = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
+    setTimeout(terminer, court ? 500 : 2500);
+})();
+</script>

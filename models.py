@@ -42,6 +42,8 @@ class Boutique(UserMixin, db.Model):
     # Frais de livraison : 'livreur_garde' (il garde ses frais et ne remet que les articles)
     # ou 'boutique_collecte' (il remet tout, la boutique le paie ensuite). Voir caisse.py.
     mode_frais = db.Column(db.String(20), nullable=False, default='livreur_garde', server_default='livreur_garde')
+    # Déconnexion automatique après X minutes sans activité (0 = jamais)
+    deconnexion_minutes = db.Column(db.Integer, nullable=False, default=15, server_default='15')
     date_inscription = db.Column(db.DateTime, default=datetime.utcnow)
     # Abonnement mensuel (fixé par l'administrateur, voir abonnement.py)
     abonnement_prix = db.Column(db.Float, nullable=True)          # FCFA par mois ; vide ou 0 = gratuit

@@ -104,6 +104,17 @@
         </div>
 
         <!-- Frais de livraison -->
+        <div id="securite" class="bg-white rounded-xl shadow-md p-5 scroll-mt-24">
+            <p class="block text-sm font-bold text-gray-700 mb-1"><i class="fas fa-lock mr-1 text-purple-600"></i> Déconnexion automatique</p>
+            <p class="text-xs text-gray-500 mb-2">Si personne ne touche l'application pendant ce temps, elle se déconnecte toute seule
+                (téléphone oublié, ordinateur partagé…). Un message prévient 1 minute avant. Vaut pour vous et toute l'équipe.</p>
+            <select name="deconnexion_minutes" class="w-full border border-gray-300 rounded-lg px-3 py-2.5 bg-white">
+                {% for valeur, libelle in durees_deconnexion %}
+                <option value="{{ valeur }}" {{ 'selected' if (current_user.deconnexion_minutes if current_user.deconnexion_minutes is not none else 15) == valeur }}>{{ ('Après ' ~ libelle) if valeur else libelle }}</option>
+                {% endfor %}
+            </select>
+        </div>
+
         <div id="frais" class="bg-white rounded-xl shadow-md p-5 scroll-mt-24">
             <p class="block text-sm font-bold text-gray-700 mb-1">Frais de livraison : à qui va l'argent ? <span class="font-normal text-gray-500">(par défaut)</span></p>
             <p class="text-xs text-gray-500 mb-2">C'est le choix proposé quand vous confiez une commande. Vous pouvez le changer pour chaque commande.</p>

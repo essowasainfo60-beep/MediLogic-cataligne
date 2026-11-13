@@ -214,6 +214,7 @@ def mettre_a_jour_schema():
         colonnes_boutiques = {c['name'] for c in inspecteur.get_columns('boutiques')}
         for nom, definition in [('description', 'TEXT'), ('adresse', 'VARCHAR(255)'),
                                 ('mode_frais', "VARCHAR(20) NOT NULL DEFAULT 'livreur_garde'"),
+                                ('deconnexion_minutes', 'INTEGER NOT NULL DEFAULT 15'),
                                 ('abonnement_prix', 'FLOAT'), ('abonnement_debut', 'VARCHAR(7)'),
                                 ('derniere_activite', 'TIMESTAMP'), ('latitude', 'FLOAT'), ('longitude', 'FLOAT'),
                                 ('message_statut', 'TEXT'),

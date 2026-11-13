@@ -74,6 +74,7 @@
     {% block extra_css %}{% endblock %}
 </head>
 <body class="min-h-screen flex flex-col">
+    {% if request.blueprint in ['boutique', 'admin'] %}{% include '_splash.html' %}{% endif %}
     {% set espace_boutique = current_user.is_authenticated and current_user.nom_boutique is defined and request.blueprint == 'boutique' %}
     {% set vitrine = current_user if espace_boutique else (boutique if boutique is defined and boutique else none) %}
     {% set liens_principaux = [
@@ -576,6 +577,7 @@
             if (document.hidden && dernierId !== null && !('Notification' in window && Notification.permission === 'granted')) return;
             try {
                 const d = await (await fetch(URL_API, { headers: { 'Accept': 'application/json' } })).json();
+                if (d.deconnecte) { location.href = window.LP_SORTIE || '/boutique/connexion'; return; }
                 majPastilles(d.nombre);
                 document.querySelectorAll('.pastille-messages').forEach((p) => {
                     p.textContent = d.messages_non_lus || ''; p.classList.toggle('hidden', !d.messages_non_lus);
@@ -734,6 +736,59 @@
         abonnerTelephone();          // déjà autorisé : on réabonne en silence (clé à jour, nouveau téléphone…)
         verifier();
         setInterval(verifier, 30000);
+    })();
+    </script>
+    {% endif %}
+    {% if espace_boutique and deconnexion_minutes %}
+    <script>
+    // ---------- Déconnexion automatique après {{ deconnexion_minutes }} min sans toucher l'application ----------
+    (function () {
+        var MAX = {{ deconnexion_minutes }} * 60000, AVERT = 60000, CLE = 'lpDerniereActivite';
+        var URL_PING = {{ url_for('boutique.activite')|tojson }};
+        var URL_SORTIE = window.LP_SORTIE = {{ url_for('boutique.logout', inactif=deconnexion_minutes)|tojson }};
+        var derniere = Date.now(), dernierPing = Date.now(), boite = null, partie = false;
+        function ecrire(t) { try { localStorage.setItem(CLE, String(t)); } catch (e) {} }
+        function lire() { var t = 0; try { t = +localStorage.getItem(CLE) || 0; } catch (e) {} return Math.max(derniere, t); }
+        function sortir() { if (partie) return; partie = true; location.href = URL_SORTIE; }
+        function ping() {
+            dernierPing = Date.now();
+            fetch(URL_PING, { cache: 'no-store', headers: { 'Accept': 'application/json' } })
+                .then(function (r) { if (r.status === 401) sortir(); }).catch(function () {});
+        }
+        function activite() {
+            var maintenant = Date.now();
+            if (maintenant - derniere < 1000 && !boite) return;   // au plus une fois par seconde
+            derniere = maintenant; ecrire(maintenant); fermer();
+            if (maintenant - dernierPing > 120000) ping();      // le serveur sait qu'on est là
+        }
+        function fermer() { if (boite) { boite.remove(); boite = null; } }
+        function avertir(secondes) {
+            if (!boite) {
+                boite = document.createElement('div');
+                boite.className = 'fixed inset-0 z-[200] bg-black/60 flex items-end sm:items-center justify-center p-3';
+                boite.innerHTML = '<div class="bg-white text-gray-800 rounded-2xl shadow-xl w-full max-w-sm p-5 text-center">'
+                    + '<p class="text-4xl">⏳</p><p class="font-bold text-lg text-gray-900 mt-1">Vous êtes toujours là ?</p>'
+                    + '<p class="text-sm text-gray-600 mt-1">Pour protéger vos données, LivraPlus vous déconnecte dans <b class="lp-sec text-red-600 text-lg"></b> secondes.</p>'
+                    + '<button type="button" data-rester class="mt-4 w-full bg-purple-600 text-white font-bold py-3 rounded-xl">Je suis là, rester connecté</button>'
+                    + '<button type="button" data-sortir class="mt-2 w-full text-gray-500 text-sm py-2">Me déconnecter maintenant</button></div>';
+                document.body.appendChild(boite);
+                boite.querySelector('[data-rester]').onclick = function () { derniere = 0; activite(); ping(); };
+                boite.querySelector('[data-sortir]').onclick = sortir;
+            }
+            boite.querySelector('.lp-sec').textContent = secondes;
+        }
+        function verifier() {
+            var inactif = Date.now() - lire();
+            if (inactif >= MAX) { sortir(); return; }
+            if (inactif >= MAX - AVERT) avertir(Math.ceil((MAX - inactif) / 1000));
+            else fermer();
+        }
+        ['pointerdown', 'keydown', 'touchstart', 'wheel', 'scroll', 'input'].forEach(function (ev) {
+            document.addEventListener(ev, function (e) { if (boite && boite.contains(e.target)) return; activite(); }, { passive: true, capture: true });
+        });
+        document.addEventListener('visibilitychange', function () { if (!document.hidden) verifier(); });
+        ecrire(derniere);
+        setInterval(verifier, 1000);
     })();
     </script>
     {% endif %}

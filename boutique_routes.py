@@ -2,6 +2,7 @@ import csv
 import io
 import json
 import re
+import time
 from datetime import datetime, timedelta
 from urllib.parse import quote
 
@@ -75,6 +76,56 @@ def boutique_connectee():
     return current_user.vendeur.boutique if getattr(current_user, 'est_vendeur', False) else current_user
 
 
+# Appels faits tout seuls par la page (rafraîchissements) : ils ne comptent pas comme une activité
+ARRIERE_PLAN = {'api_nouvelles', 'api_trajet_commande', 'api_livreurs_en_route', 'api_discussion_messages',
+                'api_discussions_non_lus'}
+DUREES_DECONNEXION = [(10, '10 minutes'), (15, '15 minutes (conseillé)'), (30, '30 minutes'), (60, '1 heure'), (0, 'Jamais (déconseillé)')]
+
+
+def ouvrir_session():
+    """Après une connexion réussie : la session survit à la fermeture de l'application,
+    mais se ferme après quelques minutes sans activité."""
+    session.permanent = True
+    session['vu_a'] = time.time()
+
+
+def page_apres_connexion():
+    """Après une déconnexion pour inactivité : on revient sur la page où l'on était."""
+    page = session.pop('apres_connexion', None)
+    return page if page and page.startswith('/boutique/') and not page.startswith('/boutique/log') else url_for('boutique.dashboard')
+
+
+@boutique_bp.before_request
+def deconnexion_inactivite():
+    """Déconnexion automatique quand personne n'a touché l'application depuis X minutes
+    (téléphone oublié, ordinateur partagé…)."""
+    if not current_user.is_authenticated or not request.endpoint:
+        return None
+    boutique = boutique_connectee()
+    minutes = boutique.deconnexion_minutes if boutique and boutique.deconnexion_minutes is not None else 15
+    maintenant = time.time()
+    derniere = session.get('vu_a')
+    if minutes and (derniere is None or maintenant - derniere > minutes * 60):
+        logout_user()
+        session.pop('vu_a', None)
+        if request.accept_mimetypes.best == 'application/json' or request.is_json or request.endpoint.split('.')[-1] in ARRIERE_PLAN:
+            return jsonify(success=False, deconnecte=True, message='Session fermée'), 401
+        flash(f"Vous avez été déconnecté après {minutes} minutes sans activité, pour protéger vos données. Reconnectez-vous.", 'warning')
+        if request.method == 'GET' and request.endpoint != 'boutique.logout':
+            session['apres_connexion'] = request.full_path.rstrip('?')
+        return redirect(url_for('boutique.connexion'))
+    if request.endpoint.split('.')[-1] not in ARRIERE_PLAN:
+        session['vu_a'] = maintenant
+    return None
+
+
+@boutique_bp.route('/activite')
+@login_required
+def activite():
+    """Appelé par la page quand on la touche : garde la session ouverte."""
+    return ('', 204)
+
+
 @boutique_bp.before_request
 def verifier_abonnement_et_activite():
     boutique = boutique_connectee()
@@ -111,6 +162,8 @@ def verifier_droits():
 def injecter_droits():
     boutique = boutique_connectee() if request.blueprint == 'boutique' else None
     return {'peut': peut, 'etat_abonnement': abonnement.etat(boutique) if boutique else None,
+            'deconnexion_minutes': (boutique.deconnexion_minutes if boutique and boutique.deconnexion_minutes is not None else 15),
+            'durees_deconnexion': DUREES_DECONNEXION,
             'cle_push_boutique': notifications.cles_vapid()[0] if boutique else None}
 
 MDP_FORT = re.compile(r'^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$')
@@ -286,8 +339,9 @@ def connexion():
 
             securite.succes(request, email)
             login_user(boutique, remember=True)
+            ouvrir_session()
             flash(f'Bonjour {boutique.proprietaire_prenom} !', 'success')
-            return redirect(url_for('boutique.dashboard'))
+            return redirect(page_apres_connexion())
 
         # Membre de l'équipe (vendeur, caissier, gestionnaire)
         vendeur = Vendeur.query.filter(db.func.lower(Vendeur.email) == email).first()
@@ -297,8 +351,9 @@ def connexion():
                 return redirect(url_for('boutique.connexion'))
             securite.succes(request, email)
             login_user(EspaceVendeur(vendeur), remember=True)
+            ouvrir_session()
             flash(f'Bonjour {vendeur.prenom} ! ({vendeur.role_libelle} · {vendeur.boutique.nom_boutique})', 'success')
-            return redirect(url_for('boutique.dashboard'))
+            return redirect(page_apres_connexion())
         securite.echec(request, email)
         flash('Email ou mot de passe incorrect', 'danger')
 
@@ -324,7 +379,8 @@ def biometrie_connexion_verifier():
     if not boutique.active:
         return jsonify(success=False, error="Votre compte n'est pas encore activé par l'administrateur."), 403
     login_user(boutique, remember=True)
-    return jsonify(success=True, redirect=url_for('boutique.dashboard'))
+    ouvrir_session()
+    return jsonify(success=True, redirect=page_apres_connexion())
 
 @boutique_bp.route('/biometrie/inscription/options', methods=['POST'])
 @login_required
@@ -392,10 +448,14 @@ def mot_passe_oublie():
     return render_template('boutique/mot_passe_oublie.html')
 
 @boutique_bp.route('/logout')
-@login_required
 def logout():
     logout_user()
-    flash('Déconnexion réussie', 'success')
+    session.pop('vu_a', None)
+    if request.args.get('inactif'):
+        minutes = request.args.get('inactif', type=int) or 15
+        flash(f"Vous avez été déconnecté après {minutes} minutes sans activité, pour protéger vos données. Reconnectez-vous.", 'warning')
+    else:
+        flash('Déconnexion réussie', 'success')
     return redirect(url_for('boutique.connexion'))
 
 # ==================== TABLEAU DE BORD BOUTIQUE ====================
@@ -500,6 +560,9 @@ def profil():
             current_user.whatsapp = whatsapp
         if request.form.get('mode_frais') in ('livreur_garde', 'boutique_collecte'):
             current_user.mode_frais = request.form['mode_frais']
+        duree = request.form.get('deconnexion_minutes', type=int)
+        if duree in dict(DUREES_DECONNEXION):
+            current_user.deconnexion_minutes = duree
 
         logo = request.files.get('logo')
         if logo and logo.filename:

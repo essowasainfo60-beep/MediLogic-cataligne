@@ -1,6 +1,7 @@
 import hmac
 import os
 import re
+import time
 from datetime import date, datetime
 from functools import wraps
 
@@ -12,6 +13,7 @@ from models import db, Administrateur, Boutique, Commande, Article, PaiementAbon
 import messages_whatsapp as msg
 
 admin_bp = Blueprint('admin', __name__)
+ADMIN_INACTIVITE = 15 * 60
 
 def admin_required(f):
     @wraps(f)
@@ -19,6 +21,13 @@ def admin_required(f):
         if not session.get('is_admin'):
             flash('Accès réservé à l\'administrateur', 'danger')
             return redirect(url_for('admin.admin_login'))
+        # Déconnexion automatique après 15 minutes sans activité
+        if time.time() - (session.get('admin_vu_a') or 0) > ADMIN_INACTIVITE:
+            for cle in ('is_admin', 'admin_id', 'admin_recuperation', 'admin_vu_a'):
+                session.pop(cle, None)
+            flash('Session administrateur fermée après 15 minutes sans activité. Reconnectez-vous.', 'warning')
+            return redirect(url_for('admin.admin_login'))
+        session['admin_vu_a'] = time.time()
         return f(*args, **kwargs)
     return decorated_function
 
@@ -49,6 +58,8 @@ def admin_login():
             securite.succes(request, 'admin')
             session['is_admin'] = True
             session['admin_id'] = compte.id if compte else None
+            session['admin_vu_a'] = time.time()
+            session.permanent = True
             if compte:
                 compte.derniere_connexion = datetime.utcnow()
                 db.session.commit()
