@@ -799,6 +799,8 @@ def nouvelle_commande():
         client_nom = (f.get('client_nom') or '').strip()
         client_telephone = (f.get('client_telephone') or '').strip()
         client_adresse = (f.get('client_adresse') or '').strip()
+        if f.get('mode_reception') == 'retrait':
+            client_adresse = 'Retrait en boutique' + (f' ({current_user.adresse})' if current_user.adresse else '')
         if not lignes or not client_nom or not client_telephone or not client_adresse:
             flash('Client (nom, téléphone, adresse) et au moins un article sont obligatoires', 'danger')
             return render_template('boutique/nouvelle_commande.html', catalogue=catalogue,
@@ -812,11 +814,15 @@ def nouvelle_commande():
         if erreur_promo:
             flash(erreur_promo + ' La commande a été enregistrée sans réduction.', 'warning')
         zone = Zone.query.filter_by(id=f.get('zone_id', type=int), boutique_id=current_user.id).first()
-        if not zone:
+        if f.get('mode_reception') == 'retrait':
+            zone = zone_retrait_boutique(boutique_connectee())
+        elif not zone:
             zone, _ = zone_pour_adresse(client_adresse, zones_actives())
         frais = lire_prix(f.get('frais_livraison'))
         if frais is None:
             frais = zone.frais if zone else 0
+        if f.get('mode_reception') == 'retrait':
+            frais = 0
         commande = Commande(
             boutique_id=current_user.id,
             client_nom=client_nom,
@@ -839,7 +845,7 @@ def nouvelle_commande():
         if promo:
             promo.utilisations += 1
             db.session.commit()
-        livreur = Livreur.query.filter_by(id=f.get('livreur_id', type=int), boutique_id=current_user.id, actif=True).first()
+        livreur = None if f.get('mode_reception') == 'retrait' else Livreur.query.filter_by(id=f.get('livreur_id', type=int), boutique_id=current_user.id, actif=True).first()
         if livreur:
             confier_au_livreur(commande, livreur)
             commande.confirmee_par = qui()
@@ -897,7 +903,12 @@ def proposer_aux_livreurs(commande_id):
     commande.proposee_at = datetime.utcnow()
     commande.lu = True
     db.session.commit()
-    livreurs = Livreur.query.filter_by(boutique_id=current_user.id, actif=True).all()
+    livreurs = Livreur.query.filter_by(boutique_id=current_user.id, actif=True, externe=False).all()
+    if not livreurs:
+        commande.proposee_at = None
+        db.session.commit()
+        flash("Aucun livreur avec l'application : confiez la commande à un livreur externe ou au client (retrait à la boutique).", 'warning')
+        return redirect(url_for('boutique.commande_details', commande_id=commande.id))
     disponibles = [l for l in livreurs if l.disponible] or livreurs
     for l in disponibles:
         notifications.envoyer_livreur(
@@ -910,12 +921,69 @@ def proposer_aux_livreurs(commande_id):
     return redirect(url_for('boutique.commande_details', commande_id=commande.id))
 
 
+def zone_retrait_boutique(boutique):
+    """Zone « Retrait en boutique » (créée si besoin, gratuite)."""
+    zone = boutique.zone_retrait
+    if zone is None:
+        zone = Zone(boutique_id=boutique.id, nom='Retrait en boutique', frais=0, quartiers='Le client vient récupérer sa commande')
+        db.session.add(zone)
+        db.session.flush()
+    return zone
+
+
+@boutique_bp.route('/commande/<int:commande_id>/mode', methods=['POST'])
+@login_required
+def changer_mode_reception(commande_id):
+    """Le client passe à la boutique, ou il est livré (adresse + zone)."""
+    commande = commande_de_la_boutique(commande_id)
+    if not commande or commande.statut not in ('nouvelle', 'confirmee', 'echec'):
+        flash("Le mode de réception ne peut plus être changé pour cette commande.", 'warning')
+        return redirect(url_for('boutique.commande_details', commande_id=commande_id))
+    b = boutique_connectee()
+    if request.form.get('mode') == 'retrait':
+        commande.zone = zone_retrait_boutique(b)
+        commande.frais_livraison = 0
+        commande.client_adresse = 'Retrait en boutique' + (f' ({b.adresse})' if b.adresse else '')
+        commande.latitude = commande.longitude = None
+        commande.proposee_at = None
+        if commande.statut == 'echec':
+            commande.statut = 'confirmee'
+        message = 'Le client passe récupérer sa commande à la boutique.'
+    else:
+        adresse = (request.form.get('client_adresse') or '').strip()
+        if commande.est_retrait and not adresse:
+            flash("Indiquez l'adresse de livraison du client.", 'danger')
+            return redirect(url_for('boutique.commande_details', commande_id=commande_id))
+        if adresse:
+            commande.client_adresse = adresse[:500]
+        zone = Zone.query.filter_by(id=request.form.get('zone_id', type=int), boutique_id=b.id, active=True).first()
+        if zone is None or zone.est_retrait:
+            zone, _ = zone_pour_adresse(commande.client_adresse, [z for z in zones_actives() if not z.est_retrait])
+        commande.zone = zone
+        commande.frais_livraison = zone.frais if zone else 0
+        message = 'Commande à livrer' + (f' (zone {zone.nom})' if zone else '') + ' : choisissez le livreur.'
+    commande.recalculer_total()
+    db.session.commit()
+    flash(message, 'success')
+    return redirect(url_for('boutique.commande_details', commande_id=commande.id))
+
+
 @boutique_bp.route('/commande/<int:commande_id>/attribuer', methods=['POST'])
 @login_required
 def attribuer_livreur(commande_id):
     commande = commande_de_la_boutique(commande_id)
-    livreur = Livreur.query.filter_by(id=request.form.get('livreur_id', type=int),
-                                      boutique_id=current_user.id, actif=True).first()
+    if request.form.get('livreur_id') == 'nouveau_externe' and commande:
+        nom = (request.form.get('externe_nom') or '').strip()[:100]
+        if not nom:
+            flash('Indiquez le nom du livreur externe', 'danger')
+            return redirect(url_for('boutique.commande_details', commande_id=commande_id))
+        livreur = Livreur(boutique_id=current_user.id, nom=nom, externe=True,
+                          telephone=(request.form.get('externe_telephone') or '').strip()[:50])
+        db.session.add(livreur)
+        db.session.flush()
+    else:
+        livreur = Livreur.query.filter_by(id=request.form.get('livreur_id', type=int),
+                                          boutique_id=current_user.id, actif=True).first()
     if not commande or not livreur:
         flash('Choisissez un livreur', 'danger')
         return redirect(url_for('boutique.commande_details', commande_id=commande_id))
@@ -929,9 +997,10 @@ def attribuer_livreur(commande_id):
     if not deja_en_route and not relance:
         commande.confirmee_par = qui()
     db.session.commit()
-    notifications.envoyer_livreur(livreur, f'🛵 Nouvelle course n°{commande.numero}',
-                                  f'{commande.client_nom} · {commande.client_adresse} · {msg.fcfa(commande.total)}',
-                                  url_for('client.espace_livreur', code=livreur.code_acces), tag=f'course-{commande.id}')
+    if not livreur.externe:
+        notifications.envoyer_livreur(livreur, f'🛵 Nouvelle course n°{commande.numero}',
+                                      f'{commande.client_nom} · {commande.client_adresse} · {msg.fcfa(commande.total)}',
+                                      url_for('client.espace_livreur', code=livreur.code_acces), tag=f'course-{commande.id}')
     flash((f'Commande n°{commande.numero} confiée à {livreur.nom}.' if deja_en_route
            else f'Livraison n°{commande.numero} relancée avec {livreur.nom} (tentative {commande.tentatives}).' if relance
            else f'Commande n°{commande.numero} confirmée et en livraison avec {livreur.nom}.')
@@ -956,12 +1025,13 @@ def livreurs():
     if request.method == 'POST':
         nom = (request.form.get('nom') or '').strip()
         telephone = (request.form.get('telephone') or '').strip()
-        if not nom or sum(c.isdigit() for c in telephone) < 8:
-            flash('Nom et numéro WhatsApp valides obligatoires', 'danger')
+        externe = bool(request.form.get('externe'))
+        if not nom or (not externe and sum(c.isdigit() for c in telephone) < 8):
+            flash('Nom et numéro WhatsApp valides obligatoires (le numéro est facultatif pour un livreur externe)', 'danger')
         else:
-            db.session.add(Livreur(boutique_id=current_user.id, nom=nom, telephone=telephone))
+            db.session.add(Livreur(boutique_id=current_user.id, nom=nom, telephone=telephone, externe=externe))
             db.session.commit()
-            flash(f'Livreur {nom} ajouté', 'success')
+            flash(f"Livreur {nom} ajouté" + (" (externe : vous gérez ses livraisons depuis la boutique)" if externe else ''), 'success')
         return redirect(url_for('boutique.livreurs'))
 
     liste = Livreur.query.filter_by(boutique_id=current_user.id).order_by(Livreur.actif.desc(), Livreur.nom).all()
@@ -999,6 +1069,9 @@ def changer_statut_commande(commande_id):
         stock.changer_statut(commande, statut)
         commande.lu = True
         db.session.commit()
+        if statut == 'livree':
+            flash(f'Commande n°{commande.numero} : {commande.statut_libelle}. Vous pouvez imprimer le reçu (tampon PAYÉ).', 'success')
+            return redirect(url_for('boutique.commande_details', commande_id=commande.id))
         flash(f'Commande n°{commande.numero} : {commande.statut_libelle}', 'success')
     return redirect(request.referrer or url_for('boutique.commandes'))
 

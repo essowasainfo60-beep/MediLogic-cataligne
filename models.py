@@ -429,6 +429,8 @@ class Livreur(db.Model):
     # Lien secret de l'espace du livreur (/l/<code>), installable sur son téléphone
     code_acces = db.Column(db.String(32), unique=True, index=True, default=lambda: nouveau_code_lien())
     disponible = db.Column(db.Boolean, nullable=False, default=True, server_default='1')  # prêt à prendre des courses
+    # Livreur externe (taxi-moto, coursier…) sans téléphone ni application : la boutique gère ses courses
+    externe = db.Column(db.Boolean, nullable=False, default=False, server_default='0')
     # Dernière position GPS envoyée pendant une course (voir suivi_gps.py)
     position_lat = db.Column(db.Float, nullable=True)
     position_lng = db.Column(db.Float, nullable=True)

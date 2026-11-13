@@ -39,6 +39,37 @@
     </ol>
     {% endif %}
 
+    <!-- ===== Comment le client reçoit sa commande ===== -->
+    {% if c.statut in ['nouvelle', 'confirmee', 'echec'] %}
+    <div class="bg-white rounded-2xl shadow-sm border border-gray-200 p-3">
+        <p class="text-xs font-bold uppercase tracking-wide text-gray-500 mb-2">Comment le client reçoit sa commande ?</p>
+        <div class="grid grid-cols-2 gap-2">
+            <button type="button" onclick="document.getElementById('formLivrer').classList.toggle('hidden')"
+                    class="rounded-xl border-2 py-2.5 text-sm font-semibold {{ 'border-gray-200 text-gray-600' if c.est_retrait else 'border-purple-600 bg-purple-50 text-purple-800' }}">
+                🛵 Livraison<span class="block text-[11px] font-normal">livreur interne ou externe</span></button>
+            <form method="POST" action="{{ url_for('boutique.changer_mode_reception', commande_id=c.id) }}">
+                <button type="submit" name="mode" value="retrait" {{ 'disabled' if c.est_retrait }}
+                        class="w-full rounded-xl border-2 py-2.5 text-sm font-semibold {{ 'border-green-600 bg-green-50 text-green-800' if c.est_retrait else 'border-gray-200 text-gray-600 hover:bg-gray-50' }}">
+                    🛍 Passe à la boutique<span class="block text-[11px] font-normal">le client vient récupérer</span></button>
+            </form>
+        </div>
+        <form id="formLivrer" method="POST" action="{{ url_for('boutique.changer_mode_reception', commande_id=c.id) }}"
+              class="{{ '' if c.est_retrait else 'hidden' }} mt-2 space-y-2 text-sm">
+            <input type="hidden" name="mode" value="livraison">
+            {% if c.est_retrait %}
+            <input type="text" name="client_adresse" required placeholder="Adresse de livraison du client (quartier, repère)" class="w-full border border-gray-300 rounded-lg px-3 py-2">
+            {% endif %}
+            <div class="flex gap-2">
+                <select name="zone_id" class="flex-1 border border-gray-300 rounded-lg px-3 py-2">
+                    <option value="">Zone : selon l'adresse</option>
+                    {% for z in zones if not z.est_retrait %}<option value="{{ z.id }}" {{ 'selected' if c.zone_id == z.id }}>{{ z.nom }} · {{ fcfa(z.frais or 0) }}</option>{% endfor %}
+                </select>
+                <button type="submit" class="bg-purple-600 text-white px-4 rounded-lg font-semibold">{{ 'Passer en livraison' if c.est_retrait else 'Changer la zone' }}</button>
+            </div>
+        </form>
+    </div>
+    {% endif %}
+
     <!-- ===== PROCHAINE ÉTAPE : un seul gros bouton ===== -->
     <div id="livraison" class="rounded-2xl border-2 p-4 shadow-sm {{ 'border-purple-400 bg-purple-50' if c.statut in ['nouvelle', 'confirmee', 'echec', 'en_livraison'] else 'border-gray-200 bg-white' }}">
         {% if c.statut == 'annulee' %}
@@ -106,32 +137,45 @@
             <button type="submit" class="w-full bg-orange-500 text-white py-3.5 rounded-xl font-bold text-lg hover:bg-orange-600"><i class="fas fa-bullhorn mr-1"></i> Proposer aux livreurs disponibles</button>
         </form>
         {% endif %}
-        {% if livreurs %}
-        <form method="POST" action="{{ url_for('boutique.attribuer_livreur', commande_id=c.id) }}" class="mt-3 flex flex-col sm:flex-row gap-2"
+        <form method="POST" action="{{ url_for('boutique.attribuer_livreur', commande_id=c.id) }}" class="mt-3 space-y-2"
               data-question="{{ ('Relancer la livraison n°' ~ c.numero ~ ' ?') if c.statut == 'echec' else ('Confier la commande n°' ~ c.numero ~ ' de ' ~ c.client_nom ~ ' à ce livreur ?') }}"
-              onsubmit="return confirm(this.dataset.question + '\n\nLivreur : ' + this.livreur_id.selectedOptions[0].dataset.nom)">
-            <select name="livreur_id" required class="flex-1 border border-gray-300 px-3 py-2.5 bg-white">
-                <option value="" data-nom="">Ou choisir moi-même le livreur…</option>
-                {% for l in livreurs %}
-                <option value="{{ l.id }}" data-nom="{{ l.nom }}" {{ 'selected' if livreur_propose == l.id }}>🛵 {{ l.nom }}{% if c.zone and c.zone.livreur_id == l.id %} · livreur de la zone{% endif %}{% if not l.disponible %} · en pause{% endif %}</option>
-                {% endfor %}
-            </select>
-            <button type="submit" class="bg-white border-2 border-purple-300 text-purple-700 px-5 py-2.5 rounded-xl font-semibold">
-                {% if c.statut == 'echec' %}<i class="fas fa-rotate-right mr-1"></i> Relancer la livraison{% else %}<i class="fas fa-motorcycle mr-1"></i> Confier à ce livreur{% endif %}</button>
+              onsubmit="const o = this.livreur_id.selectedOptions[0]; return confirm(this.dataset.question + '\n\nLivreur : ' + (o.value === 'nouveau_externe' ? this.externe_nom.value : o.dataset.nom))">
+            <div class="flex flex-col sm:flex-row gap-2">
+                <select name="livreur_id" required class="flex-1 border border-gray-300 px-3 py-2.5 bg-white"
+                        onchange="this.form.querySelector('.bloc-externe').classList.toggle('hidden', this.value !== 'nouveau_externe'); this.form.externe_nom.required = this.value === 'nouveau_externe'">
+                    <option value="" data-nom="">Ou choisir moi-même le livreur…</option>
+                    {% set internes = livreurs|rejectattr('externe')|list %}{% set externes = livreurs|selectattr('externe')|list %}
+                    {% if internes %}<optgroup label="Livreurs avec l'application">
+                        {% for l in internes %}<option value="{{ l.id }}" data-nom="{{ l.nom }}" {{ 'selected' if livreur_propose == l.id }}>🛵 {{ l.nom }}{% if c.zone and c.zone.livreur_id == l.id %} · livreur de la zone{% endif %}{% if not l.disponible %} · en pause{% endif %}</option>{% endfor %}
+                    </optgroup>{% endif %}
+                    <optgroup label="Livreurs externes (gérés par la boutique)">
+                        {% for l in externes %}<option value="{{ l.id }}" data-nom="{{ l.nom }}" {{ 'selected' if livreur_propose == l.id }}>🚕 {{ l.nom }}{% if l.telephone %} · {{ l.telephone }}{% endif %}</option>{% endfor %}
+                        <option value="nouveau_externe" data-nom="">➕ Nouveau livreur externe…</option>
+                    </optgroup>
+                </select>
+                <button type="submit" class="bg-white border-2 border-purple-300 text-purple-700 px-5 py-2.5 rounded-xl font-semibold">
+                    {% if c.statut == 'echec' %}<i class="fas fa-rotate-right mr-1"></i> Relancer la livraison{% else %}<i class="fas fa-motorcycle mr-1"></i> Confier à ce livreur{% endif %}</button>
+            </div>
+            <div class="bloc-externe hidden grid grid-cols-1 sm:grid-cols-2 gap-2 bg-white border border-gray-200 rounded-xl p-2">
+                <input type="text" name="externe_nom" maxlength="100" placeholder="Nom du livreur externe (ex : taxi-moto Koffi)" class="border border-gray-300 rounded-lg px-3 py-2 text-sm">
+                <input type="tel" name="externe_telephone" maxlength="50" placeholder="Téléphone (facultatif)" class="border border-gray-300 rounded-lg px-3 py-2 text-sm">
+                <p class="sm:col-span-2 text-xs text-gray-500">Un livreur externe n'a pas l'application : c'est vous qui marquez la livraison ici. Il est enregistré pour les prochaines fois.</p>
+            </div>
         </form>
-        {% else %}
-        <p class="text-sm text-gray-600 mt-2">Aucun livreur enregistré. <a href="{{ url_for('boutique.livreurs') }}" class="text-purple-700 font-semibold underline">Ajouter un livreur</a></p>
-        {% endif %}
 
         {% elif c.statut == 'en_livraison' %}
         <p class="text-xs font-bold uppercase tracking-wide text-purple-700">Étape 3 sur 3 — En livraison</p>
         <p class="font-semibold text-gray-900 mt-1">🛵 {{ c.livreur.nom }} · {{ c.livreur.telephone }}
             {% if c.date_arrivee %}<span class="block text-sm text-green-700"><i class="fas fa-location-dot"></i> arrivé chez le client à {{ c.date_arrivee.strftime('%H:%M') }}</span>{% endif %}</p>
-        <p class="text-xs text-gray-600 mt-1">Le livreur marque « Livrée » depuis son téléphone. Vous pouvez aussi le faire ici :</p>
+        {% if c.livreur.externe %}
+        <p class="text-xs text-gray-600 mt-1">🚕 Livreur externe (sans application) : <strong>c'est vous qui marquez la livraison</strong> quand il revient.</p>
+        {% else %}
+        <p class="text-xs text-gray-600 mt-1">Le livreur marque « Livrée » depuis son téléphone (avec la photo du colis). Vous pouvez aussi le faire ici :</p>
+        {% endif %}
         <form method="POST" action="{{ url_for('boutique.changer_statut_commande', commande_id=c.id) }}" class="mt-3"
               data-question="Confirmer : {{ c.livreur.nom }} a livré la commande n°{{ c.numero }} et a l'argent (à remettre à la caisse) ?"
               onsubmit="return confirm(this.dataset.question)">
-            <button type="submit" name="statut" value="livree" class="w-full bg-green-600 text-white py-3.5 rounded-xl font-bold text-lg hover:bg-green-700">✅ Livrée par {{ c.livreur.nom }}</button>
+            <button type="submit" name="statut" value="livree" class="w-full bg-green-600 text-white py-3.5 rounded-xl font-bold text-lg hover:bg-green-700">✅ Livrée par {{ c.livreur.nom }}{% if c.livreur.externe %} <span class="block text-xs font-normal">il vous remettra l'argent</span>{% endif %}</button>
         </form>
         <form method="POST" action="{{ url_for('boutique.changer_statut_commande', commande_id=c.id) }}" class="mt-2"
               data-question="Confirmer : la boutique a remis elle-même la commande n°{{ c.numero }} et encaissé l'argent ?"

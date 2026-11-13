@@ -103,7 +103,14 @@
         {% if commande.remise %}<div class="flex justify-between py-1 text-green-700"><span>Code {{ commande.code_promo }}</span><span>-{{ fcfa(commande.remise) }}</span></div>{% endif %}
         {% if commande.frais_livraison %}<div class="flex justify-between py-1 text-gray-600"><span>Livraison{% if commande.zone %} ({{ commande.zone.nom }}){% endif %}</span><span>{{ fcfa(commande.frais_livraison) }}</span></div>{% endif %}
         <div class="flex justify-between pt-2 mt-1 border-t font-bold text-base"><span>{{ 'À payer à la boutique' if commande.est_retrait else 'À payer à la livraison' }}</span><span>{{ fcfa(commande.total) }}</span></div>
-        <p class="text-gray-500 mt-3"><i class="fas fa-location-dot mr-1"></i> {{ commande.client_adresse }}</p>
+        <div class="mt-3 pt-3 border-t text-gray-600 space-y-0.5">
+            <p class="text-xs font-bold uppercase tracking-wide text-gray-400">Commande au nom de</p>
+            <p><i class="fas fa-user mr-1"></i> <strong class="text-gray-900">{{ commande.client_nom }}</strong></p>
+            <p><i class="fas fa-phone mr-1"></i> {{ commande.client_telephone }}</p>
+            <p><i class="fas fa-location-dot mr-1"></i> {{ commande.client_adresse }}</p>
+            {% if commande.creneau %}<p><i class="fas fa-clock mr-1"></i> {{ commande.creneau }}</p>{% endif %}
+            {% if commande.instructions %}<p><i class="fas fa-pen mr-1"></i> {{ commande.instructions }}</p>{% endif %}
+        </div>
     </div>
 
     <a href="{{ url_for('client.discussion_client', code=commande.code_suivi) }}"

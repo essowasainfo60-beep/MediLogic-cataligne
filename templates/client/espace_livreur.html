@@ -167,13 +167,13 @@
             </div>
             <form method="POST" enctype="multipart/form-data" action="{{ url_for('client.espace_livreur_livree', code=livreur.code_acces, commande_id=c.id) }}" class="px-4 pb-4"
                   data-question="Confirmer : la commande n°{{ c.numero }} est livrée à {{ c.client_nom }} et {{ fcfa(c.total) }} encaissés ?"
-                  onsubmit="return confirm(this.dataset.question)">
-                <label class="flex items-center justify-center gap-2 mb-2 py-2.5 rounded-xl border-2 border-dashed border-gray-300 text-gray-600 text-sm cursor-pointer">
-                    <i class="fas fa-camera"></i> <span class="photo-libelle">Photo de preuve (colis remis)</span>
+                  onsubmit="if (!this.photo.files.length) { alert('Prenez d\'abord la photo du colis remis au client (obligatoire).'); this.querySelector('label').classList.add('border-red-500', 'text-red-600'); return false; } return confirm(this.dataset.question)">
+                <label class="flex items-center justify-center gap-2 mb-2 py-3 rounded-xl border-2 border-dashed border-orange-400 bg-orange-50 text-orange-800 text-sm font-semibold cursor-pointer">
+                    <i class="fas fa-camera"></i> <span class="photo-libelle">1. Photo du colis remis (obligatoire)</span>
                     <input type="file" name="photo" accept="image/*" capture="environment" class="hidden"
-                           onchange="this.previousElementSibling.textContent = this.files.length ? '✓ Photo prise' : 'Photo de preuve (colis remis)'; this.parentElement.classList.toggle('border-green-500', !!this.files.length)">
+                           onchange="this.previousElementSibling.textContent = this.files.length ? '✓ Photo prise' : '1. Photo du colis remis (obligatoire)'; this.parentElement.classList.toggle('border-green-500', !!this.files.length); this.parentElement.classList.remove('border-red-500', 'text-red-600')">
                 </label>
-                <button type="submit" class="w-full bg-green-600 text-white py-3.5 rounded-xl text-lg font-bold hover:bg-green-700">✅ Livrée</button>
+                <button type="submit" class="w-full bg-green-600 text-white py-3.5 rounded-xl text-lg font-bold hover:bg-green-700">2. ✅ Livrée</button>
             </form>
             <details class="px-4 pb-4">
                 <summary class="cursor-pointer text-center text-sm text-red-600 font-semibold py-1">✖ Pas pu livrer ? Signaler un échec</summary>

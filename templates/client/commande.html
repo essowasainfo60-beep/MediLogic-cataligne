@@ -55,15 +55,19 @@
             <form method="POST" id="commandeForm">
                 <input type="hidden" name="code_promo" id="codePromo">
                 <div class="space-y-4">
+                    {% if client is defined and client and client.nom %}
+                    <p class="text-sm bg-purple-50 text-purple-800 rounded-lg px-3 py-2"><i class="fas fa-user-check mr-1"></i>
+                        Vos informations de la dernière commande sont déjà remplies, <strong>{{ client.nom }}</strong>. Modifiez-les si besoin.</p>
+                    {% endif %}
                     <div>
                         <label class="block text-gray-700 text-sm font-bold mb-2">Nom complet *</label>
-                        <input type="text" name="client_nom" required 
+                        <input type="text" name="client_nom" required value="{{ client.nom if client is defined and client else '' }}"
                                class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 transition">
                     </div>
 
                     <div>
                         <label class="block text-gray-700 text-sm font-bold mb-2">Numéro WhatsApp *</label>
-                        <input type="tel" name="client_telephone" required 
+                        <input type="tel" name="client_telephone" required value="{{ client.telephone if client is defined and client else '' }}"
                                class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 transition"
                                placeholder="+228 XX XX XX XX">
                         <p class="text-xs text-gray-500 mt-1">Format international recommandé</p>
@@ -91,7 +95,7 @@
                         <label class="block text-gray-700 text-sm font-bold mb-2">Adresse de livraison *</label>
                         <textarea name="client_adresse" id="adresseClient" rows="2" required oninput="detecterZone()" 
                                   class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 transition"
-                                  placeholder="Quartier d'abord, puis rue et repère (ex : Agoè Télessou, près de la pharmacie)"></textarea>
+                                  placeholder="Quartier d'abord, puis rue et repère (ex : Agoè Télessou, près de la pharmacie)">{{ client.adresse if client is defined and client else '' }}</textarea>
                         {% if zones %}
                         <select name="zone_id" id="zoneClient" required onchange="majFrais(); verifierZone()" class="mt-2 w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500">
                             <option value="">Votre zone de livraison… *</option>

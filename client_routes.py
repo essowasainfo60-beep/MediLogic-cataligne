@@ -249,7 +249,7 @@ def valider_commande():
     total = sum(item['prix'] * item['quantite'] for item in panier.values())
 
     if request.method == 'GET':
-        return render_template('client/commande.html', panier=panier, total=total, boutique=boutique,
+        return render_template('client/commande.html', panier=panier, total=total, boutique=boutique, client=client_connu(),
                                zones=[z for z in boutique.zones if z.active and not z.est_retrait],
                                index_quartiers=index_quartiers([z for z in boutique.zones if z.active and not z.est_retrait]),
                                creneaux=creneaux_disponibles() + [CRENEAU_AUTRE])
@@ -267,6 +267,8 @@ def valider_commande():
     if not client_nom or not client_telephone or not client_adresse or erreur_creneau:
         flash(erreur_creneau or 'Nom, téléphone et adresse sont obligatoires', 'danger')
         return render_template('client/commande.html', panier=panier, total=total, boutique=boutique,
+                               client={'nom': client_nom, 'telephone': client_telephone,
+                                       'adresse': '' if client_adresse.startswith('Retrait en boutique') else client_adresse},
                                zones=[z for z in boutique.zones if z.active and not z.est_retrait],
                                index_quartiers=index_quartiers([z for z in boutique.zones if z.active and not z.est_retrait]),
                                creneaux=creneaux_disponibles() + [CRENEAU_AUTRE])
@@ -338,6 +340,12 @@ def livraison(code):
         return render_template('client/lien_invalide.html'), 404
 
     if request.method == 'POST' and commande.statut == 'en_livraison':
+        photo = request.files.get('photo')
+        url_photo = enregistrer_photo(photo, commande.boutique_id) if photo and photo.filename else None
+        if not url_photo:
+            flash("Prenez d'abord la photo du colis remis au client, puis touchez « Commande livrée ».", 'danger')
+            return redirect(url_for('client.livraison', code=code))
+        commande.photo_preuve = url_photo
         stock.changer_statut(commande, 'livree')
         db.session.commit()
 
@@ -389,8 +397,11 @@ def espace_livreur_livree(code, commande_id):
     commande = Commande.query.filter_by(id=commande_id, livreur_id=livreur.id).first_or_404()
     if commande.statut == 'en_livraison':
         photo = request.files.get('photo')
-        if photo and photo.filename:
-            commande.photo_preuve = enregistrer_photo(photo, commande.boutique_id)
+        url_photo = enregistrer_photo(photo, commande.boutique_id) if photo and photo.filename else None
+        if not url_photo:
+            flash(f"Prenez d'abord la photo du colis remis au client (commande n°{commande.numero}), puis touchez « Livrée ».", 'danger')
+            return redirect(url_for('client.espace_livreur', code=code))
+        commande.photo_preuve = url_photo
         stock.changer_statut(commande, 'livree')
         db.session.commit()
         flash(f"Commande n°{commande.numero} livrée à {commande.date_livraison.strftime('%H:%M')}"
@@ -734,6 +745,21 @@ def memoriser_commande(commande):
         return reponse
 
 
+def client_connu(boutique=None):
+    """Nom, téléphone et adresse de la dernière commande passée sur ce téléphone
+    (pour préremplir le formulaire et les rappeler au client)."""
+    codes = codes_memorises()
+    if not codes:
+        return {}
+    q = Commande.query.filter(Commande.code_suivi.in_(codes))
+    derniere = q.order_by(Commande.date_commande.desc()).first()
+    if not derniere:
+        return {}
+    livree = q.filter(~Commande.client_adresse.like('Retrait en boutique%')).order_by(Commande.date_commande.desc()).first()
+    return {'nom': derniere.client_nom, 'telephone': derniere.client_telephone,
+            'adresse': livree.client_adresse if livree else ''}
+
+
 def commandes_du_telephone(boutique):
     codes = codes_memorises()
     if not codes:
@@ -761,5 +787,6 @@ def mes_commandes(code):
         return redirect(url_for('client.mes_commandes', code=code))
 
     commandes = commandes_du_telephone(boutique)
-    return render_template('client/mes_commandes.html', boutique=boutique, commandes=commandes, fcfa=msg.fcfa)
+    return render_template('client/mes_commandes.html', boutique=boutique, commandes=commandes, fcfa=msg.fcfa,
+                           client=client_connu())
 

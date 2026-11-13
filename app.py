@@ -187,7 +187,8 @@ def mettre_a_jour_schema():
             conn.execute(text("ALTER TABLE mouvements_caisse ADD COLUMN par VARCHAR(120)"))
         colonnes_livreurs = {c['name'] for c in inspecteur.get_columns('livreurs')}
         for nom, definition in [('position_lat', 'FLOAT'), ('position_lng', 'FLOAT'), ('position_at', 'TIMESTAMP'),
-                                ('disponible', 'BOOLEAN NOT NULL DEFAULT TRUE')]:
+                                ('disponible', 'BOOLEAN NOT NULL DEFAULT TRUE'),
+                                ('externe', 'BOOLEAN NOT NULL DEFAULT FALSE')]:
             if nom not in colonnes_livreurs:
                 conn.execute(text(f"ALTER TABLE livreurs ADD COLUMN {nom} {definition}"))
         if 'code_acces' not in {c['name'] for c in inspecteur.get_columns('livreurs')}:

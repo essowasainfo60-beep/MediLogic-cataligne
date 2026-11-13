@@ -129,7 +129,7 @@ def encaisser_abonnement(boutique_id):
     """L'administrateur enregistre lui-même un paiement reçu (espèces, dépôt vérifié…)."""
     boutique = Boutique.query.get_or_404(boutique_id)
     mode = request.form.get('mode') or 'especes'
-    paiement, erreur = abonnement.enregistrer(boutique, mode, request.form.get('reference'), date.today(),
+    paiement, erreur = abonnement.enregistrer(boutique, mode, request.form.get('reference'), abonnement.date.today(),
                                               par='Administrateur LivraPlus')
     if erreur:
         flash(f'{boutique.nom_boutique} : {erreur}', 'danger')

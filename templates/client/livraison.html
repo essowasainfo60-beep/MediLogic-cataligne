@@ -62,7 +62,13 @@
 
             <!-- Action -->
             {% if commande.statut == 'en_livraison' %}
-            <form method="POST" onsubmit="return confirm('Confirmer que la commande est livrée et payée ?')">
+            <form method="POST" enctype="multipart/form-data"
+                  onsubmit="if (!this.photo.files.length) { alert('Prenez d\'abord la photo du colis remis au client (obligatoire).'); return false; } return confirm('Confirmer que la commande est livrée et payée ?')">
+                <label class="flex items-center justify-center gap-2 mb-2 py-3 rounded-xl border-2 border-dashed border-orange-400 bg-orange-50 text-orange-800 text-sm font-semibold cursor-pointer">
+                    <i class="fas fa-camera"></i> <span>1. Photo du colis remis (obligatoire)</span>
+                    <input type="file" name="photo" accept="image/*" capture="environment" class="hidden"
+                           onchange="this.previousElementSibling.textContent = this.files.length ? '✓ Photo prise' : '1. Photo du colis remis (obligatoire)'">
+                </label>
                 <button type="submit" class="w-full bg-green-600 text-white py-4 rounded-xl text-lg font-bold hover:bg-green-700">
                     ✅ Commande livrée
                 </button>
