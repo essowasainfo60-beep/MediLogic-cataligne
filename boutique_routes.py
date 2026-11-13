@@ -814,6 +814,21 @@ def commande_details(commande_id):
                            lien_suivi=msg.lien_suivi(commande),
                            gboutik_url=current_app.config['GBOUTIK_URL'])
 
+def appliquer_zone_frais(commande, form):
+    """Zone et frais de livraison choisis au moment de confier la course
+    (proposés selon la zone, modifiables). Ne valide pas la transaction."""
+    if 'frais_livraison' not in form or commande.est_retrait or commande.statut in ('livree', 'retournee', 'annulee'):
+        return
+    zone = Zone.query.filter_by(id=form.get('zone_id', type=int), boutique_id=commande.boutique_id).first()
+    if zone and not zone.est_retrait:
+        commande.zone = zone
+    frais = lire_prix(form.get('frais_livraison'))
+    if frais is None:
+        frais = commande.zone.frais if commande.zone else (commande.frais_livraison or 0)
+    commande.frais_livraison = frais
+    commande.recalculer_total()
+
+
 @boutique_bp.route('/commande/<int:commande_id>/frais', methods=['POST'])
 @login_required
 def changer_frais_commande(commande_id):
@@ -957,6 +972,7 @@ def valider_commande_boutique(commande_id):
     if not commande:
         return redirect(url_for('boutique.commandes'))
     if commande.statut == 'nouvelle':
+        appliquer_zone_frais(commande, request.form)
         stock.changer_statut(commande, 'confirmee')
         commande.confirmee_par = qui()
         commande.lu = True
@@ -988,6 +1004,7 @@ def proposer_aux_livreurs(commande_id):
         db.session.commit()
         flash('Proposition retirée : choisissez vous-même un livreur.', 'warning')
         return redirect(url_for('boutique.commande_details', commande_id=commande.id))
+    appliquer_zone_frais(commande, request.form)
     commande.proposee_at = datetime.utcnow()
     commande.lu = True
     db.session.commit()
@@ -1096,6 +1113,7 @@ def attribuer_livreur(commande_id):
 
     deja_en_route = commande.statut == 'en_livraison'
     relance = commande.statut == 'echec'
+    appliquer_zone_frais(commande, request.form)
     confier_au_livreur(commande, livreur)
     heure = (request.form.get('heure_depart') or '').strip()
     if heure:
@@ -1116,6 +1134,7 @@ def attribuer_livreur(commande_id):
     flash((f'Commande n°{commande.numero} confiée à {livreur.nom}.' if deja_en_route
            else f'Livraison n°{commande.numero} relancée avec {livreur.nom} (tentative {commande.tentatives}).' if relance
            else f'Commande n°{commande.numero} confirmée et en livraison avec {livreur.nom}.')
+          + f' Livraison {msg.fcfa(commande.frais_livraison or 0)}, à encaisser {msg.fcfa(commande.total)}.'
           + ' Étape suivante : prévenez le client et envoyez la course au livreur (boutons WhatsApp).', 'success')
     return redirect(url_for('boutique.commande_details', commande_id=commande.id) + '#livraison')
 

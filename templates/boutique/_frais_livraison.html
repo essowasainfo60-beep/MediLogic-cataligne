@@ -1,0 +1,65 @@
+{# Zone + frais de livraison, proposés selon la zone et modifiables, au moment de confier la course.
+   Les formulaires « .avec-frais » de la page reçoivent ces deux valeurs. #}
+{% if not c.est_retrait and c.statut in ['nouvelle', 'confirmee', 'echec'] %}
+{% set zone_frais = '%.0f'|format(c.zone.frais or 0) if c.zone and not c.zone.est_retrait else '' %}
+<div id="blocFrais" class="mt-3 rounded-2xl bg-white border-2 border-green-200 p-3">
+    <p class="font-bold text-gray-900">💵 Frais de livraison <span class="font-normal text-gray-500 text-xs">(livreur interne ou externe)</span></p>
+    <div class="grid grid-cols-2 gap-2 mt-2">
+        <label class="text-xs text-gray-600">Zone
+            <select id="fraisZone" class="w-full border border-gray-300 rounded-lg px-2 py-2.5 text-sm mt-0.5 bg-white text-gray-900">
+                <option value="" data-frais="">— Non précisée —</option>
+                {% for z in zones if not z.est_retrait %}
+                <option value="{{ z.id }}" data-frais="{{ '%.0f'|format(z.frais or 0) }}" {{ 'selected' if c.zone_id == z.id }}>{{ z.nom }} · {{ fcfa(z.frais or 0) }}</option>
+                {% endfor %}
+            </select>
+        </label>
+        <label class="text-xs text-gray-600">Frais (modifiable)
+            <div class="relative mt-0.5">
+                <input id="fraisMontant" type="number" min="0" step="50" inputmode="numeric" value="{{ '%.0f'|format(c.frais_livraison or 0) }}"
+                       class="w-full border-2 border-green-400 rounded-lg pl-2 pr-14 py-2 text-right font-bold text-gray-900">
+                <span class="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-gray-500">FCFA</span>
+            </div>
+        </label>
+    </div>
+    <p id="fraisInfo" class="text-xs mt-1.5"></p>
+    <p class="text-sm mt-1 bg-green-50 rounded-lg px-2 py-1.5">Total à encaisser chez le client :
+        <b id="fraisTotal" class="text-green-800"></b> <span class="text-xs text-gray-500">(articles {{ fcfa(c.net_articles) }} + livraison)</span></p>
+</div>
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    const NET = {{ c.net_articles|round(0)|int }};
+    const zone = document.getElementById('fraisZone');
+    const montant = document.getElementById('fraisMontant');
+    const fcfa = (v) => Math.round(v).toLocaleString('fr-FR') + ' FCFA';
+    const formulaires = () => document.querySelectorAll('#livraison form.avec-frais');
+    // Chaque formulaire « Confier / Proposer / Valider » emporte la zone et les frais choisis
+    formulaires().forEach((f) => {
+        ['zone_id', 'frais_livraison'].forEach((n) => {
+            const i = document.createElement('input'); i.type = 'hidden'; i.name = n; f.appendChild(i);
+        });
+        if (f.dataset.question) f.dataset.base = f.dataset.question;
+    });
+    function maj() {
+        const frais = Math.max(0, parseFloat(montant.value) || 0);
+        const tarif = zone.selectedOptions[0].dataset.frais;
+        const info = document.getElementById('fraisInfo');
+        if (tarif === '') { info.className = 'text-xs mt-1.5 text-orange-700'; info.textContent = 'Choisissez la zone : ses frais seront proposés.'; }
+        else if (+tarif === frais) { info.className = 'text-xs mt-1.5 text-gray-500'; info.textContent = '✓ Tarif de la zone. Vous pouvez le modifier pour cette commande.'; }
+        else { info.className = 'text-xs mt-1.5 text-purple-700 font-semibold'; info.textContent = 'Frais modifiés pour cette commande (tarif de la zone : ' + fcfa(+tarif) + ').'; }
+        document.getElementById('fraisTotal').textContent = fcfa(NET + frais);
+        formulaires().forEach((f) => {
+            f.elements.zone_id.value = zone.value;
+            f.elements.frais_livraison.value = montant.value === '' ? '' : frais;
+            if (f.dataset.base) f.dataset.question = f.dataset.base + '\n\nFrais de livraison : ' + fcfa(frais) + '\nÀ encaisser chez le client : ' + fcfa(NET + frais);
+        });
+    }
+    zone.addEventListener('change', () => {
+        const tarif = zone.selectedOptions[0].dataset.frais;
+        if (tarif !== '') montant.value = tarif;   // les frais de la zone sont proposés
+        maj();
+    });
+    montant.addEventListener('input', maj);
+    maj();
+});
+</script>
+{% endif %}
