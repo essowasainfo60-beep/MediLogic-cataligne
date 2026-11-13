@@ -178,8 +178,8 @@
                 {% for l in externes %}
                 <label class="flex items-center gap-2 bg-white rounded-xl border border-amber-200 px-3 py-2 cursor-pointer">
                     <input type="radio" name="livreur_id" value="{{ l.id }}" data-nom="{{ l.nom }}" class="h-4 w-4" {{ 'checked' if livreur_propose == l.id }}
-                           onchange="majExterne(this.form)">
-                    <span class="font-semibold">{{ l.nom }}</span>{% if l.telephone %}<span class="text-xs text-gray-500">{{ l.telephone }}</span>{% endif %}
+                           data-sans-tel="{{ '' if (l.telephone or '')|select('in', '0123456789')|list|length >= 8 else '1' }}" onchange="majExterne(this.form)">
+                    <span class="font-semibold">{{ l.nom }}</span>{% if l.telephone %}<span class="text-xs text-gray-500">{{ l.telephone }}</span>{% else %}<span class="text-xs text-red-600">numéro manquant</span>{% endif %}
                 </label>
                 {% endfor %}
                 <label class="flex items-center gap-2 bg-white rounded-xl border border-dashed border-amber-300 px-3 py-2 cursor-pointer">
@@ -187,10 +187,15 @@
                            onchange="majExterne(this.form)">
                     <span class="font-semibold">➕ {{ 'Un nouveau livreur externe' if externes else 'Nom du livreur externe' }}</span>
                 </label>
+                <div class="bloc-tel-existant hidden">
+                    <input type="tel" name="externe_tel_existant" maxlength="50" placeholder="Son numéro de téléphone *" class="w-full border border-red-300 rounded-lg px-3 py-2 text-sm">
+                    <p class="text-xs text-gray-500 mt-1">Ce livreur n'a pas encore de numéro : indiquez-le, il sera gardé.</p>
+                </div>
                 <div class="bloc-externe {{ '' if not externes else 'hidden' }} grid grid-cols-1 sm:grid-cols-2 gap-2">
-                    <input type="text" name="externe_nom" maxlength="100" placeholder="Nom (ex : taxi-moto Koffi)" {{ 'required' if not externes }}
+                    <input type="text" name="externe_nom" maxlength="100" placeholder="Nom * (ex : taxi-moto Koffi)" {{ 'required' if not externes }}
                            class="border border-gray-300 rounded-lg px-3 py-2 text-sm">
-                    <input type="tel" name="externe_telephone" maxlength="50" placeholder="Téléphone (facultatif)" class="border border-gray-300 rounded-lg px-3 py-2 text-sm">
+                    <input type="tel" name="externe_telephone" maxlength="50" placeholder="Téléphone * (ex : +228 90 00 00 00)" {{ 'required' if not externes }}
+                           pattern="(?:\D*\d){8,}.*" title="Au moins 8 chiffres" class="border border-gray-300 rounded-lg px-3 py-2 text-sm">
                     <p class="sm:col-span-2 text-xs text-gray-500">Il sera gardé pour les prochaines fois.</p>
                 </div>
             </div>
@@ -202,10 +207,15 @@
         </form>
         <script>
         function majExterne(form) {
-            const nouveau = form.querySelector('input[name=livreur_id][value=nouveau_externe]').checked;
+            const choix = form.querySelector('input[name=livreur_id]:checked');
+            const nouveau = choix && choix.value === 'nouveau_externe';
+            const sansTel = choix && choix.dataset.sansTel === '1';
             form.querySelector('.bloc-externe').classList.toggle('hidden', !nouveau);
-            form.externe_nom.required = nouveau;
+            form.externe_nom.required = form.externe_telephone.required = nouveau;
+            form.querySelector('.bloc-tel-existant').classList.toggle('hidden', !sansTel);
+            form.externe_tel_existant.required = sansTel;
         }
+        document.querySelectorAll('input[name=externe_tel_existant]').forEach((i) => majExterne(i.form));
         </script>
 
         {% elif c.statut == 'en_livraison' %}

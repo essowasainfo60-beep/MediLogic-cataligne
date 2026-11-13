@@ -39,7 +39,7 @@ CAISSE = {'page_caisse', 'caisse_versement', 'caisse_paiement_livreur', 'caisse_
           'abonnement_payer'}
 GESTION = {
     'inventaire', 'entree_stock', 'mouvements_stock', 'ajouter_article', 'modifier_article', 'supprimer_photo',
-    'photo_principale', 'archiver_article', 'restaurer_article', 'articles_archives', 'livreurs', 'basculer_livreur',
+    'photo_principale', 'archiver_article', 'restaurer_article', 'articles_archives', 'livreurs', 'basculer_livreur', 'modifier_livreur',
     'ajouter_zone', 'modifier_zone', 'zones_modele', 'envoyer_espace_livreur', 'nouveau_lien_livreur',
     'statistiques', 'historique', 'message_statut', 'historique_csv', 'retour_commande', 'codes_promo', 'modifier_code_promo', 'regler_fidelite',
 }
@@ -976,16 +976,23 @@ def attribuer_livreur(commande_id):
     commande = commande_de_la_boutique(commande_id)
     if request.form.get('livreur_id') == 'nouveau_externe' and commande:
         nom = (request.form.get('externe_nom') or '').strip()[:100]
-        if not nom:
-            flash('Indiquez le nom du livreur externe', 'danger')
+        telephone = (request.form.get('externe_telephone') or '').strip()[:50]
+        if not nom or not telephone_valide(telephone):
+            flash('Indiquez le nom ET le numéro de téléphone du livreur externe', 'danger')
             return redirect(url_for('boutique.commande_details', commande_id=commande_id))
-        livreur = Livreur(boutique_id=current_user.id, nom=nom, externe=True,
-                          telephone=(request.form.get('externe_telephone') or '').strip()[:50])
+        livreur = Livreur(boutique_id=current_user.id, nom=nom, externe=True, telephone=telephone)
         db.session.add(livreur)
         db.session.flush()
     else:
         livreur = Livreur.query.filter_by(id=request.form.get('livreur_id', type=int),
                                           boutique_id=current_user.id, actif=True).first()
+        if livreur and livreur.externe and not telephone_valide(livreur.telephone):
+            # Ancien livreur externe enregistré sans numéro : on le complète maintenant
+            telephone = (request.form.get('externe_tel_existant') or '').strip()[:50]
+            if not telephone_valide(telephone):
+                flash(f'Indiquez le numéro de téléphone de {livreur.nom}', 'danger')
+                return redirect(url_for('boutique.commande_details', commande_id=commande_id))
+            livreur.telephone = telephone
     if not commande or not livreur:
         flash('Choisissez un livreur', 'danger')
         return redirect(url_for('boutique.commande_details', commande_id=commande_id))
@@ -1055,8 +1062,8 @@ def livreurs():
         nom = (request.form.get('nom') or '').strip()
         telephone = (request.form.get('telephone') or '').strip()
         externe = bool(request.form.get('externe'))
-        if not nom or (not externe and sum(c.isdigit() for c in telephone) < 8):
-            flash('Nom et numéro WhatsApp valides obligatoires (le numéro est facultatif pour un livreur externe)', 'danger')
+        if not nom or not telephone_valide(telephone):
+            flash('Nom et numéro de téléphone valides obligatoires', 'danger')
         else:
             db.session.add(Livreur(boutique_id=current_user.id, nom=nom, telephone=telephone, externe=externe))
             db.session.commit()
@@ -1070,6 +1077,25 @@ def livreurs():
     zones = Zone.query.filter_by(boutique_id=current_user.id).order_by(Zone.active.desc(), Zone.nom).all()
     return render_template('boutique/livreurs.html', livreurs=liste, en_cours=en_cours, zones=zones,
                            livreurs_actifs=[l for l in liste if l.actif])
+
+def telephone_valide(numero):
+    return sum(ch.isdigit() for ch in (numero or '')) >= 8
+
+
+@boutique_bp.route('/livreurs/<int:livreur_id>/modifier', methods=['POST'])
+@login_required
+def modifier_livreur(livreur_id):
+    livreur = Livreur.query.filter_by(id=livreur_id, boutique_id=current_user.id).first_or_404()
+    nom = (request.form.get('nom') or '').strip()[:100]
+    telephone = (request.form.get('telephone') or '').strip()[:50]
+    if not nom or not telephone_valide(telephone):
+        flash('Nom et numéro de téléphone valides obligatoires', 'danger')
+    else:
+        livreur.nom, livreur.telephone = nom, telephone
+        db.session.commit()
+        flash(f'{nom} : informations enregistrées', 'success')
+    return redirect(url_for('boutique.livreurs'))
+
 
 @boutique_bp.route('/livreurs/<int:livreur_id>/basculer', methods=['POST'])
 @login_required

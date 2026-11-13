@@ -31,7 +31,7 @@
     <div class="centre">
         <h1>{{ boutique.nom_boutique }}</h1>
         <h2>BON DE COURSE n°{{ c.numero }}</h2>
-        <p>Livreur : <b>{{ c.livreur.nom }}</b></p>
+        <p>Livreur : <b>{{ c.livreur.nom }}</b>{% if c.livreur.telephone %} · {{ c.livreur.telephone }}{% endif %}</p>
         <p>Départ : {{ (c.date_depart or c.date_commande).strftime('%d/%m/%Y à %H:%M') }}</p>
     </div>
     <div class="sep"></div>
