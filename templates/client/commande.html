@@ -120,6 +120,8 @@
                                 class="mt-2 w-full border-2 border-dashed border-green-400 text-green-700 py-2 rounded-lg hover:bg-green-50 transition text-sm font-semibold">
                             📍 Partager ma position (le livreur vous trouvera plus vite)
                         </button>
+                        <button type="button" id="btnCarte" onclick="placerSurCarte()"
+                                class="mt-1 w-full text-green-700 py-1.5 text-sm underline">🗺 ou placer ma maison sur la carte</button>
                         <p id="positionInfo" class="text-xs mt-1 hidden"></p>
                     </div>
 
@@ -270,40 +272,62 @@ async function appliquerCode() {
     else total.textContent = Math.round(+total.dataset.sousTotal - (+total.dataset.remise || 0)).toLocaleString('fr-FR') + ' FCFA';
 }
 
+</script>
+<script src="{{ url_for('static', filename='localisation.js') }}"></script>
+<script>
+function poserPosition(pos) {
+    document.getElementById('latitude').value = pos.lat.toFixed(6);
+    document.getElementById('longitude').value = pos.lng.toFixed(6);
+    document.getElementById('precision').value = Math.round(pos.precision);
+    const bouton = document.getElementById('btnPosition');
+    const info = document.getElementById('positionInfo');
+    bouton.disabled = false;
+    bouton.textContent = '✅ Position enregistrée';
+    bouton.className = 'mt-2 w-full border-2 border-green-500 bg-green-50 text-green-700 py-2 rounded-lg text-sm font-semibold';
+    document.getElementById('btnCarte').textContent = '🗺 Vérifier ou corriger sur la carte';
+    info.classList.remove('hidden');
+    info.className = 'text-xs mt-1 text-green-700';
+    info.textContent = pos.carte ? 'Position placée sur la carte. Le livreur verra votre maison.'
+                                 : 'Précision : environ ' + Math.round(pos.precision) + ' m';
+}
+function placerSurCarte() {
+    const lat = parseFloat(document.getElementById('latitude').value);
+    const lng = parseFloat(document.getElementById('longitude').value);
+    const depart = window._approx || (isNaN(lat) ? null : { lat: lat, lng: lng });
+    Localisation.surCarte(depart).then(poserPosition).catch(function (e) {
+        if (e && e.cause === 'annule') return;
+        const info = document.getElementById('positionInfo');
+        info.classList.remove('hidden');
+        info.className = 'text-xs mt-1 text-red-600';
+        info.textContent = "La carte n'a pas pu s'ouvrir (connexion internet ?). L'adresse suffira.";
+    });
+}
 function partagerPosition() {
     const info = document.getElementById('positionInfo');
     const bouton = document.getElementById('btnPosition');
     info.classList.remove('hidden');
-    if (!navigator.geolocation) {
-        info.className = 'text-xs mt-1 text-red-600';
-        info.textContent = "Votre téléphone ne permet pas de partager la position. L'adresse suffira.";
-        return;
-    }
+    info.className = 'text-xs mt-1 text-gray-600';
+    info.textContent = 'Autorisez la position si le téléphone le demande. Recherche du GPS (jusqu\'à 25 secondes)…';
     bouton.disabled = true;
     bouton.textContent = '📍 Recherche de votre position…';
-    navigator.geolocation.getCurrentPosition(function (pos) {
-        document.getElementById('latitude').value = pos.coords.latitude.toFixed(6);
-        document.getElementById('longitude').value = pos.coords.longitude.toFixed(6);
-        document.getElementById('precision').value = Math.round(pos.coords.accuracy);
-        if (pos.coords.accuracy > 500) {
-            // Localisation par le réseau (ordinateur, GPS coupé) : trop imprécise pour le livreur
+    Localisation.trouver().then(function (pos) {
+        if (pos.precision > 500) {
+            // Position seulement approximative : on propose de la préciser sur la carte
+            window._approx = pos;
             bouton.disabled = false;
-            bouton.textContent = '📍 Réessayer (activez le GPS du téléphone)';
+            bouton.textContent = '📍 Réessayer avec le GPS';
             info.className = 'text-xs mt-1 text-orange-700';
-            info.textContent = 'Position trop imprécise (à ' + (pos.coords.accuracy / 1000).toFixed(1).replace('.', ',') +
-                               ' km près) : elle ne sera pas utilisée. Votre adresse suffit.';
+            info.innerHTML = 'Position approximative (à ' + (pos.precision / 1000).toFixed(1).replace('.', ',') + ' km près). ' + Localisation.aide('imprecis');
+            placerSurCarte();
             return;
         }
-        bouton.textContent = '✅ Position enregistrée';
-        bouton.className = 'mt-2 w-full border-2 border-green-500 bg-green-50 text-green-700 py-2 rounded-lg text-sm font-semibold';
-        info.className = 'text-xs mt-1 text-green-700';
-        info.textContent = 'Précision : environ ' + Math.round(pos.coords.accuracy) + ' m';
-    }, function () {
+        poserPosition(pos);
+    }).catch(function (e) {
         bouton.disabled = false;
         bouton.textContent = '📍 Réessayer de partager ma position';
         info.className = 'text-xs mt-1 text-red-600';
-        info.textContent = "Position non autorisée. Ce n'est pas grave : l'adresse suffira.";
-    }, { enableHighAccuracy: true, timeout: 15000 });
+        info.innerHTML = Localisation.aide(e && e.cause);
+    });
 }
 
 document.getElementById('commandeForm').addEventListener('submit', function() {

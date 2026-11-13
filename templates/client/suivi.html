@@ -23,11 +23,14 @@
         {% endif %}
     </div>
 
+    {% include 'client/_joindre_position.html' %}
+
     {% if commande.statut == 'en_livraison' %}
     {% include '_carte.html' %}
+    <script src="{{ url_for('static', filename='localisation.js') }}"></script>
     <!-- Où est mon livreur ? -->
     <div class="bg-white rounded-2xl shadow-md overflow-hidden">
-        <div id="carteSuivi" class="h-64 {{ '' if position else 'hidden' }}"></div>
+        <div id="carteSuivi" class="h-64 hidden"></div>
         <div class="p-4 text-sm">
             <p id="infoLivreur" class="font-bold text-gray-900">
                 {% if position and position.distance_km is not none %}🛵 Votre livreur est à {{ position.distance_km|string|replace('.', ',') }} km · arrivée dans environ {{ position.arrivee_min }} min
@@ -35,6 +38,8 @@
                 {% else %}🛵 Votre commande est en route{% endif %}</p>
             <p id="detailLivreur" class="text-gray-500 mt-0.5">
                 {% if position %}Position de {{ position.heure }}{% else %}La carte apparaîtra dès que le livreur active son GPS.{% endif %}</p>
+            <button type="button" id="btnVoirCarte" class="mt-3 w-full bg-purple-50 text-purple-700 py-2.5 rounded-xl font-semibold {{ '' if position else 'hidden' }}">
+                🗺 Voir le livreur sur la carte</button>
             {% if commande.latitude is none %}
             <button type="button" id="btnMaPosition" class="mt-3 w-full border-2 border-green-500 text-green-700 py-2.5 rounded-xl font-semibold hover:bg-green-50">
                 📍 Partager ma position pour voir la distance
@@ -141,31 +146,44 @@
     let carte = null, marqueurLivreur = null, marqueurClient = null, cadree = false;
     window.majPositionLivreur = function (s) {
         if (!s) return;
+        window._dernierePosition = s;
+        document.getElementById('btnVoirCarte').classList.remove('hidden');
         const bloc = document.getElementById('carteSuivi');
-        bloc.classList.remove('hidden');
-        if (!carte) carte = Carte.creer(bloc, [s.lat, s.lng], 14);
-        if (!marqueurLivreur) marqueurLivreur = L.marker([s.lat, s.lng], { icon: Carte.livreur() }).addTo(carte).bindPopup(Carte.echapper(s.nom));
-        else marqueurLivreur.setLatLng([s.lat, s.lng]);
-        if (s.destination && !marqueurClient) { marqueurClient = L.marker([s.destination.lat, s.destination.lng], { icon: Carte.client() }).addTo(carte).bindPopup('Vous'); cadree = false; }
-        if (!cadree) { Carte.cadrer(carte, [[s.lat, s.lng], s.destination ? [s.destination.lat, s.destination.lng] : null]); cadree = true; }
         document.getElementById('infoLivreur').textContent = s.distance_km != null
             ? '🛵 Votre livreur est à ' + String(s.distance_km).replace('.', ',') + ' km · arrivée dans environ ' + s.arrivee_min + ' min'
             : '🛵 Votre livreur est en route';
         document.getElementById('detailLivreur').textContent = 'Position de ' + s.heure + ' (' + Carte.ilYa(s.il_y_a_s) + ')'
             + (s.il_y_a_s > 180 ? ' — signal du livreur interrompu, la carte se mettra à jour dès son retour.' : '');
+        if (bloc.classList.contains('hidden')) return;     // carte fermée : seule la distance est mise à jour
+        if (!carte) carte = Carte.creer(bloc, [s.lat, s.lng], 14);
+        if (!marqueurLivreur) marqueurLivreur = L.marker([s.lat, s.lng], { icon: Carte.livreur() }).addTo(carte).bindPopup(Carte.echapper(s.nom));
+        else marqueurLivreur.setLatLng([s.lat, s.lng]);
+        if (s.destination && !marqueurClient) { marqueurClient = L.marker([s.destination.lat, s.destination.lng], { icon: Carte.client() }).addTo(carte).bindPopup('Vous'); cadree = false; }
+        if (!cadree) { Carte.cadrer(carte, [[s.lat, s.lng], s.destination ? [s.destination.lat, s.destination.lng] : null]); cadree = true; }
     };
     window.majPositionLivreur({{ position|tojson }});
+    document.getElementById('btnVoirCarte').addEventListener('click', function () {
+        const bloc = document.getElementById('carteSuivi');
+        const ouvrir = bloc.classList.contains('hidden');
+        bloc.classList.toggle('hidden', !ouvrir);
+        this.textContent = ouvrir ? '✕ Fermer la carte' : '🗺 Voir le livreur sur la carte';
+        if (ouvrir && window._dernierePosition) { window.majPositionLivreur(window._dernierePosition); if (carte) carte.invalidateSize(); }
+    });
     const bouton = document.getElementById('btnMaPosition');
+    function envoyer(pos) {
+        bouton.textContent = 'Enregistrement…';
+        return fetch(URL_MA_POSITION, { method: 'POST', headers: { 'Content-Type': 'application/json' },
+                                         body: JSON.stringify({ lat: pos.lat, lng: pos.lng, precision: pos.precision }) })
+            .then((r) => { if (!r.ok) throw 0; bouton.remove(); return fetch({{ url_for('client.suivi_etat', code=commande.code_suivi)|tojson }}); })
+            .then((r) => r.json()).then((d) => window.majPositionLivreur(d.livreur));
+    }
     if (bouton) bouton.addEventListener('click', () => {
-        if (!navigator.geolocation) { bouton.textContent = 'Position indisponible sur ce téléphone'; return; }
-        bouton.textContent = 'Recherche de votre position…';
-        navigator.geolocation.getCurrentPosition((p) => {
-            fetch(URL_MA_POSITION, { method: 'POST', headers: { 'Content-Type': 'application/json' },
-                                     body: JSON.stringify({ lat: p.coords.latitude, lng: p.coords.longitude, precision: p.coords.accuracy }) })
-                .then((r) => { if (!r.ok) throw 0; bouton.remove(); return fetch({{ url_for('client.suivi_etat', code=commande.code_suivi)|tojson }}); })
-                .then((r) => r.json()).then((d) => window.majPositionLivreur(d.livreur))
-                .catch(() => { bouton.textContent = 'Position trop imprécise : réessayez dehors'; });
-        }, () => { bouton.textContent = 'Localisation refusée'; }, { enableHighAccuracy: true, timeout: 20000 });
+        bouton.textContent = 'Recherche de votre position (jusqu\'à 25 s)…';
+        Localisation.trouver()
+            .then((pos) => pos.precision > 500 ? Localisation.surCarte(pos) : pos)
+            .catch(() => Localisation.surCarte(null))
+            .then(envoyer)
+            .catch((e) => { bouton.textContent = e && e.cause === 'annule' ? '📍 Partager ma position pour voir la distance' : 'Position non enregistrée : réessayez'; });
     });
 })();
 </script>

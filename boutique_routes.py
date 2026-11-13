@@ -64,7 +64,7 @@ def qui():
 
 # Abonnement non payé après le 8 : seules ces pages restent ouvertes
 OUVERT_SI_BLOQUE = {'dashboard', 'logout', 'abonnement_page', 'abonnement_payer', 'changer_mot_de_passe', 'api_nouvelles',
-                    'alertes_abonner'}
+                    'alertes_abonner', 'alertes_tester'}
 
 
 def boutique_connectee():
@@ -1761,6 +1761,15 @@ def alertes_abonner():
     ok = notifications.abonner_boutique(current_user.id, request.get_json(silent=True),
                                         qui=getattr(current_user, 'nom_utilisateur', None))
     return jsonify(ok=ok), (200 if ok else 400)
+
+@boutique_bp.route('/alertes/tester', methods=['POST'])
+@login_required
+def alertes_tester():
+    """Envoie une alerte d'essai à tous les téléphones abonnés de la boutique."""
+    n = notifications.envoyer_boutique(current_user.id, '🔔 Test LivraPlus',
+                                       'Les alertes de commande fonctionnent sur ce téléphone.',
+                                       url_for('boutique.dashboard'), tag='test')
+    return jsonify(ok=n > 0, envoyes=n)
 
 @boutique_bp.route('/api/nouvelles')
 @login_required

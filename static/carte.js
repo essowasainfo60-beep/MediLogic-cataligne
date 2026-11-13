@@ -17,7 +17,7 @@
         depart: function () { return icone('🏁', '#0b1d35'); },
 
         creer: function (element, centre, zoom) {
-            var carte = L.map(element, { zoomControl: true, attributionControl: true }).setView(centre || Carte.LOME, zoom || 13);
+            var carte = L.map(element, { zoomControl: true, attributionControl: true, scrollWheelZoom: false }).setView(centre || Carte.LOME, zoom || 13);
             L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
                 maxZoom: 19, attribution: '&copy; OpenStreetMap',
             }).addTo(carte);

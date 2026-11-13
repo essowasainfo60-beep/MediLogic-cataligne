@@ -1,0 +1,49 @@
+{# Après la commande : le client joint sa position (GPS ou épingle sur la carte). Variable : commande. #}
+{% if not commande.est_retrait and commande.latitude is none and commande.statut in ['nouvelle', 'confirmee'] %}
+<div id="blocJoindrePosition" class="text-left bg-white border-2 border-dashed border-green-400 rounded-2xl p-4 text-sm">
+    <p class="font-semibold text-gray-900">📍 Joignez votre position</p>
+    <p class="text-xs text-gray-500">Le livreur vous trouvera plus vite (facultatif).</p>
+    <button type="button" id="btnJoindrePosition" class="mt-2 w-full bg-green-600 text-white py-2.5 rounded-xl font-semibold">📍 Utiliser ma position GPS</button>
+    <button type="button" id="btnJoindreCarte" class="mt-1 w-full text-green-700 py-1.5 underline">🗺 ou placer ma maison sur la carte</button>
+    <p id="infoJoindrePosition" class="text-xs mt-1 hidden"></p>
+</div>
+<script src="{{ url_for('static', filename='localisation.js') }}"></script>
+<script>
+(function () {
+    const URL = {{ url_for('client.suivi_ma_position', code=commande.code_suivi)|tojson }};
+    const bloc = document.getElementById('blocJoindrePosition');
+    const info = document.getElementById('infoJoindrePosition');
+    const bGps = document.getElementById('btnJoindrePosition');
+    let approx = null;
+    function dire(texte, classe) { info.classList.remove('hidden'); info.className = 'text-xs mt-1 ' + classe; info.innerHTML = texte; }
+    function envoyer(pos) {
+        dire('Enregistrement…', 'text-gray-600');
+        return fetch(URL, { method: 'POST', headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ lat: pos.lat, lng: pos.lng, precision: pos.precision }) })
+            .then((r) => {
+                if (!r.ok) throw { cause: 'serveur' };
+                bloc.innerHTML = '<p class="font-semibold text-green-700">✅ Position envoyée : le livreur verra votre maison sur sa carte.</p>';
+            });
+    }
+    function carte() {
+        Localisation.surCarte(approx).then(envoyer).catch((e) => {
+            if (e && e.cause === 'annule') return;
+            dire(e && e.cause === 'serveur' ? "La position n'a pas pu être enregistrée. Réessayez." : "La carte n'a pas pu s'ouvrir (connexion internet ?).", 'text-red-600');
+        });
+    }
+    document.getElementById('btnJoindreCarte').addEventListener('click', carte);
+    bGps.addEventListener('click', () => {
+        bGps.disabled = true; bGps.textContent = '📍 Recherche de votre position…';
+        dire("Autorisez la position si le téléphone le demande (jusqu'à 25 secondes)…", 'text-gray-600');
+        Localisation.trouver().then((pos) => {
+            bGps.disabled = false; bGps.textContent = '📍 Réessayer avec le GPS';
+            if (pos.precision > 500) { approx = pos; dire(Localisation.aide('imprecis'), 'text-orange-700'); carte(); return; }
+            return envoyer(pos);
+        }).catch((e) => {
+            bGps.disabled = false; bGps.textContent = '📍 Réessayer avec le GPS';
+            dire(e && e.cause === 'serveur' ? "La position n'a pas pu être enregistrée. Réessayez." : Localisation.aide(e && e.cause), 'text-red-600');
+        });
+    });
+})();
+</script>
+{% endif %}

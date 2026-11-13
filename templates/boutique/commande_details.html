@@ -284,8 +284,8 @@
     </a>
     {% if c.date_depart and c.livreur %}
     {% include '_carte.html' %}
-    <details id="blocTrajet" class="bg-white rounded-2xl shadow-sm border border-gray-200 p-3" {{ 'open' if c.statut == 'en_livraison' }}>
-        <summary class="cursor-pointer text-sm font-semibold text-purple-700"><i class="fas fa-route mr-1"></i> Trajet du livreur{{ ' — en direct' if c.statut == 'en_livraison' }}</summary>
+    <details id="blocTrajet" class="bg-white rounded-2xl shadow-sm border border-gray-200 p-3">
+        <summary class="cursor-pointer text-sm font-semibold text-purple-700"><i class="fas fa-map-location-dot mr-1"></i> {{ 'Suivre le livreur sur la carte (en direct)' if c.statut == 'en_livraison' else 'Voir le trajet du livreur sur la carte' }} <span class="text-xs font-normal text-gray-500">— toucher pour ouvrir / fermer</span></summary>
         <div id="carteTrajet" class="h-72 rounded-xl border mt-2"></div>
         <p id="infoTrajet" class="text-xs text-gray-500 mt-2"></p>
         <div id="etapesTrajet" class="mt-2 flex flex-wrap gap-1 text-[11px]"></div>

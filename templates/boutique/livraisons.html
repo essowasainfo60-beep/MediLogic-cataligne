@@ -18,17 +18,20 @@
     <!-- ===== EN COURS ===== -->
     {% if en_cours %}
     {% include '_carte.html' %}
-    <div class="bg-white rounded-2xl shadow-md overflow-hidden">
+    <details id="blocEnRoute" class="bg-white rounded-2xl shadow-md overflow-hidden">
+        <summary class="cursor-pointer px-4 py-3 text-sm font-semibold text-purple-700"><i class="fas fa-map-location-dot mr-1"></i> Voir les livreurs sur la carte <span class="text-xs font-normal text-gray-500">— toucher pour ouvrir / fermer</span></summary>
         <div id="carteEnRoute" class="h-80"></div>
         <p id="legendeEnRoute" class="px-4 py-2 text-xs text-gray-500">Chargement des positions…</p>
-    </div>
+    </details>
     <script>
     (function () {
         if (!window.L || !window.Carte) return;
-        const carte = Carte.creer('carteEnRoute');
-        const couche = L.layerGroup().addTo(carte);
-        let cadree = false;
+        const bloc = document.getElementById('blocEnRoute');
+        let carte = null, couche = null, cadree = false;
         function charger() {
+            if (!bloc.open) return;
+            if (!carte) { carte = Carte.creer('carteEnRoute'); couche = L.layerGroup().addTo(carte); }
+            carte.invalidateSize();
             fetch({{ url_for('boutique.api_livreurs_en_route')|tojson }}, { cache: 'no-store' }).then((r) => r.json()).then((d) => {
                 couche.clearLayers();
                 const points = [], sansGps = [];
@@ -57,7 +60,7 @@
                     + (sansGps.length ? ' · GPS non activé : ' + sansGps.join(', ') : '');
             }).catch(() => {});
         }
-        charger();
+        bloc.addEventListener('toggle', charger);
         setInterval(() => { if (!document.hidden) charger(); }, 20000);
     })();
     </script>

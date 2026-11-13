@@ -621,20 +621,114 @@
                 return r.ok;
             } catch (e) { return false; }
         }
+        // ---------- Activer les alertes, avec un guide quand ça bloque ----------
+        const UA = navigator.userAgent;
+        const IPHONE = /iPhone|iPad|iPod/i.test(UA) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+        const SAMSUNG = /SamsungBrowser/i.test(UA);
+        const INTEGREE = /FBAN|FBAV|FB_IAB|Instagram|WhatsApp|TikTok|musical_ly|Snapchat|Line\//i.test(UA);
+        const INSTALLEE = window.matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
+        function lienChrome() {
+            return 'intent://' + location.host + location.pathname + location.search + '#Intent;scheme=https;package=com.android.chrome;end';
+        }
+        window.aideAlertes = function (cause) {
+            const hote = '<b>' + location.host + '</b>';
+            let titre = 'Les notifications sont bloquées', etapes;
+            if (cause === 'integree') {
+                titre = "Ouvrez LivraPlus dans le vrai navigateur";
+                etapes = "<p>Vous êtes dans le navigateur de WhatsApp / Facebook / TikTok, qui ne permet pas les notifications.</p>"
+                    + (IPHONE ? '<p class="mt-1">Touchez ⋯ puis <b>« Ouvrir dans Safari »</b>.</p>'
+                              : '<a href="' + lienChrome() + '" class="inline-block mt-2 bg-blue-600 text-white font-semibold px-3 py-2 rounded-lg">Ouvrir dans Chrome</a>');
+            } else if (cause === 'iphone') {
+                titre = "Sur iPhone : installez d'abord l'application";
+                etapes = '<ol class="list-decimal ml-4 space-y-1"><li>Dans <b>Safari</b>, touchez le bouton <b>Partager</b> (carré avec flèche ↑).</li>'
+                    + "<li><b>Sur l'écran d'accueil</b> → <b>Ajouter</b>.</li>"
+                    + "<li>Ouvrez LivraPlus <b>depuis l'icône</b> sur l'écran d'accueil, connectez-vous et touchez de nouveau <b>Activer les alertes</b>.</li></ol>"
+                    + '<p class="mt-1 text-xs text-gray-500">Apple n\'autorise les notifications que pour les applications installées (iOS 16.4 ou plus récent).</p>';
+            } else if (cause === 'navigateur') {
+                titre = 'Ce navigateur ne gère pas les notifications';
+                etapes = '<p>Utilisez <b>Google Chrome</b> sur Android (ou Safari à jour sur iPhone, application installée).</p>';
+            } else if (cause === 'abonnement') {
+                titre = "Le téléphone n'a pas pu s'abonner";
+                etapes = '<ol class="list-decimal ml-4 space-y-1"><li>Vérifiez la connexion internet.</li>'
+                    + '<li>Sur Android, les notifications passent par Google : vérifiez que <b>Services Google Play</b> est à jour.</li>'
+                    + '<li>Mode économie de batterie / données : désactivez-le pour Chrome (ou LivraPlus).</li>'
+                    + '<li>Touchez <b>Réessayer</b>.</li></ol>';
+            } else if (IPHONE) {
+                etapes = "<ol class=\"list-decimal ml-4 space-y-1\"><li>Réglages de l'iPhone → <b>Notifications</b> → <b>LivraPlus</b>.</li>"
+                    + '<li>Activez <b>Autoriser les notifications</b> (et les sons).</li><li>Revenez ici et touchez <b>Réessayer</b>.</li></ol>';
+            } else if (INSTALLEE) {
+                // Application installée : pas de barre d'adresse, donc pas de cadenas
+                etapes = "<p class=\"mb-1\">Dans l'application installée, il n'y a pas de cadenas. Faites ceci :</p>"
+                    + '<ol class="list-decimal ml-4 space-y-1"><li>Sortez de LivraPlus. Sur l\'écran d\'accueil, <b>appui long sur l\'icône LivraPlus</b>.</li>'
+                    + "<li>Touchez <b>ⓘ Infos sur l'appli</b> → <b>Notifications</b> → activez <b>Autoriser les notifications</b>.</li>"
+                    + '<li>Si ce n\'est pas là : Paramètres du téléphone → <b>Applications</b> → <b>' + (SAMSUNG ? 'Samsung Internet' : 'Chrome') + '</b> → <b>Notifications</b> → autorisez, '
+                    + 'puis dans ' + (SAMSUNG ? 'Samsung Internet : ≡ → Paramètres → Sites et téléchargements → Notifications' : 'Chrome : ⋮ → Paramètres → Paramètres des sites → Notifications')
+                    + ' → ' + hote + ' → <b>Autoriser</b>.</li>'
+                    + '<li>Rouvrez LivraPlus et touchez <b>Réessayer</b>.</li></ol>';
+            } else if (SAMSUNG) {
+                etapes = '<ol class="list-decimal ml-4 space-y-1"><li>Touchez le menu <b>≡</b> (en bas) → <b>Paramètres</b>.</li>'
+                    + '<li><b>Sites et téléchargements</b> → <b>Notifications</b> (ou Autorisations du site).</li>'
+                    + '<li>Trouvez ' + hote + ' → <b>Autoriser</b>.</li><li>Revenez ici et touchez <b>Réessayer</b>.</li></ol>';
+            } else {
+                etapes = '<ol class="list-decimal ml-4 space-y-1"><li>Touchez l\'icône <b>à gauche de l\'adresse</b> en haut (cadenas 🔒, ⓘ ou réglages ⚙).</li>'
+                    + '<li><b>Autorisations</b> → <b>Notifications</b> → <b>Autoriser</b>.</li>'
+                    + '<li>Vous ne voyez pas d\'icône ? Menu <b>⋮</b> → <b>Paramètres</b> → <b>Paramètres des sites</b> → <b>Notifications</b> → ' + hote + ' → <b>Autoriser</b>.</li>'
+                    + '<li>Toujours rien : Paramètres du téléphone → Applications → <b>Chrome</b> → <b>Notifications</b> → autoriser.</li>'
+                    + '<li>Revenez ici et touchez <b>Réessayer</b>.</li></ol>';
+            }
+            let boite = document.getElementById('aideAlertes');
+            if (!boite) {
+                boite = document.createElement('div');
+                boite.id = 'aideAlertes';
+                boite.className = 'fixed inset-0 z-[100] bg-black/50 flex items-end sm:items-center justify-center p-3';
+                document.body.appendChild(boite);
+            }
+            boite.innerHTML = '<div class="bg-white text-gray-800 rounded-2xl shadow-xl w-full max-w-md p-5 text-sm max-h-[90vh] overflow-y-auto">'
+                + '<p class="font-bold text-lg text-gray-900 mb-2"><i class="fas fa-bell-slash text-red-500 mr-1"></i> ' + titre + '</p>' + etapes
+                + '<div class="mt-4 flex gap-2"><button type="button" data-reessayer class="flex-1 bg-purple-600 text-white font-semibold py-2.5 rounded-xl">Réessayer</button>'
+                + '<button type="button" data-fermer class="px-4 py-2.5 rounded-xl bg-gray-100 text-gray-700">Fermer</button></div></div>';
+            boite.classList.remove('hidden');
+            boite.querySelector('[data-fermer]').onclick = () => boite.classList.add('hidden');
+            boite.querySelector('[data-reessayer]').onclick = () => { boite.classList.add('hidden'); window.activerAlertes(); };
+        };
+        function message(titre, texte, test) {
+            let boite = document.getElementById('aideAlertes');
+            if (!boite) { boite = document.createElement('div'); boite.id = 'aideAlertes'; boite.className = 'fixed inset-0 z-[100] bg-black/50 flex items-end sm:items-center justify-center p-3'; document.body.appendChild(boite); }
+            boite.innerHTML = '<div class="bg-white text-gray-800 rounded-2xl shadow-xl w-full max-w-md p-5 text-sm">'
+                + '<p class="font-bold text-lg text-gray-900 mb-2">' + titre + '</p><p>' + texte + '</p>'
+                + '<div class="mt-4 flex gap-2">' + (test ? '<button type="button" data-tester class="flex-1 bg-green-600 text-white font-semibold py-2.5 rounded-xl">🔔 Tester l\'alerte</button>' : '')
+                + '<button type="button" data-fermer class="px-4 py-2.5 rounded-xl bg-gray-100 text-gray-700">Fermer</button></div></div>';
+            boite.classList.remove('hidden');
+            boite.querySelector('[data-fermer]').onclick = () => boite.classList.add('hidden');
+            const t = boite.querySelector('[data-tester]');
+            if (t) t.onclick = async () => {
+                t.disabled = true; t.textContent = 'Envoi…';
+                try {
+                    const d = await (await fetch({{ url_for('boutique.alertes_tester')|tojson }}, { method: 'POST' })).json();
+                    t.textContent = d.ok ? "✓ Envoyée : elle doit s'afficher dans quelques secondes" : "Aucun téléphone n'a reçu l'alerte : réessayez d'activer";
+                } catch (e) { t.textContent = 'Pas de connexion internet'; }
+            };
+        }
         window.activerAlertes = async function () {
             bip();  // autorise le son sur cet appareil
-            if ('Notification' in window && Notification.permission !== 'granted') await Notification.requestPermission();
+            if (INTEGREE) { window.aideAlertes('integree'); return; }
+            if (!('Notification' in window) || !('serviceWorker' in navigator) || !('PushManager' in window)) {
+                window.aideAlertes(IPHONE && !INSTALLEE ? 'iphone' : 'navigateur'); return;
+            }
+            if (Notification.permission === 'default') {
+                try { await Notification.requestPermission(); } catch (e) {}
+            }
+            if (Notification.permission !== 'granted') { majLibelle(); window.aideAlertes('refuse'); return; }
             const ok = await abonnerTelephone();
             majLibelle();
-            if ('Notification' in window && Notification.permission !== 'granted') {
-                alert("Les notifications sont bloquées pour ce site. Autorisez-les dans les réglages du navigateur (cadenas à côté de l'adresse).");
-            } else if (ok) {
-                alert('Alertes activées : ce téléphone sonnera à chaque nouvelle commande, même application fermée.');
-            }
+            if (!ok) { window.aideAlertes('abonnement'); return; }
+            message('✅ Alertes activées', 'Ce téléphone sonnera à chaque nouvelle commande, même application fermée. Touchez « Tester » pour vérifier.', true);
         };
         function majLibelle() {
-            if ('Notification' in window && Notification.permission === 'granted')
-                document.querySelectorAll('#libelleAlertes, .libelle-alertes').forEach((l) => { l.textContent = 'Alertes de commande activées ✓'; });
+            const etat = 'Notification' in window ? Notification.permission : 'default';
+            const texte = etat === 'granted' ? 'Alertes de commande activées ✓ (tester)'
+                        : etat === 'denied' ? '⚠ Alertes bloquées : débloquer' : 'Activer les alertes de commande';
+            document.querySelectorAll('#libelleAlertes, .libelle-alertes').forEach((l) => { l.textContent = texte; });
         }
         majLibelle();
         abonnerTelephone();          // déjà autorisé : on réabonne en silence (clé à jour, nouveau téléphone…)
