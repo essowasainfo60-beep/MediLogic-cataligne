@@ -105,6 +105,32 @@
     </table>
     {% endfor %}
 
+    {% if cl.quartiers %}
+    <h2>Quartiers où vous livrez le plus</h2>
+    <table>
+        <thead><tr><th>#</th><th>Quartier</th><th class="r">Livraisons</th><th class="r">Frais</th><th class="r">Ventes</th></tr></thead>
+        <tbody>{% for g in cl.quartiers[:15] %}<tr><td>{{ loop.index }}</td><td>{{ g.nom }}</td><td class="r">{{ g.livraisons }}</td><td class="r">{{ fcfa(g.frais) }}</td><td class="r">{{ fcfa(g.ventes) }}</td></tr>{% endfor %}</tbody>
+    </table>
+    {% endif %}
+    {% if cl.clients %}
+    <h2>Meilleurs clients ({{ cl.nb_clients }} clients, {{ cl.clients_fideles }} fidèles)</h2>
+    <table>
+        <thead><tr><th>#</th><th>Client</th><th>Téléphone</th><th class="r">Commandes</th><th class="r">Montant</th></tr></thead>
+        <tbody>{% for g in cl.clients %}<tr><td>{{ loop.index }}</td><td>{{ g.nom }}</td><td>{{ g.telephone }}</td><td class="r">{{ g.commandes }}</td><td class="r">{{ fcfa(g.montant) }}</td></tr>{% endfor %}</tbody>
+    </table>
+    {% endif %}
+    <h2>Quand les clients commandent</h2>
+    <p>{% if cl.heure_pointe is not none %}Heure de pointe : <b>{{ cl.heure_pointe }}h - {{ cl.heure_pointe + 1 }}h</b> · jour le plus chargé : <b>{{ cl.jour_pointe }}</b>{% else %}Aucune commande.{% endif %}
+       · livrées chez le client : <b>{{ cl.livraisons }}</b> · récupérées à la boutique : <b>{{ cl.retraits }}</b></p>
+    <table>
+        <thead><tr>{% for j in cl.jours_noms %}<th class="r">{{ j[:3] }}</th>{% endfor %}</tr></thead>
+        <tbody><tr>{% for n in cl.jours %}<td class="r">{{ n }}</td>{% endfor %}</tr></tbody>
+    </table>
+    {% if cl.promos %}
+    <h2>Codes promo utilisés</h2>
+    <table><tbody>{% for g in cl.promos %}<tr><td>{{ g.code }}</td><td class="r">{{ g.commandes }} commande(s)</td><td class="r">-{{ fcfa(g.remise) }}</td><td class="r">{{ fcfa(g.ventes) }}</td></tr>{% endfor %}</tbody></table>
+    {% endif %}
+
     <h2>Détail des commandes livrées ({{ livrees|length }})</h2>
     {% if livrees %}
     <table>

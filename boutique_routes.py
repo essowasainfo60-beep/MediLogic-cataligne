@@ -13,6 +13,7 @@ import caisse
 import discussions
 import notifications
 import suivi_gps
+import stats_avancees
 import promos
 import securite
 import messages_whatsapp as msg
@@ -1898,7 +1899,8 @@ def statistiques():
                     par_source=regrouper(lambda c: c.source_libelle),
                     livrees=livrees, echecs=echecs, annulees=annulees,
                     caisse_periode=caisse_periode, charges_cat=sorted(charges_cat.items(), key=lambda x: -x[1]),
-                    maintenant=maintenant, boutique=current_user)
+                    maintenant=maintenant, boutique=current_user,
+                    cl=stats_avancees.classements(recues, livrees, echecs, zones_actives()))
     if request.args.get('imprimer'):
         return render_template('boutique/statistiques_impression.html', **contexte)
     return render_template('boutique/statistiques.html', **contexte)
