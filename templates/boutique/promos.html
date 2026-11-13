@@ -73,6 +73,9 @@
                 <input type="date" name="date_fin" min="{{ aujourdhui }}" class="mt-1 w-full border border-gray-300 px-3 py-2">
             </label>
             <label class="flex items-center gap-2 text-sm">
+                <input type="checkbox" name="une_fois_par_client" value="1" class="h-4 w-4"> Une seule fois par client (même numéro de téléphone)
+            </label>
+            <label class="flex items-center gap-2 text-sm">
                 <input type="checkbox" name="affiche" value="1" class="h-4 w-4"> Annoncer ce code en haut du catalogue
             </label>
             <button type="submit" class="w-full bg-purple-600 text-white py-2.5 rounded-xl font-semibold hover:bg-purple-700">Créer le code</button>
@@ -91,6 +94,7 @@
                             {{ p.utilisations }}{% if p.utilisations_max %}/{{ p.utilisations_max }}{% endif %} utilisation(s)
                             · {{ fcfa(remises.get(p.code, 0)) }} offerts
                             {% if p.date_fin %} · {{ 'expiré le' if expire else "jusqu'au" }} {{ p.date_fin.strftime('%d/%m/%Y') }}{% endif %}
+                            {% if p.une_fois_par_client %} · 1 fois par client{% endif %}
                             {% if p.affiche and p.actif %} · <span class="text-purple-600">annoncé dans le catalogue</span>{% endif %}
                         </p>
                     </div>

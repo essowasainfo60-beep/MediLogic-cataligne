@@ -187,8 +187,11 @@ def mettre_a_jour_schema():
                 for i, (ligne_id,) in enumerate(ids, start=dernier + 1):
                     conn.execute(text(f"UPDATE {table} SET {champ} = :n WHERE id = :i"), {'n': i, 'i': ligne_id})
             conn.execute(text(f"CREATE UNIQUE INDEX IF NOT EXISTS ux_{table}_boutique_{champ} ON {table} (boutique_id, {champ})"))
-        if 'min_articles' not in {c['name'] for c in inspecteur.get_columns('codes_promo')}:
+        colonnes_promo = {c['name'] for c in inspecteur.get_columns('codes_promo')}
+        if 'min_articles' not in colonnes_promo:
             conn.execute(text("ALTER TABLE codes_promo ADD COLUMN min_articles INTEGER"))
+        if 'une_fois_par_client' not in colonnes_promo:
+            conn.execute(text("ALTER TABLE codes_promo ADD COLUMN une_fois_par_client BOOLEAN NOT NULL DEFAULT FALSE"))
         if 'role' not in {c['name'] for c in inspecteur.get_columns('vendeurs')}:
             conn.execute(text("ALTER TABLE vendeurs ADD COLUMN role VARCHAR(20) NOT NULL DEFAULT 'vendeur'"))
         if inspecteur.has_table('discussions') and 'livreur_id' not in {c['name'] for c in inspecteur.get_columns('discussions')}:

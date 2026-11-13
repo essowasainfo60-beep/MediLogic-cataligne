@@ -92,6 +92,10 @@ def catalogue(code):
                         and (not p.utilisations_max or p.utilisations < p.utilisations_max)]
     articles = (Article.query.filter_by(boutique_id=boutique_id, archive=False)
                 .order_by(Article.created_at.desc()).all())
+    reserves = stock.reserves(boutique_id)
+    for a in articles:
+        a.disponible = stock.disponible(a, None, reserves)
+        a.donnees_client = a.donnees_variantes(reserves) if a.options else None
 
     mes_commandes = commandes_du_telephone(boutique)
     en_cours = [c for c in mes_commandes if c.statut in ('nouvelle', 'confirmee', 'en_livraison', 'echec')]
@@ -130,7 +134,9 @@ def ajouter_panier():
 
     # On ne commande que dans la boutique dont on a ouvert le lien
     visitee = boutique_visitee()
-    epuise = article.stock is not None and article.stock <= 0
+    reserves = stock.reserves(article.boutique_id)
+    dispo_article = stock.disponible(article, None, reserves)
+    epuise = dispo_article is not None and dispo_article <= 0
     if article.archive or epuise or not visitee or article.boutique_id != visitee.id:
         if veut_json:
             return jsonify(success=False, message='Article épuisé' if epuise else 'Article indisponible'), 400
@@ -150,14 +156,16 @@ def ajouter_panier():
             return jsonify(success=False, message=str(e)), 400
         flash(str(e), 'danger')
         return redirect(url_for('client.catalogue', code=visitee.lien_public))
-    # Stock de la variante choisie (pointure 24 verte…)
-    dispo = article.stock_variante(variante) if variante else None
+    # Stock encore disponible (la variante choisie, ou l'article) moins ce qui est déjà dans le panier
+    dispo = stock.disponible(article, variante, reserves)
     if dispo is not None:
+        par_variante = bool(variante and article.suit_variantes)
         deja = sum(int(i['quantite']) for i in panier.values()
-                   if i.get('article_id') == article.id and i.get('variante') == variante)
+                   if i.get('article_id') == article.id and (not par_variante or i.get('variante') == variante))
         if deja + quantite > dispo:
-            message = (f'{choix} : épuisé pour le moment' if dispo <= 0 else
-                       f'{choix} : il n\'en reste que {dispo}' + (f' (déjà {deja} dans votre panier)' if deja else ''))
+            nom = choix or article.nom
+            message = (f'{nom} : épuisé pour le moment' if dispo <= 0 else
+                       f'{nom} : il n\'en reste que {dispo}' + (f' (déjà {deja} dans votre panier)' if deja else ''))
             if veut_json:
                 return jsonify(success=False, message=message), 400
             flash(message, 'danger')
@@ -200,9 +208,64 @@ def ajouter_panier():
     flash(f'{article.nom} ajouté au panier', 'success')
     return redirect(url_for('client.catalogue', code=visitee.lien_public))
 
+def rafraichir_panier(panier):
+    """Revérifie le panier avant d'afficher ou de commander : article retiré de la vente,
+    prix changé, stock insuffisant. Renvoie (panier corrigé, messages pour le client)."""
+    messages, propre = [], {}
+    for cle, item in panier.items():
+        article = db.session.get(Article, item.get('article_id')) if item.get('article_id') else None
+        if not article or article.archive or article.boutique_id != item.get('boutique_id'):
+            messages.append(f"« {item['nom']} » n'est plus en vente : retiré de votre panier.")
+            continue
+        variante = item.get('variante')
+        if variante and variante not in dict(article.combinaisons()):
+            messages.append(f"« {item['nom']} » n'est plus proposé dans ce choix : retiré de votre panier.")
+            continue
+        prix = article.prix_de(variante)
+        if abs(prix - float(item['prix'])) > 0.001:
+            messages.append(f"Le prix de « {item['nom']} » a changé : {msg.fcfa(prix)} (au lieu de {msg.fcfa(item['prix'])}).")
+            item = dict(item, prix=prix)
+        propre[cle] = item
+    # Stock : quantités ramenées à ce qui reste (les commandes déjà passées sont servies d'abord)
+    if propre:
+        reserves = stock.reserves(next(iter(propre.values()))['boutique_id'])
+        groupes = {}
+        for cle, item in propre.items():
+            article = db.session.get(Article, item['article_id'])
+            par_variante = bool(item.get('variante') and article.suit_variantes)
+            groupes.setdefault((article.id, item.get('variante') if par_variante else None), []).append(cle)
+        for (article_id, variante), cles in groupes.items():
+            article = db.session.get(Article, article_id)
+            reste = stock.disponible(article, variante, reserves)
+            if reste is None:
+                continue
+            for cle in cles:
+                item = propre[cle]
+                if int(item['quantite']) > max(reste, 0):
+                    if reste <= 0:
+                        messages.append(f"« {item['nom']} » est épuisé : retiré de votre panier.")
+                        del propre[cle]
+                        continue
+                    messages.append(f"« {item['nom']} » : il n'en reste que {reste}, quantité ajustée.")
+                    propre[cle] = item = dict(item, quantite=reste)
+                reste -= int(item['quantite'])
+    return propre, messages
+
+
+def _appliquer_rafraichissement():
+    """Corrige le panier en session et affiche les messages ; renvoie le panier."""
+    panier, messages = rafraichir_panier(session.get('panier', {}))
+    if messages:
+        session['panier'] = panier
+        session.modified = True
+        for m in messages:
+            flash(m, 'warning')
+    return panier, bool(messages)
+
+
 @client_bp.route('/panier')
 def voir_panier():
-    panier = session.get('panier', {})
+    panier, _ = _appliquer_rafraichissement()
     total = sum(item['prix'] * item['quantite'] for item in panier.values())
     boutique = boutique_du_panier(panier)
     if not boutique and session.get('last_boutique_id'):
@@ -219,6 +282,9 @@ def modifier_quantite(cle):
             del panier[cle]
         else:
             panier[cle]['quantite'] = min(quantite, 999)
+            panier, messages = rafraichir_panier(panier)
+            for m in messages:
+                flash(m, 'warning')
         session['panier'] = panier
         session.modified = True
     return redirect(url_for('client.voir_panier'))
@@ -254,7 +320,10 @@ def _message_commande(commande):
 
 @client_bp.route('/valider_commande', methods=['GET', 'POST'])
 def valider_commande():
-    panier = session.get('panier', {})
+    panier, change = _appliquer_rafraichissement()
+    if change and request.method == 'POST':
+        # Le client doit voir le nouveau total avant de commander
+        return redirect(url_for('client.valider_commande') if panier else url_for('client.voir_panier'))
 
     if not panier:
         flash('Votre panier est vide', 'warning')
@@ -338,7 +407,7 @@ def valider_commande():
         url_for('boutique.commande_details', commande_id=commande.id), tag=f'nouvelle-{commande.id}')
     memoriser_commande(commande)
     if promo:
-        promo.utilisations += 1
+        promos.consommer(promo)
         db.session.commit()
 
     # ==================== MESSAGE POUR LA BOUTIQUE (WhatsApp ou messagerie LivraPlus) ====================

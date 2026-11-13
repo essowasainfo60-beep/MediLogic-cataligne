@@ -105,6 +105,7 @@
                                 {% endif %}
                                 <form method="POST" action="{{ url_for('boutique.changer_statut_commande', commande_id=commande.id) }}"
                                       data-question="Confirmer : la commande n°{{ commande.numero }} est remise à {{ commande.client_nom }} et payée ?" onsubmit="return confirm(this.dataset.question)">
+                                    <input type="hidden" name="depuis" value="{{ commande.statut }}">
                                     <button type="submit" name="statut" value="livree" class="bg-green-600 text-white px-4 py-2.5 rounded-xl font-semibold hover:bg-green-700">
                                         <i class="fas fa-circle-check mr-1"></i> Remise au client</button>
                                 </form>
@@ -169,6 +170,7 @@
                                 <form method="POST" action="{{ url_for('boutique.changer_statut_commande', commande_id=commande.id) }}"
                                       data-question="Confirmer : {{ commande.livreur.nom }} a livré la commande n°{{ commande.numero }} (il a l'argent) ?"
                                       onsubmit="return confirm(this.dataset.question)">
+                                    <input type="hidden" name="depuis" value="{{ commande.statut }}">
                                     <button type="submit" name="statut" value="livree" class="bg-white border border-green-600 text-green-700 px-3 py-2 rounded-xl text-sm hover:bg-green-50">
                                         <i class="fas fa-circle-check mr-1"></i> Livrée par {{ commande.livreur.nom }}
                                     </button>
@@ -177,6 +179,7 @@
                                       data-question="Confirmer : la boutique a remis elle-même la commande n°{{ commande.numero }} et encaissé l'argent ?"
                                       onsubmit="return confirm(this.dataset.question)">
                                     <input type="hidden" name="par" value="boutique">
+                                    <input type="hidden" name="depuis" value="{{ commande.statut }}">
                                     <button type="submit" name="statut" value="livree" class="bg-white border border-gray-300 text-gray-700 px-3 py-2 rounded-xl text-sm hover:bg-gray-50">
                                         🏪 Remise par la boutique
                                     </button>
@@ -194,6 +197,7 @@
                                 <form method="POST" action="{{ url_for('boutique.changer_statut_commande', commande_id=commande.id) }}"
                                       data-question="Annuler la commande n°{{ commande.numero }} de {{ commande.client_nom }} ?"
                                       onsubmit="return confirm(this.dataset.question)" class="ml-auto">
+                                    <input type="hidden" name="depuis" value="{{ commande.statut }}">
                                     <button type="submit" name="statut" value="annulee" class="text-red-600 hover:underline"><i class="fas fa-ban mr-1"></i> Annuler la commande</button>
                                 </form>
                                 {% endif %}

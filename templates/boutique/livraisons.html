@@ -92,6 +92,7 @@
                 {% endif %}
                 <form method="POST" action="{{ url_for('boutique.changer_statut_commande', commande_id=c.id) }}"
                       data-question="Confirmer que la commande n°{{ c.numero }} a été livrée et payée ?" onsubmit="return confirm(this.dataset.question)">
+                    <input type="hidden" name="depuis" value="{{ c.statut }}">
                     <button type="submit" name="statut" value="livree" class="bg-green-600 text-white px-3 py-1.5 rounded-lg hover:bg-green-700">Livrée</button>
                 </form>
             </div>

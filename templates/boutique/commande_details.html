@@ -85,6 +85,16 @@
     </div>
     {% endif %}
 
+    {% if manques %}
+    <div class="rounded-2xl border-2 border-red-300 bg-red-50 p-3 text-sm text-red-900">
+        <p class="font-bold"><i class="fas fa-triangle-exclamation mr-1"></i> Stock insuffisant pour cette commande</p>
+        <ul class="mt-1 space-y-0.5">
+            {% for m in manques %}<li>• {{ m.nom }} : {{ m.demande }} demandé(s), <b>{{ m.disponible }} disponible(s)</b></li>{% endfor %}
+        </ul>
+        <p class="text-xs mt-1 text-red-800">Les commandes passées avant celle-ci sont servies d'abord. Réapprovisionnez, prévenez le client ou proposez une autre variante.</p>
+    </div>
+    {% endif %}
+
     <!-- ===== PROCHAINE ÉTAPE : un seul gros bouton ===== -->
     <div id="livraison" class="rounded-2xl border-2 p-4 shadow-sm {{ 'border-purple-400 bg-purple-50' if c.statut in ['nouvelle', 'confirmee', 'echec', 'en_livraison'] else 'border-gray-200 bg-white' }}">
         {% if c.statut == 'annulee' %}
@@ -132,7 +142,7 @@
                 {% endif %}
             </div>
             {% endif %}
-            {% if not c.reglee %}
+            {% if not c.reglee and peut('boutique.changer_mode_frais') and not (not c.garde_frais and c.frais_payes) %}
             <details class="px-3 py-2">
                 <summary class="text-xs text-purple-700 cursor-pointer">{{ '🛵 Le livreur garde ses frais' if c.garde_frais else '💼 Il rapporte tout, je le paie après' }} — changer</summary>
                 <form method="POST" action="{{ url_for('boutique.changer_mode_frais', commande_id=c.id) }}" class="mt-2 grid grid-cols-2 gap-2">
@@ -165,6 +175,7 @@
         <form method="POST" action="{{ url_for('boutique.changer_statut_commande', commande_id=c.id) }}" class="mt-2"
               data-question="Confirmer : la commande n°{{ c.numero }} est remise à {{ c.client_nom }} et {{ fcfa(c.total) }} encaissés ?"
               onsubmit="return confirm(this.dataset.question)">
+            <input type="hidden" name="depuis" value="{{ c.statut }}">
             <button type="submit" name="statut" value="livree" class="w-full {{ 'bg-green-600 text-white text-lg py-3.5' if c.statut == 'confirmee' else 'bg-white text-green-700 border-2 border-green-600 py-2.5' }} rounded-xl font-bold">
                 ✅ Remise au client (payée)</button>
         </form>
@@ -313,7 +324,7 @@
                 <p class="flex justify-between px-3 py-2 text-orange-800 bg-orange-50"><span>Vous lui devrez ensuite</span><strong>{{ fcfa(c.frais_livraison) }}</strong></p>
                 {% endif %}
             </div>
-            <details class="border-t border-gray-100">
+            {% if peut('boutique.changer_mode_frais') %}<details class="border-t border-gray-100">
                 <summary class="px-3 py-2 text-xs text-purple-700 cursor-pointer">
                     {{ '🛵 Le livreur garde ses frais' if c.garde_frais else '💼 Il rapporte tout, je le paie après' }} — changer</summary>
                 <form method="POST" action="{{ url_for('boutique.changer_mode_frais', commande_id=c.id) }}" class="px-3 pb-3 grid grid-cols-1 gap-1.5">
@@ -324,16 +335,17 @@
                             class="text-left rounded-lg border px-3 py-2 {{ 'border-orange-500 bg-orange-50 font-semibold' if not c.garde_frais else 'border-gray-200 hover:bg-gray-50' }}">
                         💼 Il rapporte tout, je le paie après <span class="block text-xs font-normal text-gray-500">il rapporte {{ fcfa(c.total) }}, vous lui devez {{ fcfa(c.frais_livraison or 0) }}</span></button>
                 </form>
-            </details>
+            </details>{% endif %}
         </div>
         {% endif %}
             <form method="POST" action="{{ url_for('boutique.changer_statut_commande', commande_id=c.id) }}"
                   data-question="Confirmer : {{ c.livreur.nom }} a livré la commande n°{{ c.numero }} et vous a remis {{ fcfa(a_rapporter) }} ?"
                   onsubmit="return confirm(this.dataset.question + (this.payer_frais && this.payer_frais.checked ? '\n\nEt vous lui payez maintenant ses {{ fcfa(c.frais_livraison or 0) }} de frais.' : ''))">
                 <input type="hidden" name="argent_remis" value="1">
+                <input type="hidden" name="depuis" value="{{ c.statut }}">
                 <button type="submit" name="statut" value="livree" class="w-full bg-green-600 text-white py-3.5 rounded-xl font-bold text-lg hover:bg-green-700">
-                    ✅ Livré, il m'a remis {{ fcfa(a_rapporter) }}<span class="block text-xs font-normal">l'argent entre en caisse</span></button>
-                {% if not c.garde_frais and c.frais_livraison %}
+                    ✅ Livré, il m'a remis {{ fcfa(a_rapporter) }}<span class="block text-xs font-normal">{{ "l'argent entre en caisse" if peut('boutique.versement_commande') else "le gérant ou le caissier l'enregistrera en caisse" }}</span></button>
+                {% if not c.garde_frais and c.frais_livraison and peut('boutique.payer_frais_commande') %}
                 <label class="mt-2 flex items-start gap-2 text-sm bg-white rounded-lg border border-orange-200 px-3 py-2">
                     <input type="checkbox" name="payer_frais" value="1" class="mt-0.5 h-4 w-4">
                     <span>Je lui paie aussi ses <b>{{ fcfa(c.frais_livraison) }}</b> de frais maintenant
@@ -344,6 +356,7 @@
             <form method="POST" action="{{ url_for('boutique.changer_statut_commande', commande_id=c.id) }}"
                   data-question="Confirmer : la commande n°{{ c.numero }} est livrée mais {{ c.livreur.nom }} vous remettra l'argent plus tard ?"
                   onsubmit="return confirm(this.dataset.question)">
+                <input type="hidden" name="depuis" value="{{ c.statut }}">
                 <button type="submit" name="statut" value="livree" class="w-full bg-white border-2 border-green-600 text-green-700 py-2.5 rounded-xl font-semibold">Livré, il rapportera l'argent plus tard
                     <span class="block text-xs font-normal">{{ fcfa(a_rapporter) }} à récupérer (fiche commande ou Caisse)</span></button>
             </form>
@@ -354,6 +367,7 @@
                         <option>Client absent</option><option>Client injoignable</option><option>Client a refusé</option>
                         <option>Adresse introuvable</option><option>Reportée par le client</option><option>Autre</option>
                     </select>
+                    <input type="hidden" name="depuis" value="{{ c.statut }}">
                     <button type="submit" name="statut" value="echec" class="bg-red-600 text-white px-4 rounded-lg font-semibold">Valider</button>
                 </form>
             </details>
@@ -373,7 +387,7 @@
                 <p class="flex justify-between px-3 py-2 text-orange-800 bg-orange-50"><span>Vous lui devrez ensuite</span><strong>{{ fcfa(c.frais_livraison) }}</strong></p>
                 {% endif %}
             </div>
-            <details class="border-t border-gray-100">
+            {% if peut('boutique.changer_mode_frais') %}<details class="border-t border-gray-100">
                 <summary class="px-3 py-2 text-xs text-purple-700 cursor-pointer">
                     {{ '🛵 Le livreur garde ses frais' if c.garde_frais else '💼 Il rapporte tout, je le paie après' }} — changer</summary>
                 <form method="POST" action="{{ url_for('boutique.changer_mode_frais', commande_id=c.id) }}" class="px-3 pb-3 grid grid-cols-1 gap-1.5">
@@ -384,13 +398,14 @@
                             class="text-left rounded-lg border px-3 py-2 {{ 'border-orange-500 bg-orange-50 font-semibold' if not c.garde_frais else 'border-gray-200 hover:bg-gray-50' }}">
                         💼 Il rapporte tout, je le paie après <span class="block text-xs font-normal text-gray-500">il rapporte {{ fcfa(c.total) }}, vous lui devez {{ fcfa(c.frais_livraison or 0) }}</span></button>
                 </form>
-            </details>
+            </details>{% endif %}
         </div>
         {% endif %}
         <p class="text-xs text-gray-600 mt-3">Le livreur marque « Livrée » depuis son téléphone (avec la photo du colis). Vous pouvez aussi le faire ici :</p>
         <form method="POST" action="{{ url_for('boutique.changer_statut_commande', commande_id=c.id) }}" class="mt-3"
               data-question="Confirmer : {{ c.livreur.nom }} a livré la commande n°{{ c.numero }} et a l'argent (à remettre à la caisse) ?"
               onsubmit="return confirm(this.dataset.question)">
+            <input type="hidden" name="depuis" value="{{ c.statut }}">
             <button type="submit" name="statut" value="livree" class="w-full bg-green-600 text-white py-3.5 rounded-xl font-bold text-lg hover:bg-green-700">✅ Livrée par {{ c.livreur.nom }}</button>
         </form>
         {% endif %}
@@ -403,6 +418,7 @@
                       data-question="Confirmer : la boutique a remis elle-même la commande n°{{ c.numero }} et encaissé {{ fcfa(c.total) }} ?"
                       onsubmit="return confirm(this.dataset.question)">
                     <input type="hidden" name="par" value="boutique">
+                    <input type="hidden" name="depuis" value="{{ c.statut }}">
                     <button type="submit" name="statut" value="livree" class="w-full bg-white border-2 border-gray-400 text-gray-700 py-2.5 rounded-xl font-semibold">🏪 Remise par la boutique (encaissé en boutique)</button>
                 </form>
             </div>
@@ -599,6 +615,7 @@
             {% if c.statut in ['nouvelle', 'confirmee', 'en_livraison', 'echec'] %}
             <form method="POST" action="{{ url_for('boutique.changer_statut_commande', commande_id=c.id) }}"
                   data-question="Annuler la commande n°{{ c.numero }} de {{ c.client_nom }} ?" onsubmit="return confirm(this.dataset.question)">
+                <input type="hidden" name="depuis" value="{{ c.statut }}">
                 <button type="submit" name="statut" value="annulee" class="w-full flex items-center gap-2 border border-red-200 text-red-600 rounded-xl px-3 py-2.5 hover:bg-red-50"><i class="fas fa-ban w-5 text-center"></i> Annuler la commande</button>
             </form>
             {% endif %}

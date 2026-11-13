@@ -296,13 +296,14 @@ class Article(db.Model):
                     resultat.setdefault(option, {})[valeur] = photos.index(url)
         return resultat
 
-    def donnees_variantes(self):
-        """Ce dont la page a besoin pour griser les variantes épuisées et changer prix / photo."""
+    def donnees_variantes(self, reserves=None):
+        """Ce dont la page a besoin pour griser les variantes épuisées et changer prix / photo.
+        reserves : quantités déjà commandées (commandes en cours), déduites du stock."""
         v = {}
         for cle, _ in self.combinaisons():
             e = {}
             if self.suit_variantes:
-                e['s'] = self.stock_variante(cle)
+                e['s'] = self.stock_variante(cle) - (reserves or {}).get((self.id, cle), 0)
             prix = self.variante(cle).get('prix')
             if prix is not None:
                 e['p'] = float(prix)
@@ -732,6 +733,7 @@ class CodePromo(db.Model):
     utilisations_max = db.Column(db.Integer, nullable=True)
     utilisations = db.Column(db.Integer, nullable=False, default=0)
     affiche = db.Column(db.Boolean, nullable=False, default=False)   # annoncé en haut du catalogue
+    une_fois_par_client = db.Column(db.Boolean, nullable=False, default=False, server_default='0')  # 1 seule fois par téléphone
     actif = db.Column(db.Boolean, nullable=False, default=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 

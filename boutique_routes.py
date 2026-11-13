@@ -37,7 +37,7 @@ GERANT_SEUL = {
     'biometrie_retirer',
 }
 CAISSE = {'page_caisse', 'caisse_versement', 'caisse_paiement_livreur', 'caisse_mouvement', 'caisse_supprimer',
-          'payer_frais_commande', 'versement_commande',
+          'payer_frais_commande', 'versement_commande', 'changer_mode_frais',
           'abonnement_payer'}
 GESTION = {
     'inventaire', 'entree_stock', 'mouvements_stock', 'ajouter_article', 'modifier_article', 'supprimer_photo',
@@ -871,6 +871,7 @@ def commande_details(commande_id):
     # Livreur proposé : celui déjà choisi, sinon le livreur attitré de la zone
     livreur_propose = commande.livreur_id or (commande.zone.livreur_id if commande.zone else None)
     return render_template('boutique/commande_details.html', a_rapporter=a_rapporter_externe(commande),
+                           manques=stock.manques(commande),
                            maintenant=datetime.utcnow(), commande=commande, statuts=Commande.STATUTS,
                            discussion_non_lus=discussions.non_lus(commande.discussion, 'boutique') if commande.discussion else 0,
                            livreurs=livreurs, zones=zones_actives(), livreur_propose=livreur_propose,
@@ -933,6 +934,7 @@ def nouvelle_commande():
         f = request.form
         lignes = []
         par_id = {a.id: a for a in catalogue}
+        reserves_stock = None
         choix_lignes = f.getlist('article_choix') or [''] * len(f.getlist('article_id'))
         for article_id, qte, choix_texte in zip(f.getlist('article_id'), f.getlist('quantite'), choix_lignes):
             article = par_id.get(int(article_id)) if article_id.isdigit() else None
@@ -948,9 +950,12 @@ def nouvelle_commande():
                                            sources=Commande.SOURCES, zones=zones_actives(), form=f,
                                            index_quartiers=index_quartiers(zones_actives()), creneaux=creneaux_disponibles() + [CRENEAU_AUTRE],
                                            livreurs=Livreur.query.filter_by(boutique_id=current_user.id, actif=True).order_by(Livreur.nom).all())
-                dispo = article.stock_variante(cle) if cle else None
+                if reserves_stock is None:
+                    reserves_stock = stock.reserves(current_user.id)
+                dispo = stock.disponible(article, cle, reserves_stock)
                 if dispo is not None and quantite > dispo:
-                    flash(f'Attention : « {article.nom} ({choix}) » : il n\'en reste que {max(dispo, 0)} en stock.', 'warning')
+                    flash(f"Attention : « {article.nom}{f' ({choix})' if choix else ''} » : seulement {max(dispo, 0)} disponible(s) "
+                          "(stock moins les commandes en cours). Vérifiez avant de livrer.", 'warning')
                 photos_art = [p for p in (article.photos_urls or []) if p]
                 index_photo = next((i for o, v in (cle and article.choix_de_cle(cle) or {}).items()
                                     for i in [article.photos_valeurs().get(o, {}).get(v)] if i is not None), 0)
@@ -1014,7 +1019,7 @@ def nouvelle_commande():
         )
         enregistrer_avec_numero(commande, 'numero_commande', Commande.prochain_numero)
         if promo:
-            promo.utilisations += 1
+            promos.consommer(promo)
             db.session.commit()
         livreur = None if f.get('mode_reception') == 'retrait' else Livreur.query.filter_by(id=f.get('livreur_id', type=int), boutique_id=current_user.id, actif=True).first()
         if livreur:
@@ -1235,6 +1240,9 @@ def changer_mode_frais(commande_id):
     if commande.reglee and commande.statut in ('livree', 'retournee'):
         flash("L'argent de cette commande est déjà en caisse : le choix des frais ne peut plus changer.", 'warning')
         return redirect(url_for('boutique.commande_details', commande_id=commande.id) + '#livraison')
+    if commande.statut in ('livree', 'retournee') and not commande.garde_frais and commande.frais_payes:
+        flash(f"Les frais ({msg.fcfa(commande.frais_livraison or 0)}) ont déjà été payés au livreur : le choix ne peut plus changer.", 'warning')
+        return redirect(url_for('boutique.commande_details', commande_id=commande.id) + '#livraison')
     commande.mode_frais = mode
     if commande.statut in ('livree', 'retournee') and commande.livree_par_livreur:
         commande.frais_payes = commande.garde_frais
@@ -1347,6 +1355,16 @@ def changer_statut_commande(commande_id):
         return redirect(url_for('boutique.commandes'))
 
     statut = request.form.get('statut')
+    # Page restée ouverte : la commande a changé entre-temps (ex. le livreur l'a marquée livrée)
+    depuis = request.form.get('depuis')
+    if depuis and depuis != commande.statut:
+        flash(f"La commande n°{commande.numero} a changé entre-temps : elle est maintenant « {commande.statut_libelle} ». "
+              "Rien n'a été modifié, vérifiez ci-dessous.", 'warning')
+        return redirect(url_for('boutique.commande_details', commande_id=commande.id))
+    refus = stock.refus_transition(commande, statut) if statut in Commande.STATUTS and statut != 'retournee' else None
+    if refus:
+        flash(refus, 'danger')
+        return redirect(url_for('boutique.commande_details', commande_id=commande.id))
     if statut in Commande.STATUTS and statut != 'retournee':  # « retournée » passe par un retour
         if statut == 'livree' and commande.statut != 'livree':
             # Remise par la boutique (retrait sur place, ou la boutique a livré elle-même) :
@@ -1356,10 +1374,13 @@ def changer_statut_commande(commande_id):
         stock.changer_statut(commande, statut)
         commande.lu = True
         verse = 0
-        if statut == 'livree' and request.form.get('argent_remis') and commande.livree_par_livreur and not commande.reglee:
+        droits_caisse = peut('boutique.versement_commande')
+        if statut == 'livree' and request.form.get('argent_remis') and commande.livree_par_livreur and not droits_caisse:
+            flash("L'argent n'est pas encore entré en caisse : le gérant ou le caissier l'enregistrera (Caisse ou fiche commande).", 'info')
+        if statut == 'livree' and request.form.get('argent_remis') and droits_caisse and commande.livree_par_livreur and not commande.reglee:
             # Livreur revenu avec l'argent : il entre en caisse tout de suite
             verse = caisse.enregistrer_versement(commande.livreur, [commande])
-            if request.form.get('payer_frais') and commande.frais_a_payer_livreur:
+            if request.form.get('payer_frais') and commande.frais_a_payer_livreur and peut('boutique.payer_frais_commande'):
                 verse -= caisse.payer_livreur(commande.livreur, [commande])
         if statut == 'echec':
             commande.date_echec = datetime.utcnow()
@@ -1513,6 +1534,14 @@ def historique_csv():
 
 # ==================== RETOURS / ÉCHANGES ====================
 
+def montant_rembourse(commande, lignes):
+    """Prix des articles rendus, moins leur part de la réduction (code promo, fidélité)."""
+    brut = sum(l['prix'] * l['quantite'] for l in lignes)
+    if commande.remise and commande.sous_total:
+        return round(brut * commande.net_articles / commande.sous_total)
+    return brut
+
+
 @boutique_bp.route('/commande/<int:commande_id>/retour', methods=['GET', 'POST'])
 @login_required
 def retour_commande(commande_id):
@@ -1537,7 +1566,7 @@ def retour_commande(commande_id):
 
         motif = (request.form.get('motif') or '').strip() or None
         retour = Retour(commande=commande, type=type_retour, motif=motif, lignes=lignes,
-                        montant=sum(l['prix'] * l['quantite'] for l in lignes))
+                        montant=montant_rembourse(commande, lignes))
         db.session.add(retour)
         for l in lignes:  # les articles rapportés reviennent en stock
             stock.mouvement_ligne(l, commande.boutique_id, l['quantite'], 'retour', commande,
@@ -2256,6 +2285,7 @@ def codes_promo():
                 date_fin=date_fin.date() if date_fin else None,
                 utilisations_max=request.form.get('utilisations_max', type=int) or None,
                 affiche=bool(request.form.get('affiche')),
+                une_fois_par_client=bool(request.form.get('une_fois_par_client')),
             ))
             db.session.commit()
             flash(f'Code {code} créé', 'success')
