@@ -1,0 +1,60 @@
+{% extends "base.html" %}
+
+{% block title %}Admin - Import Ma Boutik{% endblock %}
+
+{% macro f(v) %}{{ "{:,.0f}".format(v or 0).replace(',', ' ') }}{% endmacro %}
+
+{% block content %}
+<div class="max-w-2xl mx-auto px-4 space-y-4 pb-16">
+    <div>
+        <a href="{{ url_for('admin.admin_dashboard') }}" class="text-sm text-gray-500"><i class="fas fa-arrow-left mr-1"></i> Administration</a>
+        <h1 class="text-2xl font-extrabold text-gray-900 mt-1"><i class="fas fa-file-import text-purple-500 mr-1"></i> Importer depuis Ma Boutik</h1>
+        <p class="text-sm text-gray-500">Articles (nom, catégorie, prix, stock) et créances encore ouvertes d'une boutique de Ma Boutik.</p>
+    </div>
+
+    {% if not apercu %}
+    <form method="POST" enctype="multipart/form-data" class="bg-white rounded-2xl shadow-md p-5 space-y-4">
+        <ol class="text-sm text-gray-700 list-decimal ml-5 space-y-1">
+            <li>Sur le PC : lancez <code class="bg-gray-100 px-1 rounded">exporter_unik.py</code> (dossier <b>DEVP\import_maboutik</b>). Il lit Ma Boutik sans rien modifier et crée le fichier <b>import_….json</b>.</li>
+            <li>Déposez ce fichier ci-dessous et choisissez la boutique LivraPlus qui le reçoit.</li>
+            <li>Vérifiez l'aperçu, puis confirmez.</li>
+        </ol>
+        <label class="block text-sm font-semibold text-gray-700">Fichier exporté de Ma Boutik
+            <input type="file" name="fichier" accept=".json,application/json" required class="mt-1 w-full border border-gray-300 rounded-xl px-3 py-2"></label>
+        <label class="block text-sm font-semibold text-gray-700">Boutique LivraPlus qui reçoit
+            <select name="boutique_id" required class="mt-1 w-full border border-gray-300 rounded-xl px-3 py-2">
+                <option value="">Choisir…</option>
+                {% for b in boutiques %}<option value="{{ b.id }}">{{ b.nom_boutique }} — {{ b.email }}</option>{% endfor %}
+            </select></label>
+        <button type="submit" class="w-full bg-purple-600 text-white rounded-xl py-3 font-bold">Voir l'aperçu</button>
+    </form>
+    {% else %}
+    <div class="bg-white rounded-2xl shadow-md p-5 space-y-3">
+        <p class="text-lg font-bold">« {{ apercu.boutique }} » (export du {{ apercu.exporte_le }}) → <span class="text-purple-700">{{ boutique.nom_boutique }}</span></p>
+        <ul class="text-sm space-y-1.5">
+            <li>📦 <b>{{ apercu.nouveaux|length }}</b> articles à créer, <b>{{ f(apercu.pieces) }}</b> pièces en stock{% if apercu.deja %} · {{ apercu.deja }} déjà présents (même nom) : ignorés{% endif %}</li>
+            <li>🏷 {{ apercu.categories|length }} catégories : {{ apercu.categories[:12]|join(', ') }}{{ '…' if apercu.categories|length > 12 }}</li>
+            {% if apercu.sans_prix_achat %}<li class="text-orange-700">⚠ {{ apercu.sans_prix_achat }} articles sans prix d'achat (bénéfice inconnu tant qu'il n'est pas rempli)</li>{% endif %}
+            <li>🤝 <b>{{ apercu.creances|length }}</b> créances ouvertes reprises : {{ f(apercu.total_creances) }} FCFA à recevoir</li>
+            <li>🙈 Les articles arrivent <b>cachés du catalogue en ligne</b> (pas encore de photo) mais vendables tout de suite au comptoir.</li>
+        </ul>
+        <details class="text-sm"><summary class="cursor-pointer text-purple-700">Voir les articles</summary>
+            <div class="max-h-72 overflow-y-auto mt-2 divide-y divide-gray-100">
+                {% for a in apercu.nouveaux %}<div class="py-1 flex justify-between gap-2"><span class="truncate">{{ a.nom }} <span class="text-gray-400">{{ a.categorie }}</span></span><span class="whitespace-nowrap">{{ f(a.prix_vente) }} F · {{ a.stock }} en stock</span></div>{% endfor %}
+            </div></details>
+        {% if apercu.creances %}
+        <details class="text-sm"><summary class="cursor-pointer text-purple-700">Voir les créances</summary>
+            <ul class="mt-2 space-y-0.5">{% for c in apercu.creances %}<li>{{ c.client_nom }} {{ c.client_telephone }} : reste {{ f(c.reste) }} F (sur {{ f(c.total) }}, du {{ c.date }})</li>{% endfor %}</ul>
+        </details>
+        {% endif %}
+        <form method="POST" class="flex gap-2 pt-2" onsubmit="this.querySelector('button[type=submit]').disabled = true">
+            <input type="hidden" name="boutique_id" value="{{ boutique.id }}">
+            <textarea name="donnees" class="hidden">{{ donnees }}</textarea>
+            <input type="hidden" name="confirmer" value="1">
+            <a href="{{ url_for('admin.import_maboutik') }}" class="px-4 py-3 rounded-xl bg-gray-100 font-semibold">Annuler</a>
+            <button type="submit" class="flex-1 bg-green-600 text-white rounded-xl py-3 font-bold"><i class="fas fa-check mr-1"></i> Confirmer l'import</button>
+        </form>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

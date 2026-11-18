@@ -194,7 +194,7 @@
     // ---------- Tuiles ----------
     function dessinerTuiles() {
         const q = sansAcc($('recherche').value.trim());
-        const liste = CATALOGUE.filter((a) => !q || sansAcc('n°' + a.n + ' ' + a.n + ' ' + a.nom + ' ' + (a.cb || '')).includes(q)
+        const liste = CATALOGUE.filter((a) => !q || sansAcc('n°' + a.n + ' ' + a.n + ' ' + a.nom + ' ' + (a.cat || '') + ' ' + (a.cb || '')).includes(q)
             || Object.values(a.v).some((v) => v.cb && v.cb.includes(q)));
         $('tuiles').innerHTML = '';
         liste.slice(0, 120).forEach((a) => {

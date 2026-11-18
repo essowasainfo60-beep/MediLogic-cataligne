@@ -314,10 +314,17 @@ def enregistrer_variantes(article, form, type_mouvement, note):
     return erreur_code
 
 
+def _categories(boutique_id):
+    return sorted({c for (c,) in db.session.query(Article.categorie).filter(
+        Article.boutique_id == boutique_id, Article.categorie.isnot(None)).distinct()})
+
+
 def _lire_caisse_article(article, form):
     """Code-barres (unique dans la boutique), prix d'achat et affichage en ligne saisis sur la fiche article."""
     if 'en_ligne_present' in form:
         article.en_ligne = bool(form.get('en_ligne'))
+    if 'categorie' in form:
+        article.categorie = (form.get('categorie') or '').strip()[:60] or None
     if 'prix_achat' in form:
         article.prix_achat = lire_prix(form.get('prix_achat')) if (form.get('prix_achat') or '').strip() else None
     if 'code_barre' in form:
@@ -1192,7 +1199,8 @@ def ajouter_article():
             return redirect(url_for('boutique.modifier_article', article_id=article.id) + '#photosChoix')
         return redirect(url_for('boutique.articles'))
 
-    return render_template('boutique/ajouter_article.html', nb_abonnes=nouveautes.abonnes(current_user.id))
+    return render_template('boutique/ajouter_article.html', nb_abonnes=nouveautes.abonnes(current_user.id),
+                           categories_boutique=_categories(current_user.id))
 
 def _annoncer_et_dire(boutique):
     """Envoie l'annonce si c'est possible aujourd'hui, et explique ce qui s'est passé."""
@@ -1269,7 +1277,7 @@ def modifier_article(article_id):
             flash(f'{echecs} fichier(s) ignoré(s) : ce ne sont pas des images valides', 'warning')
         return redirect(url_for('boutique.articles'))
 
-    return render_template('boutique/modifier_article.html', article=article)
+    return render_template('boutique/modifier_article.html', article=article, categories_boutique=_categories(current_user.id))
 
 @boutique_bp.route('/videos', methods=['POST'])
 @login_required

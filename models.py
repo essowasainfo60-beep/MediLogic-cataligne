@@ -207,6 +207,8 @@ class Article(db.Model):
     code_barre = db.Column(db.String(40), nullable=True, index=True)
     # Prix d'achat (pour le bénéfice) ; facultatif
     prix_achat = db.Column(db.Float, nullable=True)
+    # Catégorie (Sacs, Parfums, Robes…) : pour retrouver vite l'article à la caisse
+    categorie = db.Column(db.String(60), nullable=True)
     # Affiché dans le catalogue en ligne ? (sinon : vendu seulement au comptoir / par la boutique)
     en_ligne = db.Column(db.Boolean, nullable=False, default=True, server_default='1')
     # Photo à montrer quand le client choisit une valeur : {"Couleur": {"Noir": "<url de la photo>"}}

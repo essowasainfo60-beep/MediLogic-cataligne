@@ -6,6 +6,12 @@
     <span class="text-sm"><b>🌐 Afficher dans mon catalogue en ligne</b>
         <span class="block text-xs text-gray-600">Décoché : l'article reste dans votre stock et se vend au comptoir, mais vos clients ne le voient pas en ligne.</span></span>
 </label>
+<div class="mb-3">
+    <label class="block text-gray-700 text-sm font-bold mb-1">Catégorie <span class="font-normal text-gray-400">(facultatif)</span></label>
+    <input type="text" name="categorie" maxlength="60" list="listeCategories" value="{{ art_c.categorie if art_c and art_c.categorie else '' }}"
+           class="w-full px-3 py-2.5 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-500" placeholder="Ex : Sacs, Parfums, Robes…">
+    <datalist id="listeCategories">{% for c in categories_boutique if categories_boutique is defined %}<option value="{{ c }}">{% endfor %}</datalist>
+</div>
 <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
     <div>
         <label class="block text-gray-700 text-sm font-bold mb-1">Prix d'achat <span class="font-normal text-gray-400">(facultatif)</span></label>

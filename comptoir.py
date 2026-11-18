@@ -82,7 +82,7 @@ def catalogue_caisse(boutique_id):
             v[cle] = {'l': a.libelle_choix(choisis), 'p': a.prix_de(cle),
                       's': a.stock_variante(cle) if a.suit_variantes else None,
                       'r': reserves.get((a.id, cle), 0), 'cb': e.get('cb')}
-        res.append({'id': a.id, 'n': a.numero, 'nom': a.nom, 'prix': a.prix, 'photo': photos[0] if photos else None,
+        res.append({'id': a.id, 'n': a.numero, 'nom': a.nom, 'cat': a.categorie or '', 'prix': a.prix, 'photo': photos[0] if photos else None,
                     'cb': a.code_barre, 's': a.stock, 'r': reserves.get((a.id, None), 0),
                     'options': a.options or {}, 'suivi': a.suit_variantes, 'v': v,
                     'photos': a.photos_valeurs() if a.options else {}, 'tout': photos})

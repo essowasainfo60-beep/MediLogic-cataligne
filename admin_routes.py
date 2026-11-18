@@ -205,6 +205,30 @@ def supprimer_boutique(boutique_id):
 MDP_FORT = re.compile(r'^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z\d]).{8,}$')
 
 
+@admin_bp.route('/import-maboutik', methods=['GET', 'POST'])
+@admin_required
+def import_maboutik():
+    """Importer une boutique de Ma Boutik (fichier exporté) : aperçu, puis confirmation."""
+    import import_maboutik as imp
+    boutiques = Boutique.query.order_by(Boutique.nom_boutique).all()
+    if request.method == 'GET':
+        return render_template('admin/import_maboutik.html', boutiques=boutiques, apercu=None)
+    fichier = request.files.get('fichier')
+    texte = fichier.read().decode('utf-8-sig', errors='replace') if fichier and fichier.filename else (request.form.get('donnees') or '')
+    donnees, erreur = imp.lire(texte)
+    boutique = db.session.get(Boutique, request.form.get('boutique_id', type=int) or 0)
+    if erreur or not boutique:
+        flash(erreur or 'Choisissez la boutique LivraPlus qui reçoit les données.', 'danger')
+        return redirect(url_for('admin.import_maboutik'))
+    if not request.form.get('confirmer'):
+        return render_template('admin/import_maboutik.html', boutiques=boutiques, apercu=imp.apercu(donnees, boutique),
+                               boutique=boutique, donnees=texte)
+    bilan = imp.importer(donnees, boutique)
+    flash(f"Import terminé dans « {boutique.nom_boutique} » : {bilan['articles']} articles créés ({bilan['pieces']} pièces en stock), "
+          f"{bilan['deja']} déjà présents, {bilan['creances']} créances reprises ({msg.fcfa(bilan['total_creances'])}).", 'success')
+    return redirect(url_for('admin.admin_dashboard'))
+
+
 @admin_bp.route('/compte', methods=['GET', 'POST'])
 @admin_required
 def compte_admin():
