@@ -32,6 +32,11 @@
 
     window.Nouveautes = {
         possible: POSSIBLE,
+        // Abonnement push de ce téléphone (null si refusé / impossible) — sert aussi aux demandes d'articles épuisés
+        abonnementPush: function (CLE, demander) {
+            if (!POSSIBLE || !CLE) return Promise.resolve(null);
+            return abonnement(CLE, demander).then(function (a) { return a ? a.toJSON() : null; }).catch(function () { return null; });
+        },
         // Abonne ce téléphone (appelé aussi par la page de suivi avec l'alerte d'arrivée)
         abonner: async function (urlAbonner, CLE, demander) {
             var abo = await abonnement(CLE, demander);

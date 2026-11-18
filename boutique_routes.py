@@ -6,7 +6,7 @@ import time
 from datetime import datetime, timedelta
 from urllib.parse import quote
 
-from flask import Blueprint, Response, render_template, redirect, url_for, flash, request, session, jsonify, current_app
+from flask import Blueprint, Response, render_template, redirect, url_for, flash, request, session, jsonify, current_app, abort
 from flask_login import login_user, logout_user, login_required, current_user
 
 import abonnement
@@ -14,6 +14,7 @@ import caisse
 import discussions
 import notifications
 import nouveautes
+import demandes
 import suivi_gps
 import stats_avancees
 import promos
@@ -138,6 +139,23 @@ def annonce_differee():
         except Exception:                      # une annonce ratée ne bloque jamais la boutique
             db.session.rollback()
     return None
+
+
+@boutique_bp.after_request
+def retour_en_stock(reponse):
+    """Après chaque action de la boutique (entrée de stock, inventaire, article modifié, commande annulée…) :
+    les clients qui attendaient un article revenu sont prévenus."""
+    if (request.method == 'POST' and reponse.status_code < 400 and request.endpoint
+            and current_user.is_authenticated and request.endpoint.split('.')[-1] not in ARRIERE_PLAN):
+        boutique = boutique_connectee()
+        if boutique:
+            try:
+                bilan = demandes.verifier(boutique.id)
+                if bilan:
+                    flash(demandes.resume(bilan), 'success')
+            except Exception:                  # une notification ratée ne bloque jamais la boutique
+                db.session.rollback()
+    return reponse
 
 
 @boutique_bp.route('/activite')
@@ -614,7 +632,89 @@ def articles():
     return render_template('boutique/articles.html', articles=articles_list, archives=False,
                            nb_abonnes=nouveautes.abonnes(b.id), en_attente=nouveautes.en_attente(b.id),
                            annonce_possible=nouveautes.annonce_possible(b), derniere_annonce=b.derniere_annonce,
+                           demandes_par_article=_demandes_par_article(b.id),
                            lien_wa_nouveautes='https://wa.me/?text=' + quote(nouveautes.message_whatsapp(b, recentes)) if recentes else None)
+
+def _demandes_par_article(boutique_id):
+    compte = {}
+    for d in demandes.en_attente(boutique_id).all():
+        compte[d.article_id] = compte.get(d.article_id, 0) + 1
+    return compte
+
+
+# ==================== DEMANDES D'ARTICLES ÉPUISÉS ====================
+
+@boutique_bp.route('/demandes')
+@login_required
+def demandes_clients():
+    """Clients qui attendent un article épuisé (avec leur message)."""
+    from models import DemandeArticle
+    b = boutique_connectee()
+    vue = request.args.get('vue', 'attente')
+    vue = vue if vue in ('attente', 'prevenus') else 'attente'
+    demandes.verifier(b.id)                    # un article revenu sans action (ex. commande annulée par le client)
+    q = DemandeArticle.query.filter_by(boutique_id=b.id)
+    if vue == 'attente':
+        liste = q.filter_by(statut=DemandeArticle.ATTENTE).all()
+        liste.sort(key=lambda d: (d.revenu_at is None, d.created_at))       # « revenu, à prévenir » d'abord
+    else:
+        liste = (q.filter(DemandeArticle.statut != DemandeArticle.ATTENTE)
+                 .order_by(DemandeArticle.created_at.desc()).limit(200).all())
+        liste.sort(key=lambda d: d.prevenu_at or d.created_at, reverse=True)
+    reserves = stock.reserves(b.id)
+    dispo = {d.id: demandes.disponible(d, reserves) for d in liste}
+    nouvelles = {d.id for d in liste if not d.vue}
+    page = render_template('boutique/demandes.html', liste=liste, vue=vue, dispo=dispo, nouvelles=nouvelles,
+                           nb_attente=demandes.en_attente(b.id).count(), lien_wa=demandes.lien_whatsapp)
+    if nouvelles:
+        for d in liste:
+            d.vue = True
+        db.session.commit()
+    return page
+
+
+def _demande_de_la_boutique(demande_id):
+    from models import DemandeArticle
+    d = db.session.get(DemandeArticle, demande_id)
+    b = boutique_connectee()
+    if not d or not b or d.boutique_id != b.id:
+        abort(404)
+    return d
+
+
+@boutique_bp.route('/demandes/<int:demande_id>/prevenir', methods=['POST'])
+@login_required
+def prevenir_demande(demande_id):
+    """La boutique fait signe au client : notification sur son téléphone et/ou WhatsApp."""
+    d = _demande_de_la_boutique(demande_id)
+    par = qui() or boutique_connectee().nom_boutique
+    lien = demandes.lien_whatsapp(d)
+    envoye = demandes.prevenir(d, par)
+    if request.form.get('mode') == 'whatsapp':
+        return redirect(lien)
+    if envoye:
+        flash(f'🔔 {d.nom} a reçu une notification sur son téléphone : « {d.designation} » est disponible.', 'success')
+    else:
+        flash(f"{d.nom} n'a pas activé les notifications (ou les a coupées) : prévenez-le par WhatsApp.", 'warning')
+    return redirect(url_for('boutique.demandes_clients', vue=request.form.get('vue') or 'attente'))
+
+
+@boutique_bp.route('/demandes/<int:demande_id>/classer', methods=['POST'])
+@login_required
+def classer_demande(demande_id):
+    """Ne plus attendre (article abandonné, client servi autrement…) — ou remettre en attente."""
+    from models import DemandeArticle
+    d = _demande_de_la_boutique(demande_id)
+    if request.form.get('remettre'):
+        d.statut, d.prevenu_at, d.prevenu_par, d.revenu_at = DemandeArticle.ATTENTE, None, None, None
+        flash(f'La demande de {d.nom} est de nouveau en attente.', 'success')
+    else:
+        d.statut, d.vue = DemandeArticle.CLASSEE, True
+        d.prevenu_at, d.prevenu_par = datetime.utcnow(), f'classée par {qui() or "la boutique"}'
+        flash(f'Demande de {d.nom} classée (le client ne sera pas prévenu).', 'info')
+    db.session.commit()
+    return redirect(url_for('boutique.demandes_clients', vue=request.form.get('vue') or 'attente'))
+
 
 @boutique_bp.route('/articles_archives')
 @login_required
@@ -1772,8 +1872,9 @@ def injecter_compteurs():
     """Pastille « nouvelles commandes » dans la barre du haut."""
     if current_user.is_authenticated and hasattr(current_user, 'nom_boutique') and request.blueprint == 'boutique':
         return {'nouvelles_commandes': Commande.query.filter_by(boutique_id=current_user.id, statut='nouvelle').count(),
-                'messages_non_lus': discussions.non_lus_boutique(current_user.id)}
-    return {'nouvelles_commandes': 0, 'messages_non_lus': 0}
+                'messages_non_lus': discussions.non_lus_boutique(current_user.id),
+                'demandes_a_traiter': demandes.nombre_a_traiter(current_user.id)}
+    return {'nouvelles_commandes': 0, 'messages_non_lus': 0, 'demandes_a_traiter': 0}
 
 @boutique_bp.route('/mot_de_passe', methods=['GET', 'POST'])
 @login_required

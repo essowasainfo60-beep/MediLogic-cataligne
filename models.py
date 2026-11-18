@@ -793,6 +793,44 @@ class AbonnementNouveautes(db.Model):
     boutique = db.relationship('Boutique', backref=db.backref('abonnements_nouveautes', cascade='all, delete-orphan', lazy='dynamic'))
 
 
+class DemandeArticle(db.Model):
+    """Un client voulait un article épuisé : il laisse un message et sera prévenu à son retour."""
+    __tablename__ = 'demandes_articles'
+
+    ATTENTE, PREVENU, CLASSEE = 'attente', 'prevenu', 'classee'
+
+    id = db.Column(db.Integer, primary_key=True)
+    boutique_id = db.Column(db.Integer, db.ForeignKey('boutiques.id'), nullable=False, index=True)
+    article_id = db.Column(db.Integer, db.ForeignKey('articles.id', ondelete='CASCADE'), nullable=False, index=True)
+    variante = db.Column(db.String(300), nullable=True)          # clé « Couleur=Noir|Pointure=42 » (None = l'article)
+    variante_libelle = db.Column(db.String(150), nullable=True)  # « Pointure 42, Noir »
+    nom = db.Column(db.String(100), nullable=False)
+    telephone = db.Column(db.String(30), nullable=False)
+    message = db.Column(db.Text, nullable=True)
+    quantite = db.Column(db.Integer, nullable=False, default=1)
+    # Notification sur le téléphone du client (s'il l'a acceptée)
+    endpoint = db.Column(db.String(1000), nullable=True)
+    cle_p256dh = db.Column(db.String(200), nullable=True)
+    cle_auth = db.Column(db.String(100), nullable=True)
+    statut = db.Column(db.String(10), nullable=False, default='attente', index=True)
+    revenu_at = db.Column(db.DateTime, nullable=True)       # l'article est revenu (client sans notification : à prévenir)
+    prevenu_at = db.Column(db.DateTime, nullable=True)
+    prevenu_par = db.Column(db.String(60), nullable=True)   # « notification automatique », nom du vendeur…
+    vue = db.Column(db.Boolean, nullable=False, default=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    article = db.relationship('Article', backref=db.backref('demandes', cascade='all, delete-orphan', lazy='dynamic'))
+    boutique = db.relationship('Boutique', backref=db.backref('demandes_articles', cascade='all, delete-orphan', lazy='dynamic'))
+
+    @property
+    def notifiable(self):
+        return bool(self.endpoint and self.cle_p256dh and self.cle_auth)
+
+    @property
+    def designation(self):
+        return self.article.nom + (f' ({self.variante_libelle})' if self.variante_libelle else '')
+
+
 class Parametre(db.Model):
     """Réglages techniques de l'application (ex. clés des notifications)."""
     __tablename__ = 'parametres'

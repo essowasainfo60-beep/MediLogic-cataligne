@@ -15,6 +15,7 @@ import discussions
 import suivi_gps
 from utils import enregistrer_photo
 import stock
+import demandes
 from models import db, Boutique, Article, Commande, Photo, Zone, Livreur, enregistrer_avec_numero
 
 client_bp = Blueprint('client', __name__)
@@ -105,6 +106,7 @@ def catalogue(code):
                            boutique=boutique,
                            articles=articles,
                            cle_push=notifications.cles_vapid()[0],
+                           client=client_connu(),
                            panier=session.get('panier', {}))
 
 def _boutique_du_lien(code):
@@ -136,6 +138,42 @@ def nouveautes_etat(code):
     boutique = _boutique_du_lien(code)
     endpoint = (request.get_json(silent=True) or {}).get('endpoint') or ''
     return jsonify(abonne=AbonnementNouveautes.query.filter_by(boutique_id=boutique.id, endpoint=endpoint).first() is not None)
+
+
+@client_bp.route('/c/<code>/demande', methods=['POST'])
+def demande_article(code):
+    """Article épuisé : le client laisse un message et sera prévenu de son retour."""
+    boutique = _boutique_du_lien(code)
+    d = request.get_json(silent=True) or {}
+    try:
+        article_id = int(d.get('article_id') or 0)
+    except (TypeError, ValueError):
+        article_id = 0
+    article = db.session.get(Article, article_id)
+    if not article or article.boutique_id != boutique.id or article.archive:
+        return jsonify(ok=False, message='Article introuvable'), 404
+    if article.stock is None:
+        return jsonify(ok=False, message="Cet article n'est pas épuisé : ajoutez-le au panier."), 400
+    # Variante : seulement si le client a tout choisi (sinon « peu importe »)
+    choix = d.get('choix') if isinstance(d.get('choix'), dict) else {}
+    libelle = cle = None
+    if article.options and all(choix.get(o) for o in article.options):
+        try:
+            libelle, cle = article.choisir(choix)
+        except ValueError:
+            libelle = cle = None
+    if stock.disponible(article, cle if article.suit_variantes else None, stock.reserves(boutique.id)) > 0:
+        return jsonify(ok=False, disponible=True,
+                       message='Bonne nouvelle : il est disponible ! Ajoutez-le directement au panier.'), 409
+    try:
+        quantite = int(d.get('quantite') or 1)
+    except (TypeError, ValueError):
+        quantite = 1
+    demande, erreur = demandes.enregistrer(boutique, article, cle, libelle, d.get('nom'), d.get('telephone'),
+                                           d.get('message'), quantite, d.get('abo'))
+    if erreur:
+        return jsonify(ok=False, message=erreur), 400
+    return jsonify(ok=True, notifiable=demande.notifiable, designation=demande.designation)
 
 
 @client_bp.route('/c/<code>/article/<int:numero>')

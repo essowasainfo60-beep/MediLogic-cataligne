@@ -1,0 +1,101 @@
+{% extends "base.html" %}
+
+{% block title %}Demandes d'articles - {{ current_user.nom_boutique }}{% endblock %}
+
+{% block content %}
+<div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 space-y-5">
+    <div>
+        <h1 class="text-2xl md:text-3xl font-extrabold text-gray-900"><i class="fas fa-bell text-purple-500 mr-2"></i> Demandes d'articles</h1>
+        <p class="text-sm text-gray-500">Des clients voulaient un article épuisé : ils ont laissé un message pour être prévenus de son retour.</p>
+    </div>
+
+    <details class="bg-purple-50 border border-purple-100 rounded-2xl px-4 py-3 text-sm text-purple-900">
+        <summary class="font-semibold cursor-pointer">Comment ça marche ?</summary>
+        <ul class="mt-2 space-y-1 list-disc ml-5">
+            <li>Sur votre catalogue, un article épuisé affiche <b>« Prévenez-moi quand il revient »</b>. Le client laisse son nom, son numéro et un message (ex. « je le veux en noir, pointure 42 »).</li>
+            <li>Dès que l'article revient en stock (entrée de stock, inventaire, commande annulée…), les clients qui ont accepté les notifications sont <b>prévenus automatiquement</b> sur leur téléphone.</li>
+            <li>Les autres apparaissent ici en vert <b>« De retour : à prévenir »</b> : touchez <b>WhatsApp</b>, le message est déjà écrit.</li>
+            <li>Vous pouvez aussi <b>faire signe vous-même à tout moment</b> (arrivage prévu, article proche à proposer…) : le message WhatsApp reste modifiable avant l'envoi.</li>
+        </ul>
+    </details>
+
+    <!-- Onglets -->
+    <div class="flex border-b border-gray-200 text-sm">
+        <a href="{{ url_for('boutique.demandes_clients') }}"
+           class="px-4 py-2 -mb-px border-b-2 {{ 'border-purple-600 text-purple-700 font-semibold' if vue == 'attente' else 'border-transparent text-gray-500' }}">
+            En attente <span class="ml-1 bg-gray-100 text-gray-700 rounded-full px-2 text-xs">{{ nb_attente }}</span></a>
+        <a href="{{ url_for('boutique.demandes_clients', vue='prevenus') }}"
+           class="px-4 py-2 -mb-px border-b-2 {{ 'border-purple-600 text-purple-700 font-semibold' if vue == 'prevenus' else 'border-transparent text-gray-500' }}">
+            Prévenus / classées</a>
+    </div>
+
+    {% if not liste %}
+    <div class="text-center text-gray-500 py-14">
+        <i class="fas fa-inbox text-4xl text-gray-300 mb-3"></i>
+        <p>{{ "Aucune demande en attente." if vue == 'attente' else "Aucun client prévenu pour l'instant." }}</p>
+    </div>
+    {% endif %}
+
+    <div class="space-y-3">
+        {% for d in liste %}
+        {% set a = d.article %}
+        {% set photo = (a.photos_urls or [])|select|first %}
+        <div class="bg-white rounded-2xl shadow-md p-4 border-2 {{ 'border-green-400' if d.statut == 'attente' and dispo[d.id] else 'border-transparent' }}">
+            <div class="flex gap-3">
+                {% if photo %}<img src="{{ photo }}" alt="" class="h-16 w-16 rounded-xl object-cover flex-shrink-0">
+                {% else %}<div class="h-16 w-16 rounded-xl bg-gray-100 text-gray-300 flex items-center justify-center flex-shrink-0"><i class="fas fa-image text-2xl"></i></div>{% endif %}
+                <div class="min-w-0 flex-1">
+                    <p class="font-bold text-gray-900"><span class="text-purple-600">n°{{ a.numero }}</span> · {{ a.nom }}
+                        {% if d.id in nouvelles %}<span class="ml-1 text-[11px] bg-red-500 text-white rounded-full px-2 py-0.5 align-middle">Nouveau</span>{% endif %}</p>
+                    {% if d.variante_libelle %}<p class="text-sm text-purple-700 font-semibold">{{ d.variante_libelle }}</p>{% endif %}
+                    <p class="text-sm text-gray-700"><i class="fas fa-user text-gray-400 mr-1"></i>{{ d.nom }} · <a href="tel:{{ d.telephone }}" class="text-purple-700 underline">{{ d.telephone }}</a>
+                        · {{ d.quantite }} voulu{{ 's' if d.quantite > 1 }}</p>
+                    <p class="text-xs text-gray-500">Demandé le {{ d.created_at.strftime('%d/%m/%Y à %H:%M') }}
+                        · {% if d.notifiable %}🔔 notifications activées{% else %}📵 pas de notification : WhatsApp{% endif %}</p>
+                </div>
+            </div>
+
+            {% if d.message %}
+            <p class="mt-3 bg-gray-50 rounded-xl px-3 py-2 text-sm text-gray-800 whitespace-pre-line"><i class="fas fa-quote-left text-gray-300 mr-1"></i>{{ d.message }}</p>
+            {% endif %}
+
+            {% if d.statut == 'attente' %}
+            <p class="mt-3 text-sm font-semibold {{ 'text-green-700' if dispo[d.id] else 'text-orange-700' }}">
+                {% if dispo[d.id] %}✅ De retour en stock : prévenez {{ d.nom }} !{% else %}⏳ Toujours épuisé : le client sera prévenu à son retour.{% endif %}</p>
+            <div class="mt-3 flex flex-wrap gap-2">
+                <form method="POST" action="{{ url_for('boutique.prevenir_demande', demande_id=d.id) }}" target="_blank"
+                      {% if not dispo[d.id] %}onsubmit="return confirm('L\'article est encore épuisé dans votre stock. Envoyer quand même le message à ce client ?')"{% endif %}>
+                    <input type="hidden" name="mode" value="whatsapp">
+                    <button type="submit" onclick="setTimeout(() => location.reload(), 1500)" class="bg-green-600 text-white px-4 py-2 rounded-xl font-semibold text-sm">
+                        <i class="fab fa-whatsapp mr-1"></i> Prévenir sur WhatsApp</button>
+                </form>
+                {% if d.notifiable %}
+                <form method="POST" action="{{ url_for('boutique.prevenir_demande', demande_id=d.id) }}"
+                      {% if not dispo[d.id] %}onsubmit="return confirm('L\'article est encore épuisé dans votre stock. Envoyer quand même la notification ?')"{% endif %}>
+                    <button type="submit" class="bg-purple-600 text-white px-4 py-2 rounded-xl font-semibold text-sm"><i class="fas fa-bell mr-1"></i> Envoyer une notification</button>
+                </form>
+                {% endif %}
+                <form method="POST" action="{{ url_for('boutique.classer_demande', demande_id=d.id) }}"
+                      onsubmit="return confirm('Classer cette demande ? Le client ne sera pas prévenu.')">
+                    <button type="submit" class="bg-gray-100 text-gray-600 px-4 py-2 rounded-xl text-sm">Classer</button>
+                </form>
+            </div>
+            {% else %}
+            <div class="mt-3 flex flex-wrap items-center justify-between gap-2">
+                <p class="text-sm {{ 'text-green-700' if d.statut == 'prevenu' else 'text-gray-500' }}">
+                    {% if d.statut == 'prevenu' %}✓ Prévenu le {{ d.prevenu_at.strftime('%d/%m à %H:%M') }} ({{ d.prevenu_par or 'boutique' }})
+                    {% else %}Classée le {{ d.prevenu_at.strftime('%d/%m à %H:%M') if d.prevenu_at else '' }} ({{ d.prevenu_par }}){% endif %}</p>
+                <div class="flex gap-2">
+                    <a href="{{ lien_wa(d) }}" target="_blank" rel="noopener" class="border-2 border-green-500 text-green-700 px-3 py-1.5 rounded-xl text-sm font-semibold"><i class="fab fa-whatsapp mr-1"></i> Écrire</a>
+                    <form method="POST" action="{{ url_for('boutique.classer_demande', demande_id=d.id) }}">
+                        <input type="hidden" name="remettre" value="1"><input type="hidden" name="vue" value="prevenus">
+                        <button type="submit" class="bg-gray-100 text-gray-600 px-3 py-1.5 rounded-xl text-sm">Remettre en attente</button>
+                    </form>
+                </div>
+            </div>
+            {% endif %}
+        </div>
+        {% endfor %}
+    </div>
+</div>
+{% endblock %}

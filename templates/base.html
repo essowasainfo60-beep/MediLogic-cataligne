@@ -84,7 +84,8 @@
         ('boutique.discussions_liste', 'fa-comments', 'Messages')] %}
     {% set groupes_plus = [
         ('Vente', [('boutique.articles', 'fa-boxes-stacked', 'Articles'), ('boutique.inventaire', 'fa-warehouse', 'Stock'),
-                   ('boutique.codes_promo', 'fa-ticket', 'Codes promo'), ('boutique.clients', 'fa-address-book', 'Clients')]),
+                   ('boutique.codes_promo', 'fa-ticket', 'Codes promo'), ('boutique.clients', 'fa-address-book', 'Clients'),
+                   ('boutique.demandes_clients', 'fa-bell', "Demandes d'articles")]),
         ('Argent', [('boutique.page_caisse', 'fa-cash-register', 'Caisse'), ('boutique.statistiques', 'fa-chart-line', 'Statistiques'),
                     ('boutique.historique', 'fa-clock-rotate-left', 'Historique et export')]),
         ('Équipe', [('boutique.livreurs', 'fa-id-badge', 'Livreurs et zones'), ('boutique.vendeurs', 'fa-users', 'Équipe et accès')]),
@@ -157,7 +158,7 @@
                                 <p class="px-2 pt-1 pb-0.5 text-[11px] font-bold uppercase tracking-wide text-gray-400">{{ titre }}</p>
                                 {% for endpoint, icone, libelle in liens if peut(endpoint) %}
                                 <a href="{{ url_for(endpoint) }}" class="flex items-center gap-2 px-2 py-1.5 rounded-lg {{ 'bg-purple-50 text-purple-700 font-semibold' if request.endpoint == endpoint else 'text-gray-700 hover:bg-gray-50' }}">
-                                    <i class="fas {{ icone }} w-4 text-center opacity-80"></i> {{ libelle }}</a>
+                                    <i class="fas {{ icone }} w-4 text-center opacity-80"></i> {{ libelle }}{% if endpoint == 'boutique.demandes_clients' and demandes_a_traiter %}<span class="ml-auto bg-red-500 text-white text-[10px] font-bold rounded-full min-w-[18px] h-[18px] px-1 inline-flex items-center justify-center">{{ demandes_a_traiter }}</span>{% endif %}</a>
                                 {% endfor %}
                             </div>
                             {% endfor %}
@@ -257,8 +258,9 @@
                 {% if endpoint == 'boutique.discussions_liste' %}<span class="pastille-messages {{ '' if messages_non_lus else 'hidden' }} absolute top-1.5 left-1/2 ml-2 bg-green-600 text-white text-[10px] font-bold rounded-full min-w-[18px] h-[18px] px-1 flex items-center justify-center">{{ messages_non_lus or '' }}</span>{% endif %}
             </a>
             {% endfor %}
-            <button type="button" onclick="ouvrirMenuLateral()" class="flex flex-col items-center justify-center gap-0.5 text-gray-500">
-                <i class="fas fa-grip text-lg"></i>Plus</button>
+            <button type="button" onclick="ouvrirMenuLateral()" class="relative flex flex-col items-center justify-center gap-0.5 text-gray-500">
+                <i class="fas fa-grip text-lg"></i>Plus
+                {% if demandes_a_traiter %}<span class="absolute top-1.5 left-1/2 ml-2 bg-red-500 text-white text-[10px] font-bold rounded-full min-w-[18px] h-[18px] px-1 flex items-center justify-center">{{ demandes_a_traiter }}</span>{% endif %}</button>
         </div>
     </nav>
     <div class="md:hidden h-20" aria-hidden="true"></div>
@@ -285,7 +287,7 @@
             {% for endpoint, icone, libelle in liens if peut(endpoint) %}
             <a href="{{ url_for(endpoint) }}"
                class="flex items-center gap-3 mx-2 px-3 py-2.5 rounded-xl text-sm {{ 'bg-purple-50 text-purple-700 font-semibold' if request.endpoint == endpoint else 'text-gray-700 hover:bg-gray-50' }}">
-                <i class="fas {{ icone }} w-5 text-center"></i> {{ libelle }}
+                <i class="fas {{ icone }} w-5 text-center"></i> {{ libelle }}{% if endpoint == 'boutique.demandes_clients' and demandes_a_traiter %}<span class="ml-auto bg-red-500 text-white text-[10px] font-bold rounded-full min-w-[18px] h-[18px] px-1 inline-flex items-center justify-center">{{ demandes_a_traiter }}</span>{% endif %}
             </a>
             {% endfor %}
             {% endfor %}

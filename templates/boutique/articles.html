@@ -104,6 +104,10 @@
                             {% if article.options %}<span class="block text-purple-700 font-normal">{{ article.combinaisons()|length }} variantes ({{ article.options.keys()|join(', ')|lower }}){% if article.variantes_epuisees and article.stock and article.stock > 0 %} · <span class="text-red-600">{{ article.variantes_epuisees }} épuisée{{ 's' if article.variantes_epuisees > 1 }}</span>{% endif %}</span>{% endif %}
                         </p>
 
+                        {% if demandes_par_article is defined and demandes_par_article.get(article.id) %}
+                        <a href="{{ url_for('boutique.demandes_clients') }}" class="block mb-3 text-xs font-semibold bg-purple-50 text-purple-800 rounded-lg px-2 py-1.5">
+                            🔔 {{ demandes_par_article[article.id] }} client{{ 's' if demandes_par_article[article.id] > 1 }} attend{{ 'ent' if demandes_par_article[article.id] > 1 }} cet article ›</a>
+                        {% endif %}
                         <!-- Actions -->
                         <div class="flex space-x-2">
                             <a href="{{ url_for('boutique.modifier_article', article_id=article.id) }}"

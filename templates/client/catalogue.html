@@ -48,6 +48,18 @@
     .rebond { animation: rebond .6s ease 2; }
     @keyframes halo { 0% { box-shadow: 0 0 0 0 rgba(22,163,74,.55) } 100% { box-shadow: 0 0 0 16px rgba(22,163,74,0) } }
     .halo { animation: halo 1.2s ease-out 3; }
+
+    /* ===== Fenêtre de choix (photo, variante) ===== */
+    @keyframes monte { from { transform: translateY(100%) } to { transform: translateY(0) } }
+    @media (max-width: 767px) { #feuille:not(.hidden) .feuille-corps { animation: monte .25s ease-out; } }
+    .puce { min-width: 3rem; padding: .55rem .9rem; border: 2px solid #e5e7eb; border-radius: .9rem; font-weight: 600; font-size: .95rem; background: #fff; color: #1f2937; }
+    .puce.choisie { border-color: #7c3aed; background: #7c3aed; color: #fff; }
+    .puce.epuisee { color: #9ca3af; text-decoration: line-through; border-style: dashed; }
+    .puce.epuisee.choisie { background: #ede9fe; color: #6d28d9; border-color: #7c3aed; }
+    .vignette { flex: 0 0 auto; width: 76px; height: 76px; border-radius: .9rem; border: 3px solid transparent; overflow: hidden; position: relative; background: #f3f4f6; }
+    .vignette img { width: 100%; height: 100%; object-fit: cover; }
+    .vignette.choisie { border-color: #7c3aed; }
+    .vignette.choisie::after { content: '✓'; position: absolute; top: 3px; right: 3px; width: 20px; height: 20px; border-radius: 9999px; background: #7c3aed; color: #fff; font-size: 12px; display: flex; align-items: center; justify-content: center; }
 </style>
 {% endblock %}
 
@@ -175,7 +187,10 @@
     <div id="articles" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
         {% for article in articles %}
         {% set photos = (article.photos_urls or [])|select|list %}
-        <article class="carte bg-white rounded-2xl shadow-md hover:shadow-xl transition overflow-hidden flex flex-col"
+        <article id="article-{{ article.numero }}" class="carte scroll-mt-24 bg-white rounded-2xl shadow-md hover:shadow-xl transition overflow-hidden flex flex-col"
+                 data-article='{{ {"id": article.id, "numero": article.numero, "nom": article.nom, "prix": article.prix, "photos": photos,
+                                   "epuise": (article.disponible is not none and article.disponible <= 0),
+                                   "d": (article.donnees_client if article.options else None)}|tojson }}'
                  data-nom="{{ ('n°' ~ article.numero ~ ' ' ~ article.numero ~ ' ' ~ article.nom ~ ' ' ~ (article.description or ''))|lower }}" data-prix="{{ article.prix }}" data-ordre="{{ loop.index0 }}">
 
             {% if photos %}
@@ -214,29 +229,25 @@
                 </div>
                 {% endif %}
 
-                {% if article.disponible is not none and article.disponible <= 0 %}
-                <p class="mt-auto pt-4"><span class="block text-center bg-gray-100 text-gray-500 py-2.5 rounded-xl font-semibold">Épuisé pour le moment</span></p>
+                {% set epuise = article.disponible is not none and article.disponible <= 0 %}
+                {% if epuise %}
+                <div class="mt-auto pt-4 space-y-2">
+                    <span class="block text-center bg-gray-100 text-gray-500 py-2 rounded-xl font-semibold text-sm">Épuisé pour le moment</span>
+                    <button type="button" data-ouvrir="demande" class="w-full border-2 border-purple-500 text-purple-700 rounded-xl font-semibold py-2 hover:bg-purple-50">
+                        🔔 Prévenez-moi quand il revient</button>
+                </div>
+                {% elif article.options or photos|length > 1 %}
+                <div class="mt-auto pt-4">
+                    {% if article.options %}
+                    <p class="text-xs text-gray-500 mb-1.5">{% for option, valeurs in article.options.items() %}{{ valeurs|length }} {{ option|lower }}{{ 's' if valeurs|length > 1 and not option.endswith('s') }}{{ ' · ' if not loop.last }}{% endfor %}{% if photos|length > 1 %} · {{ photos|length }} photos{% endif %}</p>
+                    {% endif %}
+                    <button type="button" data-ouvrir="choix" class="w-full bg-green-600 text-white rounded-xl font-semibold hover:bg-green-700 transition py-2.5">
+                        <i class="fas fa-hand-pointer mr-1"></i> Choisir {{ (article.options.keys()|join(', ')|lower) if article.options else 'mon modèle' }} et ajouter</button>
+                </div>
                 {% else %}
-                <form method="POST" action="{{ url_for('client.ajouter_panier') }}" class="ajout-panier mt-auto pt-4 space-y-2"
-                      {% if article.options %}data-variantes='{{ (article.donnees_client or article.donnees_variantes())|tojson }}'{% endif %}>
+                <form method="POST" action="{{ url_for('client.ajouter_panier') }}" class="ajout-panier mt-auto pt-4 space-y-2">
                     <input type="hidden" name="article_id" value="{{ article.id }}">
                     <input type="hidden" name="photo_index" value="0">
-                    {% if photos|length > 1 %}
-                    <p class="photo-choisie text-xs text-purple-700 bg-purple-50 rounded-lg px-2 py-1.5">
-                        <i class="fas fa-hand-pointer mr-1"></i> Faites défiler les photos : celle affichée (<span class="num-photo">1</span>/{{ photos|length }}) sera indiquée à la boutique.</p>
-                    {% endif %}
-                    {% if article.options %}
-                    <div class="grid grid-cols-{{ 2 if article.options|length > 1 else 1 }} gap-2">
-                        {% for option, valeurs in article.options.items() %}
-                        <select name="option_{{ option }}" data-option="{{ option }}" required aria-label="{{ option }}"
-                                class="w-full border-2 border-gray-100 rounded-xl px-2 py-2 text-sm">
-                            <option value="">{{ option }}…</option>
-                            {% for v in valeurs %}<option value="{{ v }}">{{ v }}</option>{% endfor %}
-                        </select>
-                        {% endfor %}
-                    </div>
-                    <p class="info-variante hidden text-xs rounded-lg px-2 py-1.5"></p>
-                    {% endif %}
                     <div class="flex gap-2">
                         <div class="flex items-center border-2 border-gray-100 rounded-xl">
                             <button type="button" class="moins px-3 py-2 text-gray-500 hover:text-purple-600" aria-label="Moins">−</button>
@@ -293,6 +304,79 @@
     <button type="button" class="galerie-fleche gauche" aria-label="Photo précédente"><i class="fas fa-chevron-left"></i></button>
     <button type="button" class="galerie-fleche droite" aria-label="Photo suivante"><i class="fas fa-chevron-right"></i></button>
     <div class="galerie-points"></div>
+</div>
+
+<!-- Fenêtre de choix : photo du modèle, variante (pointure, couleur…), quantité — ou demande si épuisé -->
+<div id="feuille" class="fixed inset-0 z-[65] hidden" role="dialog" aria-modal="true" aria-labelledby="fNom">
+    <div data-fermer class="absolute inset-0 bg-black/50"></div>
+    <div class="feuille-corps absolute inset-x-0 bottom-0 md:inset-auto md:left-1/2 md:top-1/2 md:-translate-x-1/2 md:-translate-y-1/2 md:w-[480px]
+                bg-white rounded-t-3xl md:rounded-3xl shadow-2xl max-h-[92vh] overflow-y-auto pb-[max(1rem,env(safe-area-inset-bottom))]">
+        <div class="sticky top-0 bg-white z-10 px-4 pt-2 pb-3 border-b border-gray-100">
+            <div class="mx-auto h-1.5 w-12 rounded-full bg-gray-200 mb-3 md:hidden"></div>
+            <div class="flex items-center gap-3">
+                <img id="fImage" alt="" class="h-16 w-16 rounded-xl object-cover bg-gray-100 flex-shrink-0">
+                <div class="min-w-0 flex-1">
+                    <p id="fNom" class="font-bold text-gray-900 leading-tight"></p>
+                    <p id="fPrix" class="text-lg font-extrabold text-purple-700"></p>
+                </div>
+                <button type="button" data-fermer class="h-10 w-10 rounded-full bg-gray-100 text-gray-500 text-xl flex-shrink-0" aria-label="Fermer">&times;</button>
+            </div>
+        </div>
+
+        <div class="px-4 pt-4 space-y-5">
+            <!-- Photos : le client touche le modèle qu'il veut -->
+            <div id="fBlocPhotos">
+                <p class="text-sm font-bold text-gray-800 mb-2">Touchez la photo du modèle que vous voulez</p>
+                <div id="fPhotos" class="flex gap-2 overflow-x-auto pb-1 -mx-1 px-1"></div>
+                <p class="text-xs text-gray-500 mt-1">La boutique verra exactement la photo choisie.</p>
+            </div>
+            <!-- Variantes en boutons -->
+            <div id="fOptions" class="space-y-4"></div>
+            <p id="fInfo" class="hidden text-sm rounded-xl px-3 py-2"></p>
+
+            <!-- Achat -->
+            <div id="fAchat" class="space-y-3">
+                <div class="flex items-center justify-between">
+                    <span class="text-sm font-bold text-gray-800">Quantité</span>
+                    <div class="flex items-center border-2 border-gray-100 rounded-xl">
+                        <button type="button" data-q="-1" class="px-4 py-2 text-lg text-gray-500" aria-label="Moins">−</button>
+                        <span id="fQuantite" class="w-8 text-center font-bold">1</span>
+                        <button type="button" data-q="1" class="px-4 py-2 text-lg text-gray-500" aria-label="Plus">+</button>
+                    </div>
+                </div>
+                <button type="button" id="fAjouter" class="w-full bg-green-600 text-white rounded-2xl font-bold py-3.5 text-lg shadow-md hover:bg-green-700">
+                    <i class="fas fa-cart-plus mr-1"></i> Ajouter au panier</button>
+                <button type="button" id="fVersDemande" class="hidden w-full border-2 border-purple-500 text-purple-700 rounded-2xl font-bold py-3">
+                    🔔 Me prévenir quand ce choix revient</button>
+            </div>
+
+            <!-- Demande : article épuisé -->
+            <form id="fDemande" class="hidden space-y-3">
+                <div class="bg-purple-50 text-purple-900 rounded-2xl px-4 py-3 text-sm">
+                    <p class="font-bold">🔔 Prévenez-moi quand il revient</p>
+                    <p>Laissez votre message : {{ boutique.nom_boutique }} vous préviendra dès que l'article sera de nouveau disponible
+                        <span id="fAstuce" class="block text-xs mt-1 text-purple-700">Si votre choix (taille, couleur…) n'est pas fait au-dessus, précisez-le dans le message.</span></p>
+                </div>
+                <div class="grid grid-cols-2 gap-2">
+                    <input name="nom" required maxlength="100" placeholder="Votre nom" value="{{ client.nom if client else '' }}"
+                           class="w-full border-2 border-gray-100 rounded-xl px-3 py-2.5 focus:outline-none focus:border-purple-500">
+                    <input name="telephone" required type="tel" maxlength="30" placeholder="Téléphone (WhatsApp)" value="{{ client.telephone if client else '' }}"
+                           class="w-full border-2 border-gray-100 rounded-xl px-3 py-2.5 focus:outline-none focus:border-purple-500">
+                </div>
+                <textarea name="message" rows="3" maxlength="500" placeholder="Votre message (ex : je le veux en noir, pointure 42, pour samedi)"
+                          class="w-full border-2 border-gray-100 rounded-xl px-3 py-2.5 focus:outline-none focus:border-purple-500"></textarea>
+                <button type="submit" class="w-full bg-purple-600 text-white rounded-2xl font-bold py-3.5 shadow-md hover:bg-purple-700">
+                    <i class="fas fa-paper-plane mr-1"></i> Envoyer ma demande</button>
+                <button type="button" id="fRetourAchat" class="hidden w-full text-sm text-gray-500 underline">← Choisir autre chose</button>
+            </form>
+            <div id="fMerci" class="hidden text-center py-4">
+                <p class="text-5xl">🎉</p>
+                <p class="font-bold text-gray-900 mt-2">C'est noté !</p>
+                <p id="fMerciTexte" class="text-sm text-gray-600 mt-1"></p>
+                <button type="button" data-fermer class="mt-4 bg-gray-900 text-white rounded-xl px-6 py-2.5 font-semibold">Continuer mes achats</button>
+            </div>
+        </div>
+    </div>
 </div>
 
 <script src="{{ url_for('static', filename='variantes.js') }}"></script>
@@ -445,45 +529,6 @@
         document.body.appendChild(t);
         setTimeout(() => t.remove(), 3500);
     }
-    // ---------- Variantes : prix, stock et photo selon la pointure / couleur choisie ----------
-    const fcfaTexte = (v) => Math.round(v).toLocaleString('fr-FR').replace(/\u202f|\u00a0/g, ' ');
-    document.querySelectorAll('.ajout-panier[data-variantes]').forEach((form) => {
-        const d = JSON.parse(form.dataset.variantes);
-        const carte = form.closest('.carte');
-        const prixEl = carte.querySelector('.prix-article');
-        const prixInitial = prixEl.innerHTML;
-        const info = form.querySelector('.info-variante');
-        const bouton = form.querySelector('button[type="submit"]');
-        let dernierChoix = {};
-        Variantes.brancher(form, d, (etat) => {
-            // Photo de la valeur qui vient d'être choisie (ex. la chaussure noire)
-            Object.entries(etat.choisis).forEach(([o, v]) => {
-                if (dernierChoix[o] === v) return;
-                const i = (d.photos[o] || {})[v];
-                const piste = carte.querySelector('.galerie-piste');
-                if (i != null && piste) piste.scrollTo({ left: i * piste.clientWidth });
-            });
-            dernierChoix = etat.choisis;
-            prixEl.innerHTML = etat.complet ? fcfaTexte(etat.prix) + ' FCFA' : prixInitial;
-            bouton.disabled = false;
-            bouton.classList.remove('opacity-50');
-            if (!etat.complet || etat.stock === null) { info.classList.add('hidden'); return; }
-            info.classList.remove('hidden');
-            if (etat.stock <= 0) {
-                info.className = 'info-variante text-xs rounded-lg px-2 py-1.5 bg-red-50 text-red-700 font-semibold';
-                info.textContent = 'Épuisé dans ce choix : choisissez une autre ' + [...form.querySelectorAll('select[data-option]')].map((x) => x.dataset.option.toLowerCase()).join(' ou ') + '.';
-                bouton.disabled = true;
-                bouton.classList.add('opacity-50');
-            } else if (etat.stock <= 3) {
-                info.className = 'info-variante text-xs rounded-lg px-2 py-1.5 bg-orange-50 text-orange-700 font-semibold';
-                info.textContent = etat.stock === 1 ? 'Plus qu\'un seul dans ce choix !' : 'Plus que ' + etat.stock + ' dans ce choix !';
-            } else {
-                info.className = 'info-variante text-xs rounded-lg px-2 py-1.5 bg-green-50 text-green-700';
-                info.textContent = '✓ Disponible';
-            }
-        });
-    });
-
     document.querySelectorAll('.ajout-panier').forEach((form) => {
         const champ = form.querySelector('input[name="quantite"]');
         form.querySelector('.moins').addEventListener('click', () => { champ.value = Math.max(1, (+champ.value || 1) - 1); });
@@ -506,6 +551,181 @@
             }
         });
     });
+
+    // ---------- Fenêtre de choix : photo du modèle + variante en boutons, ou demande si épuisé ----------
+    const feuille = document.getElementById('feuille');
+    const URL_DEMANDE = {{ url_for('client.demande_article', code=boutique.lien_public)|tojson }};
+    const URL_AJOUT = {{ url_for('client.ajouter_panier')|tojson }};
+    const CLE_PUSH = {{ (cle_push or '')|tojson }};
+    const $ = (id) => document.getElementById(id);
+    let art = null, choisis = {}, photo = 0, quantite = 1, mode = 'achat';
+
+    const fcfaTexte = (v) => Math.round(v).toLocaleString('fr-FR').replace(/ | /g, ' ') + ' FCFA';
+    function etat() {
+        const d = art.d;
+        const options = d ? Object.keys(d.options) : [];
+        const complet = options.every((o) => choisis[o]);
+        const cle = d && options.length && complet ? Variantes.cle(choisis) : null;
+        const x = cle ? (d.v[cle] || {}) : null;
+        return { options, complet, cle, prix: x && x.p != null ? x.p : art.prix, stock: d && d.suivi && x ? (x.s || 0) : null };
+    }
+    function photoDeChoix(option, valeur) {
+        const i = ((art.d && art.d.photos || {})[option] || {})[valeur];
+        if (i != null) photo = i;
+    }
+    function choixDePhoto(i) {
+        // La photo touchée correspond à une couleur (ou autre) : on la choisit aussi
+        Object.entries((art.d && art.d.photos) || {}).forEach(([o, valeurs]) => {
+            Object.entries(valeurs).forEach(([v, j]) => { if (j === i) choisis[o] = v; });
+        });
+    }
+    function dessiner() {
+        const e = etat();
+        // Photos
+        $('fImage').src = art.photos[photo] || art.photos[0] || '';
+        $('fImage').classList.toggle('invisible', !art.photos.length);
+        $('fBlocPhotos').classList.toggle('hidden', art.photos.length < 2);
+        $('fPhotos').querySelectorAll('.vignette').forEach((v, i) => v.classList.toggle('choisie', i === photo));
+        // Variantes : boutons, les valeurs épuisées barrées (encore touchables pour la demande)
+        $('fOptions').querySelectorAll('.puce').forEach((b) => {
+            const o = b.dataset.option, v = b.dataset.valeur;
+            const partiel = Object.assign({}, choisis); partiel[o] = v;
+            b.classList.toggle('choisie', choisis[o] === v);
+            b.classList.toggle('epuisee', !!art.d && !Variantes.possible(art.d, partiel));
+        });
+        $('fOptions').querySelectorAll('[data-libelle]').forEach((l) => {
+            const o = l.dataset.libelle;
+            l.innerHTML = '<b>' + o + '</b>' + (choisis[o] ? ' : <span class="text-purple-700 font-semibold">' + choisis[o] + '</span>' : ' <span class="text-orange-600 text-xs">(à choisir)</span>');
+        });
+        $('fPrix').textContent = (!e.complet && art.prixVarie ? 'dès ' : '') + fcfaTexte(e.complet ? e.prix : art.prixMin);
+        $('fQuantite').textContent = quantite;
+        // Stock du choix
+        const info = $('fInfo');
+        const epuiseChoix = art.epuise || (e.complet && e.stock !== null && e.stock <= 0);
+        info.className = 'hidden';
+        if (mode === 'achat' && e.complet && e.stock !== null) {
+            info.className = 'text-sm rounded-xl px-3 py-2 font-semibold ' + (e.stock <= 0 ? 'bg-red-50 text-red-700' : e.stock <= 3 ? 'bg-orange-50 text-orange-700' : 'bg-green-50 text-green-700');
+            info.textContent = e.stock <= 0 ? 'Épuisé dans ce choix pour le moment.' : e.stock === 1 ? "Plus qu'un seul dans ce choix !" : e.stock <= 3 ? 'Plus que ' + e.stock + ' dans ce choix !' : '✓ Disponible';
+        }
+        $('fAchat').classList.toggle('hidden', mode !== 'achat');
+        $('fDemande').classList.toggle('hidden', mode !== 'demande');
+        $('fMerci').classList.toggle('hidden', mode !== 'merci');
+        $('fAjouter').classList.toggle('hidden', epuiseChoix);
+        $('fVersDemande').classList.toggle('hidden', !epuiseChoix);
+        $('fRetourAchat').classList.toggle('hidden', art.epuise);
+        $('fOptions').classList.toggle('hidden', mode === 'merci' || !e.options.length);
+        $('fAstuce').classList.toggle('hidden', !e.options.length);
+    }
+    function ouvrirFeuille(carte, m) {
+        art = JSON.parse(carte.dataset.article);
+        const prixVariantes = art.d ? Object.values(art.d.v).map((x) => x.p != null ? x.p : art.prix) : [art.prix];
+        art.prixMin = Math.min(...prixVariantes);
+        art.prixVarie = prixVariantes.some((p) => p !== art.prixMin);
+        choisis = {}; quantite = 1; mode = m === 'demande' ? 'demande' : 'achat';
+        const piste = carte.querySelector('.galerie-piste');
+        photo = piste ? Math.round(piste.scrollLeft / piste.clientWidth) : 0;
+        if (art.photos.length > 1) choixDePhoto(photo);
+        $('fNom').textContent = (art.numero ? 'n°' + art.numero + ' · ' : '') + art.nom;
+        $('fPhotos').innerHTML = '';
+        art.photos.forEach((url, i) => {
+            const b = document.createElement('button');
+            b.type = 'button'; b.className = 'vignette'; b.setAttribute('aria-label', 'Modèle ' + (i + 1));
+            const img = document.createElement('img'); img.src = url; img.alt = ''; img.loading = 'lazy';
+            b.appendChild(img);
+            b.addEventListener('click', () => { photo = i; choixDePhoto(i); dessiner(); });
+            $('fPhotos').appendChild(b);
+        });
+        $('fOptions').innerHTML = '';
+        Object.entries((art.d && art.d.options) || {}).forEach(([o, valeurs]) => {
+            const bloc = document.createElement('div');
+            const titre = document.createElement('p'); titre.className = 'text-sm text-gray-800 mb-2'; titre.dataset.libelle = o;
+            const puces = document.createElement('div'); puces.className = 'flex flex-wrap gap-2';
+            valeurs.forEach((v) => {
+                const b = document.createElement('button');
+                b.type = 'button'; b.className = 'puce'; b.textContent = v; b.dataset.option = o; b.dataset.valeur = v;
+                b.addEventListener('click', () => {
+                    if (choisis[o] === v) delete choisis[o]; else { choisis[o] = v; photoDeChoix(o, v); }
+                    dessiner();
+                });
+                puces.appendChild(b);
+            });
+            bloc.append(titre, puces);
+            $('fOptions').appendChild(bloc);
+        });
+        feuille.classList.remove('hidden');
+        document.body.style.overflow = 'hidden';
+        dessiner();
+    }
+    function fermerFeuille() { feuille.classList.add('hidden'); document.body.style.overflow = ''; }
+    feuille.querySelectorAll('[data-fermer]').forEach((b) => b.addEventListener('click', fermerFeuille));
+    document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !feuille.classList.contains('hidden')) fermerFeuille(); });
+    feuille.querySelectorAll('[data-q]').forEach((b) => b.addEventListener('click', () => {
+        quantite = Math.min(99, Math.max(1, quantite + parseInt(b.dataset.q, 10))); dessiner();
+    }));
+    document.querySelectorAll('[data-ouvrir]').forEach((b) => b.addEventListener('click', () => ouvrirFeuille(b.closest('.carte'), b.dataset.ouvrir)));
+    $('fVersDemande').addEventListener('click', () => { mode = 'demande'; dessiner(); $('fDemande').scrollIntoView({ behavior: 'smooth', block: 'nearest' }); });
+    $('fRetourAchat').addEventListener('click', () => { mode = 'achat'; dessiner(); });
+
+    $('fAjouter').addEventListener('click', async () => {
+        const e = etat();
+        const manque = e.options.filter((o) => !choisis[o]);
+        if (manque.length) {
+            toast('Choisissez : ' + manque.map((o) => o.toLowerCase()).join(' et '), true);
+            $('fOptions').querySelector('[data-libelle="' + manque[0] + '"]')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            return;
+        }
+        const bouton = $('fAjouter');
+        bouton.disabled = true;
+        try {
+            const fd = new FormData();
+            fd.append('article_id', art.id); fd.append('photo_index', photo); fd.append('quantite', quantite);
+            Object.entries(choisis).forEach(([o, v]) => fd.append('option_' + o, v));
+            const r = await fetch(URL_AJOUT, { method: 'POST', body: fd, headers: { 'Accept': 'application/json' } });
+            const d = await r.json();
+            if (!d.success) throw new Error(d.message || "Impossible d'ajouter cet article");
+            majPanier(d.panier_count, d.panier_total, true);
+            fermerFeuille();
+            toast('✓ Ajouté ! Touchez « Commander » en bas pour terminer');
+        } catch (err) {
+            toast(err.message || 'Erreur, réessayez', true);
+        } finally { bouton.disabled = false; }
+    });
+
+    $('fDemande').addEventListener('submit', async (ev) => {
+        ev.preventDefault();
+        const f = ev.target, bouton = f.querySelector('button[type="submit"]');
+        bouton.disabled = true;
+        bouton.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i> Envoi…';
+        try {
+            // Notification à son retour (le client accepte ou non : la boutique peut aussi le prévenir par WhatsApp)
+            const abo = window.Nouveautes && window.Nouveautes.abonnementPush ? await window.Nouveautes.abonnementPush(CLE_PUSH, true) : null;
+            const r = await fetch(URL_DEMANDE, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({
+                article_id: art.id, choix: choisis, quantite: quantite, abo: abo,
+                nom: f.nom.value, telephone: f.telephone.value, message: f.message.value }) });
+            const d = await r.json();
+            if (d.disponible) { mode = 'achat'; art.epuise = false; dessiner(); toast(d.message); return; }
+            if (!d.ok) throw new Error(d.message || 'Erreur, réessayez');
+            $('fMerciTexte').innerHTML = d.notifiable
+                ? 'Vous recevrez une <b>notification sur ce téléphone</b> dès que « ' + d.designation.replace(/</g, '&lt;') + ' » revient.'
+                : {{ boutique.nom_boutique|tojson }} + ' vous préviendra <b>sur WhatsApp</b> au ' + f.telephone.value.replace(/</g, '&lt;') + ' dès que « ' + d.designation.replace(/</g, '&lt;') + ' » revient.';
+            f.message.value = '';
+            mode = 'merci'; dessiner();
+        } catch (err) {
+            toast(err.message || 'Erreur, réessayez', true);
+        } finally {
+            bouton.disabled = false;
+            bouton.innerHTML = '<i class="fas fa-paper-plane mr-1"></i> Envoyer ma demande';
+        }
+    });
+
+    // Arrivée depuis une notification « de retour » (lien …#article-12) : on montre l'article
+    if (location.hash.startsWith('#article-')) {
+        const carte = document.getElementById(location.hash.slice(1));
+        if (carte) {
+            carte.classList.add('ring-4', 'ring-purple-400');
+            setTimeout(() => carte.scrollIntoView({ behavior: 'smooth', block: 'center' }), 300);
+        }
+    }
 })();
 </script>
 {% endblock %}

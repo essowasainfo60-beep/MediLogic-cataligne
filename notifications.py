@@ -164,6 +164,7 @@ def _envoyer(abonnements, titre, corps, url, tag, **extra):
         log.warning('pywebpush absent : notification non envoyée')
         return 0
     _, cle_privee = cles_vapid()
+    oublier = extra.pop('oublier', True)       # False : ne pas supprimer l'objet si le téléphone s'est désabonné
     message = json.dumps({'titre': titre, 'corps': corps, 'url': url, 'tag': tag,
                           **{k: v for k, v in extra.items() if v is not None}})
     envoyes = 0
@@ -177,8 +178,10 @@ def _envoyer(abonnements, titre, corps, url, tag, **extra):
             envoyes += 1
         except WebPushException as e:
             statut = getattr(e.response, 'status_code', None)
-            if statut in (404, 410):                       # téléphone désabonné : on l'oublie
+            if statut in (404, 410) and oublier:           # téléphone désabonné : on l'oublie
                 db.session.delete(abonnement)
+            elif statut in (404, 410):
+                abonnement.endpoint = None
             else:
                 log.warning('Notification refusée (%s) : %s', statut, e)
         except Exception as e:                             # réseau, clé invalide… ne bloque jamais la livraison
