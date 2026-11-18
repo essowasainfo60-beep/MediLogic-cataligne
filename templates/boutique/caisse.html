@@ -101,8 +101,8 @@
             <div class="bg-white rounded-2xl shadow-md">
                 <form method="GET" class="px-5 py-4 border-b border-gray-100 flex flex-wrap items-end gap-2 text-sm">
                     <h2 class="font-bold text-gray-900 mr-auto">Journal de caisse</h2>
-                    <label class="text-gray-500">Du <input type="date" name="du" value="{{ du }}" class="ml-1 border border-gray-300 px-2 py-1"></label>
-                    <label class="text-gray-500">au <input type="date" name="au" value="{{ au }}" class="ml-1 border border-gray-300 px-2 py-1"></label>
+                    <label class="text-gray-500">Du <input type="datetime-local" name="du" value="{{ du }}" class="ml-1 border border-gray-300 px-2 py-1"></label>
+                    <label class="text-gray-500">au <input type="datetime-local" name="au" value="{{ au }}" class="ml-1 border border-gray-300 px-2 py-1"></label>
                     <button type="submit" class="bg-gray-800 text-white px-3 py-1.5 rounded-lg">Afficher</button>
                 </form>
                 {% if journal %}

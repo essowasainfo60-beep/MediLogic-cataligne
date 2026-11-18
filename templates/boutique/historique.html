@@ -15,8 +15,8 @@
 
     <!-- Filtres -->
     <form method="GET" class="bg-white rounded-xl shadow-md p-4 mb-6 grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-2 text-sm">
-        <div><label class="text-gray-500">Du</label><input type="date" name="du" value="{{ f.get('du', '') }}" class="w-full border rounded-lg px-2 py-1.5"></div>
-        <div><label class="text-gray-500">Au</label><input type="date" name="au" value="{{ f.get('au', '') }}" class="w-full border rounded-lg px-2 py-1.5"></div>
+        <div class="col-span-2 md:col-span-2"><label class="text-gray-500">Du (date et heure)</label><input type="datetime-local" name="du" value="{{ f.get('du', '') }}" class="w-full border rounded-lg px-2 py-1.5"></div>
+        <div class="col-span-2 md:col-span-2"><label class="text-gray-500">Au (date et heure)</label><input type="datetime-local" name="au" value="{{ f.get('au', '') }}" class="w-full border rounded-lg px-2 py-1.5"></div>
         <div><label class="text-gray-500">Statut</label>
             <select name="statut" class="w-full border rounded-lg px-2 py-1.5"><option value="">Tous</option>
                 {% for code, (libelle, c) in statuts.items() %}<option value="{{ code }}" {{ 'selected' if f.get('statut') == code }}>{{ libelle }}</option>{% endfor %}

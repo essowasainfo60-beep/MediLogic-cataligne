@@ -2177,6 +2177,23 @@ def modifier_zone(zone_id):
 
 # ==================== HISTORIQUE ====================
 
+def _bornes(du_txt, au_txt):
+    """Période « du… au… » avec ou sans heure : (début inclus, fin exclue), chacune None si absente.
+    Sans heure, la fin couvre toute la journée ; avec heure, la minute indiquée est comprise."""
+    def lire(v):
+        for fmt, avec_heure in (('%Y-%m-%dT%H:%M', True), ('%Y-%m-%d', False)):
+            try:
+                return datetime.strptime((v or '').strip(), fmt), avec_heure
+            except ValueError:
+                pass
+        return None, False
+    du, _ = lire(du_txt)
+    au, heure = lire(au_txt)
+    if au is not None:
+        au = au + (timedelta(minutes=1) if heure else timedelta(days=1))
+    return du, au
+
+
 def _lire_date(valeur):
     try:
         return datetime.strptime(valeur or '', '%Y-%m-%d')
@@ -2186,11 +2203,11 @@ def _lire_date(valeur):
 
 def _filtrer_historique(args):
     requete = Commande.query.filter_by(boutique_id=current_user.id)
-    du, au = _lire_date(args.get('du')), _lire_date(args.get('au'))
+    du, au = _bornes(args.get('du'), args.get('au'))
     if du:
         requete = requete.filter(Commande.date_commande >= du)
     if au:
-        requete = requete.filter(Commande.date_commande < au + timedelta(days=1))
+        requete = requete.filter(Commande.date_commande < au)
     if args.get('statut') in Commande.STATUTS:
         requete = requete.filter_by(statut=args['statut'])
     if args.get('source') in Commande.SOURCES:
@@ -2501,9 +2518,11 @@ def page_caisse():
 
     # Période du journal (par défaut : le mois en cours)
     aujourd_hui = datetime.utcnow()
-    du = _lire_date(request.args.get('du')) or aujourd_hui.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
-    au = _lire_date(request.args.get('au')) or aujourd_hui
-    journal = (tous.filter(MouvementCaisse.date >= du, MouvementCaisse.date < au.replace(hour=0, minute=0, second=0) + timedelta(days=1))
+    du, fin = _bornes(request.args.get('du'), request.args.get('au'))
+    du = du or aujourd_hui.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+    fin = fin or aujourd_hui.replace(hour=0, minute=0, second=0, microsecond=0) + timedelta(days=1)
+    au = fin - timedelta(minutes=1)
+    journal = (tous.filter(MouvementCaisse.date >= du, MouvementCaisse.date < fin)
                .order_by(MouvementCaisse.date.desc()).all())
     entrees = sum(m.montant for m in journal if m.montant > 0)
     sorties = -sum(m.montant for m in journal if m.montant < 0)
@@ -2523,7 +2542,7 @@ def page_caisse():
     return render_template('boutique/caisse.html', modes_abonnement=abonnement.MODES, solde=solde, journal=journal, entrees=entrees, sorties=sorties,
                            charges_par_categorie=sorted(charges_par_categorie.items(), key=lambda x: -x[1]),
                            a_recuperer=a_recuperer, frais_dus=frais_dus, a_remettre=caisse.a_remettre,
-                           du=du.strftime('%Y-%m-%d'), au=au.strftime('%Y-%m-%d'),
+                           du=du.strftime('%Y-%m-%dT%H:%M'), au=au.strftime('%Y-%m-%dT%H:%M'),
                            categories=MouvementCaisse.CATEGORIES, types=MouvementCaisse.TYPES,
                            aujourdhui=aujourd_hui.strftime('%Y-%m-%d'), fcfa=msg.fcfa)
 
