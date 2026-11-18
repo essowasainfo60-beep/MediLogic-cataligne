@@ -340,6 +340,14 @@
         </div>
 
         <div class="px-4 pt-4 space-y-5">
+            <!-- Ce que le client a déjà pris dans cette fenêtre (plusieurs modèles / variantes) -->
+            <div id="fAjoutes" class="hidden bg-green-50 border border-green-200 rounded-2xl px-3 py-2.5">
+                <p class="text-sm font-bold text-green-800 mb-1.5">✓ Déjà dans votre panier</p>
+                <ul id="fListeAjoutes" class="space-y-1.5"></ul>
+                <p class="text-xs text-green-800 mt-2">Choisissez un autre modèle ci-dessous, ou touchez « Terminé ».</p>
+            </div>
+            <p id="fPlusieurs" class="hidden text-xs bg-blue-50 text-blue-800 rounded-xl px-3 py-2">
+                <i class="fas fa-layer-group mr-1"></i> Vous voulez <b>plusieurs modèles</b> (couleurs, pointures, photos différentes) ? Ajoutez-les un par un : la fenêtre reste ouverte.</p>
             <!-- Photos : le client touche le modèle qu'il veut -->
             <div id="fBlocPhotos">
                 <p class="text-sm font-bold text-gray-800 mb-2">Touchez la photo du modèle que vous voulez</p>
@@ -362,6 +370,9 @@
                 </div>
                 <button type="button" id="fAjouter" class="w-full bg-green-600 text-white rounded-2xl font-bold py-3.5 text-lg shadow-md hover:bg-green-700">
                     <i class="fas fa-cart-plus mr-1"></i> Ajouter au panier</button>
+                <button type="button" id="fTermine" class="hidden w-full bg-gray-900 text-white rounded-2xl font-bold py-3">
+                    ✓ Terminé</button>
+                <a id="fCommander" href="{{ url_for('client.valider_commande') }}" class="hidden block text-center text-green-700 font-semibold underline text-sm">Commander maintenant →</a>
                 <button type="button" id="fVersDemande" class="hidden w-full border-2 border-purple-500 text-purple-700 rounded-2xl font-bold py-3">
                     🔔 Me prévenir quand ce choix revient</button>
             </div>
@@ -602,7 +613,7 @@
     const URL_AJOUT = {{ url_for('client.ajouter_panier')|tojson }};
     const CLE_PUSH = {{ (cle_push or '')|tojson }};
     const $ = (id) => document.getElementById(id);
-    let art = null, choisis = {}, photo = 0, quantite = 1, mode = 'achat';
+    let art = null, choisis = {}, photo = 0, quantite = 1, mode = 'achat', ajoutes = [];
 
     const fcfaTexte = (v) => Math.round(v).toLocaleString('fr-FR').replace(/ | /g, ' ') + ' FCFA';
     function etat() {
@@ -655,6 +666,12 @@
         $('fDemande').classList.toggle('hidden', mode !== 'demande');
         $('fMerci').classList.toggle('hidden', mode !== 'merci');
         $('fAjouter').classList.toggle('hidden', epuiseChoix);
+        $('fAjouter').innerHTML = ajoutes.length ? '<i class="fas fa-plus mr-1"></i> Ajouter aussi ce modèle' : '<i class="fas fa-cart-plus mr-1"></i> Ajouter au panier';
+        $('fAjoutes').classList.toggle('hidden', !ajoutes.length || mode !== 'achat');
+        $('fTermine').classList.toggle('hidden', !ajoutes.length || mode !== 'achat');
+        $('fCommander').classList.toggle('hidden', !ajoutes.length || mode !== 'achat');
+        $('fTermine').textContent = '✓ Terminé (' + ajoutes.reduce((n, a) => n + a.quantite, 0) + ' ajouté' + (ajoutes.reduce((n, a) => n + a.quantite, 0) > 1 ? 's' : '') + ')';
+        $('fPlusieurs').classList.toggle('hidden', !!ajoutes.length || mode !== 'achat' || (art.photos.length < 2 && !e.options.length));
         $('fVersDemande').classList.toggle('hidden', !epuiseChoix);
         $('fRetourAchat').classList.toggle('hidden', art.epuise);
         $('fOptions').classList.toggle('hidden', mode === 'merci' || !e.options.length);
@@ -665,7 +682,8 @@
         const prixVariantes = art.d ? Object.values(art.d.v).map((x) => x.p != null ? x.p : art.prix) : [art.prix];
         art.prixMin = Math.min(...prixVariantes);
         art.prixVarie = prixVariantes.some((p) => p !== art.prixMin);
-        choisis = {}; quantite = 1; mode = m === 'demande' ? 'demande' : 'achat';
+        choisis = {}; quantite = 1; mode = m === 'demande' ? 'demande' : 'achat'; ajoutes = [];
+        $('fListeAjoutes').innerHTML = '';
         const piste = carte.querySelector('.galerie-piste');
         photo = piste ? Math.max(0, Math.round(piste.scrollLeft / piste.clientWidth) - (+carte.dataset.decalage || 0)) : 0;
         if (art.photos.length > 1) choixDePhoto(photo);
@@ -688,7 +706,7 @@
                 const b = document.createElement('button');
                 b.type = 'button'; b.className = 'puce'; b.textContent = v; b.dataset.option = o; b.dataset.valeur = v;
                 b.addEventListener('click', () => {
-                    if (choisis[o] === v) delete choisis[o]; else { choisis[o] = v; photoDeChoix(o, v); }
+                    choisis[o] = v; photoDeChoix(o, v);          // toucher un choix le sélectionne (jamais de décochage surprise)
                     dessiner();
                 });
                 puces.appendChild(b);
@@ -709,6 +727,7 @@
     document.querySelectorAll('[data-ouvrir]').forEach((b) => b.addEventListener('click', () => ouvrirFeuille(b.closest('.carte'), b.dataset.ouvrir)));
     $('fVersDemande').addEventListener('click', () => { mode = 'demande'; dessiner(); $('fDemande').scrollIntoView({ behavior: 'smooth', block: 'nearest' }); });
     $('fRetourAchat').addEventListener('click', () => { mode = 'achat'; dessiner(); });
+    $('fTermine').addEventListener('click', () => { fermerFeuille(); toast('✓ ' + $('fTermine').textContent.replace('✓ Terminé ', '').replace(/[()]/g, '') + ' au panier : touchez « Commander » en bas'); });
 
     $('fAjouter').addEventListener('click', async () => {
         const e = etat();
@@ -728,8 +747,21 @@
             const d = await r.json();
             if (!d.success) throw new Error(d.message || "Impossible d'ajouter cet article");
             majPanier(d.panier_count, d.panier_total, true);
-            fermerFeuille();
-            toast('✓ Ajouté ! Touchez « Commander » en bas pour terminer');
+            // On garde la fenêtre ouverte : le client peut prendre un autre modèle / une autre variante
+            const libelle = [...e.options.map((o) => choisis[o]), art.photos.length > 1 && !Object.keys(choisis).length ? 'Photo ' + (photo + 1) : null].filter(Boolean).join(' · ') || art.nom;
+            ajoutes.push({ libelle, quantite, prix: e.prix });
+            const li = document.createElement('li');
+            li.className = 'flex items-center gap-2 text-sm';
+            const img = document.createElement('img');
+            img.src = art.photos[photo] || ''; img.alt = ''; img.className = 'h-9 w-9 rounded-lg object-cover bg-white flex-shrink-0' + (art.photos.length ? '' : ' invisible');
+            const t = document.createElement('span'); t.className = 'flex-1 min-w-0 truncate font-semibold text-gray-800'; t.textContent = libelle;
+            const q = document.createElement('span'); q.className = 'text-gray-600 whitespace-nowrap'; q.textContent = '× ' + quantite + ' · ' + fcfaTexte(e.prix * quantite);
+            li.append(img, t, q);
+            $('fListeAjoutes').appendChild(li);
+            choisis = {}; quantite = 1;
+            dessiner();
+            feuille.querySelector('.feuille-corps').scrollTo({ top: 0, behavior: 'smooth' });
+            toast('✓ Ajouté ! Choisissez un autre modèle, ou touchez « Terminé »');
         } catch (err) {
             toast(err.message || 'Erreur, réessayez', true);
         } finally { bouton.disabled = false; }
