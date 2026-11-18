@@ -41,6 +41,8 @@
                 </div>
                 <p id="messageScan" class="hidden mt-2 text-sm rounded-xl px-3 py-2"></p>
             </div>
+            <div id="filtres" class="flex gap-2 overflow-x-auto pb-2 mb-1 -mx-1 px-1 text-sm"></div>
+            <p id="titreTuiles" class="text-xs text-gray-500 mb-2"></p>
             <div id="tuiles" class="grid grid-cols-3 sm:grid-cols-4 lg:grid-cols-5 gap-2.5"></div>
             <p id="aucun" class="hidden text-center text-gray-500 py-10">Aucun article trouvé.</p>
         </div>
@@ -192,12 +194,36 @@
     }
 
     // ---------- Tuiles ----------
+    // Filtres : les plus vendus (par défaut), tous, ou une catégorie. La recherche / le scan cherchent partout.
+    const NB_PLUS_VENDUS = 60;
+    let filtre = CATALOGUE.some((a) => a.vd > 0) ? 'top' : 'tous';
+    function dessinerFiltres() {
+        const cats = [...new Set(CATALOGUE.map((a) => a.cat).filter(Boolean))].sort((x, y) => x.localeCompare(y, 'fr'));
+        const choix = [['top', '⭐ Plus vendus'], ['tous', 'Tous (' + CATALOGUE.length + ')']].concat(cats.map((c) => ['cat:' + c, c]));
+        $('filtres').innerHTML = '';
+        choix.forEach(([code, libelle]) => {
+            const b = document.createElement('button');
+            b.type = 'button';
+            b.className = 'whitespace-nowrap rounded-full px-3 py-1.5 font-semibold border ' + (filtre === code
+                ? 'bg-purple-600 text-white border-purple-600' : 'bg-white text-gray-700 border-gray-200');
+            b.textContent = libelle;
+            b.addEventListener('click', () => { filtre = code; dessinerFiltres(); dessinerTuiles(); });
+            $('filtres').appendChild(b);
+        });
+    }
     function dessinerTuiles() {
         const q = sansAcc($('recherche').value.trim());
-        const liste = CATALOGUE.filter((a) => !q || sansAcc('n°' + a.n + ' ' + a.n + ' ' + a.nom + ' ' + (a.cat || '') + ' ' + (a.cb || '')).includes(q)
+        let liste = CATALOGUE.filter((a) => !q || sansAcc('n°' + a.n + ' ' + a.n + ' ' + a.nom + ' ' + (a.cat || '') + ' ' + (a.cb || '')).includes(q)
             || Object.values(a.v).some((v) => v.cb && v.cb.includes(q)));
+        if (!q && filtre.startsWith('cat:')) liste = liste.filter((a) => a.cat === filtre.slice(4));
+        liste = liste.slice().sort((x, y) => (y.vd || 0) - (x.vd || 0) || x.n - y.n);     // les plus vendus d'abord
+        if (!q && filtre === 'top') liste = liste.slice(0, NB_PLUS_VENDUS);
+        $('titreTuiles').textContent = q ? liste.length + ' résultat(s)'
+            : filtre === 'top' ? 'Les ' + liste.length + ' articles les plus vendus (60 derniers jours) · touchez une photo pour l’ajouter'
+            : liste.length + ' article(s) · les plus vendus d’abord';
+        $('filtres').classList.toggle('hidden', !!q);
         $('tuiles').innerHTML = '';
-        liste.slice(0, 120).forEach((a) => {
+        liste.slice(0, 300).forEach((a) => {
             const s = enMain(a, null);
             const b = document.createElement('button');
             b.type = 'button';
@@ -317,6 +343,7 @@
         bip(false);
         message(liste.length ? liste.length + ' articles trouvés : touchez le bon.' : 'Code ' + code + ' inconnu : ajoutez-le sur la fiche de l\'article.', !!liste.length);
     }
+    dessinerFiltres();
     $('recherche').addEventListener('input', dessinerTuiles);
     $('recherche').addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); lireCode($('recherche').value); } });
     $('btnCamera').addEventListener('click', () => Scanner.ouvrir(lireCode));

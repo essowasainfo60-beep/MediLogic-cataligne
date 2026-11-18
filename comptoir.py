@@ -69,9 +69,27 @@ def deja_pris(boutique_id, code, article_id=None, cle=None):
     return a.nom + (f' ({a.libelle_cle(c)})' if c else '')
 
 
+JOURS_PLUS_VENDUS = 60
+
+
+def ventes_recentes(boutique_id, jours=JOURS_PLUS_VENDUS):
+    """{article_id: pièces vendues} sur les derniers jours (comptoir et commandes livrées)."""
+    from datetime import datetime, timedelta
+    depuis = datetime.utcnow() - timedelta(days=jours)
+    res = {}
+    for (lignes,) in (db.session.query(Commande.articles_json)
+                      .filter(Commande.boutique_id == boutique_id, Commande.statut.in_(('livree', 'retournee')),
+                              Commande.date_commande >= depuis).all()):
+        for l in lignes or []:
+            if l.get('article_id'):
+                res[l['article_id']] = res.get(l['article_id'], 0) + int(l.get('quantite') or 0)
+    return res
+
+
 def catalogue_caisse(boutique_id):
     """Articles pour la page « Vendre » (recherche et lecture des codes sur le téléphone, sans attendre)."""
     reserves = stock.reserves(boutique_id)
+    vendus = ventes_recentes(boutique_id)
     res = []
     for a in (Article.query.filter_by(boutique_id=boutique_id, archive=False)
               .order_by(Article.numero).all()):
@@ -83,6 +101,7 @@ def catalogue_caisse(boutique_id):
                       's': a.stock_variante(cle) if a.suit_variantes else None,
                       'r': reserves.get((a.id, cle), 0), 'cb': e.get('cb')}
         res.append({'id': a.id, 'n': a.numero, 'nom': a.nom, 'cat': a.categorie or '', 'prix': a.prix, 'photo': photos[0] if photos else None,
+                    'vd': vendus.get(a.id, 0),
                     'cb': a.code_barre, 's': a.stock, 'r': reserves.get((a.id, None), 0),
                     'options': a.options or {}, 'suivi': a.suit_variantes, 'v': v,
                     'photos': a.photos_valeurs() if a.options else {}, 'tout': photos})
