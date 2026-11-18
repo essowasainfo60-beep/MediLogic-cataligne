@@ -16,6 +16,7 @@
                     class="px-3 rounded-xl bg-gray-900 text-white" title="Scanner avec la caméra" aria-label="Scanner avec la caméra"><i class="fas fa-camera"></i></button>
         </div>
         <button type="button" id="creerCode" class="mt-1 text-xs text-purple-700 font-semibold underline">Pas de code-barres ? En créer un</button>
+        {% if art_c and art_c.id %}<a href="{{ url_for('boutique.etiquettes', choix=art_c.id if not art_c.options else '') }}" class="mt-1 ml-2 text-xs text-gray-600 underline"><i class="fas fa-print"></i> Imprimer ses étiquettes</a>{% endif %}
     </div>
 </div>
 <script src="{{ url_for('static', filename='scanner.js') }}" defer></script>

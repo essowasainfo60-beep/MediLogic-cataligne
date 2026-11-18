@@ -30,8 +30,14 @@
         <div class="bg-green-600 text-white rounded-2xl p-4 col-span-2">
             <p class="text-sm opacity-90">Encaissé</p>
             <p class="text-3xl font-extrabold">{{ "{:,.0f}".format(total).replace(',', ' ') }} <span class="text-base">FCFA</span></p>
-            <p class="text-sm opacity-90">{{ nb }} vente{{ 's' if nb > 1 }} · {{ articles }} article{{ 's' if articles > 1 }}</p>
+            <p class="text-sm opacity-90">{{ nb }} vente{{ 's' if nb > 1 }} · {{ articles }} article{{ 's' if articles > 1 }}{% if paiements_creance %} · {{ paiements_creance|length }} paiement{{ 's' if paiements_creance|length > 1 }} de créance{% endif %}</p>
         </div>
+        {% if credit_jour %}
+        <a href="{{ url_for('boutique.page_creances') }}" class="bg-orange-50 border border-orange-200 rounded-2xl p-4 col-span-2">
+            <p class="text-sm text-orange-800">Vendu à crédit ce jour</p>
+            <p class="text-2xl font-extrabold text-orange-700">{{ "{:,.0f}".format(credit_jour).replace(',', ' ') }} FCFA</p>
+        </a>
+        {% endif %}
         {% if benefice is not none %}
         <div class="bg-white rounded-2xl shadow-sm p-4 col-span-2 sm:col-span-2">
             <p class="text-sm text-gray-500">Bénéfice{% if benefice_partiel %} <span class="text-xs">(articles avec prix d'achat)</span>{% endif %}</p>

@@ -17,6 +17,7 @@ import nouveautes
 import demandes
 import videos
 import comptoir
+import creances
 import suivi_gps
 import stats_avancees
 import promos
@@ -25,7 +26,7 @@ import messages_whatsapp as msg
 import stock
 import webauthn_service
 from models import (db, Boutique, Vendeur, EspaceVendeur, Article, Commande, CleBiometrique, Livreur, Zone, CodePromo,
-                    MouvementStock, MouvementCaisse, Retour, nouveau_code_lien, enregistrer_avec_numero)
+                    MouvementStock, MouvementCaisse, Retour, nouveau_code_lien, enregistrer_avec_numero, PaiementCreance)
 from utils import enregistrer_photo, enregistrer_photos, supprimer_photo_stockee, TAILLE_LOGO_PX
 from zones_modele import ZONES_LOME
 from zones_detection import zone_pour_adresse, index_quartiers
@@ -40,7 +41,7 @@ GERANT_SEUL = {
     'regenerer_lien', 'modifier_whatsapp', 'biometrie_inscription_options', 'biometrie_inscription_verifier',
     'biometrie_retirer',
 }
-CAISSE = {'annuler_vente', 'page_caisse', 'caisse_versement', 'caisse_paiement_livreur', 'caisse_mouvement', 'caisse_supprimer',
+CAISSE = {'annuler_vente', 'valider_paiement_creance', 'refuser_paiement_creance', 'page_caisse', 'caisse_versement', 'caisse_paiement_livreur', 'caisse_mouvement', 'caisse_supprimer',
           'payer_frais_commande', 'versement_commande', 'changer_mode_frais',
           'abonnement_payer'}
 GESTION = {
@@ -48,7 +49,7 @@ GESTION = {
     'photo_principale', 'archiver_article', 'restaurer_article', 'articles_archives', 'livreurs', 'basculer_livreur', 'modifier_livreur',
     'ajouter_zone', 'modifier_zone', 'zones_modele', 'envoyer_espace_livreur', 'nouveau_lien_livreur',
     'statistiques', 'historique', 'message_statut', 'historique_csv', 'retour_commande', 'codes_promo', 'modifier_code_promo', 'regler_fidelite',
-    'annoncer_article', 'annoncer_nouveautes', 'envoyer_video', 'code_barre_nouveau',
+    'annoncer_article', 'annoncer_nouveautes', 'envoyer_video', 'code_barre_nouveau', 'etiquettes', 'etiquettes_codes',
 }
 ROLES_AUTORISES = {'vendeur': set(), 'caissier': CAISSE, 'gestionnaire': CAISSE | GESTION}
 
@@ -765,12 +766,12 @@ def vendre_valider():
     d = request.get_json(silent=True) or {}
     b = boutique_connectee()
     commande, erreur = comptoir.vendre(b, d.get('lignes') or [], d.get('remise'), d.get('mode'), d.get('recu'),
-                                       d.get('client_nom'), d.get('client_tel'), qui() or b.nom_boutique)
+                                       d.get('client_nom'), d.get('client_tel'), qui() or b.nom_boutique, d.get('paye'))
     if erreur:
         return jsonify(success=False, message=erreur), 400
     monnaie = (commande.montant_recu - commande.total) if commande.montant_recu is not None else None
     return jsonify(success=True, id=commande.id, numero=commande.numero, total=commande.total,
-                   monnaie=monnaie, ticket=url_for('boutique.ticket_vente', commande_id=commande.id),
+                   monnaie=monnaie, reste_du=commande.reste_du, ticket=url_for('boutique.ticket_vente', commande_id=commande.id),
                    catalogue=comptoir.catalogue_caisse(b.id))
 
 
@@ -783,7 +784,10 @@ def ticket_vente(commande_id):
         lignes.append(f"{l['quantite']} × {l['nom']} : {msg.fcfa(l['prix'] * l['quantite'])}")
     if commande.remise:
         lignes.append(f"Remise : -{msg.fcfa(commande.remise)}")
-    lignes += [f"*Total : {msg.fcfa(commande.total)}*", '', 'Merci pour votre achat ! 🙏']
+    lignes.append(f"*Total : {msg.fcfa(commande.total)}*")
+    if commande.reste_du:
+        lignes += [f"Déjà payé : {msg.fcfa(commande.montant_paye or 0)}", f"*Reste à payer : {msg.fcfa(commande.reste_du)}*"]
+    lignes += ['', 'Merci pour votre achat ! 🙏']
     texte = '\n'.join(lignes)
     lien_wa = (msg.lien_whatsapp(commande.client_telephone, texte) if commande.client_telephone
                else 'https://wa.me/?text=' + quote(texte))
@@ -810,14 +814,25 @@ def ventes_jour():
     if vendeur:
         q = q.filter(Commande.saisie_par == vendeur)
     ventes = q.order_by(Commande.date_commande.desc()).all()
-    valides = [v for v in ventes if v.statut == 'livree']
-    par_mode = {}
+    valides = [v for v in ventes if v.statut in ('livree', 'retournee')]
+    par_mode, credit_jour = {}, 0
     for v in valides:
-        par_mode[v.mode_paiement or 'especes'] = par_mode.get(v.mode_paiement or 'especes', 0) + v.total
+        paye_vente = v.total if v.montant_paye is None else v.montant_paye - sum(
+            p.montant for p in v.paiements_creance if p.statut == 'valide')
+        credit_jour += v.total - paye_vente
+        par_mode[v.mode_paiement or 'especes'] = par_mode.get(v.mode_paiement or 'especes', 0) + paye_vente
+    pq = PaiementCreance.query.filter(PaiementCreance.boutique_id == b.id, PaiementCreance.statut != 'refuse',
+                                      PaiementCreance.date >= debut, PaiementCreance.date < debut + timedelta(days=1))
+    if vendeur:
+        pq = pq.filter(PaiementCreance.par == vendeur)
+    paiements_creance = pq.all()
+    for p in paiements_creance:
+        par_mode[p.mode] = par_mode.get(p.mode, 0) + p.montant
     benefices = [comptoir.benefice(v) for v in valides]
     vendeurs = sorted({v for (v,) in db.session.query(Commande.saisie_par).filter(
         Commande.boutique_id == b.id, Commande.source == 'comptoir', Commande.saisie_par.isnot(None)).distinct()}) if tout_voir else []
-    return render_template('boutique/ventes_jour.html', ventes=ventes, jour=jour, total=sum(v.total for v in valides),
+    return render_template('boutique/ventes_jour.html', ventes=ventes, jour=jour, total=sum(par_mode.values()),
+                           credit_jour=credit_jour, paiements_creance=paiements_creance,
                            nb=len(valides), articles=sum(l['quantite'] for v in valides for l in v.articles_json),
                            par_mode=par_mode, modes=comptoir.MODES_PAIEMENT, tout_voir=tout_voir, vendeur=vendeur,
                            vendeurs=vendeurs, benefice=sum(x for x in benefices if x is not None) if tout_voir and any(x is not None for x in benefices) else None,
@@ -840,6 +855,132 @@ def annuler_vente(commande_id):
         db.session.commit()
         flash(f'Vente n°{commande.numero} annulée : le stock est remis et {msg.fcfa(commande.total)} sont sortis de la caisse.', 'success')
     return redirect(request.form.get('retour') or url_for('boutique.ventes_jour'))
+
+
+# ==================== CRÉANCES (ventes à crédit) ====================
+
+@boutique_bp.route('/creances')
+@login_required
+def page_creances():
+    b = boutique_connectee()
+    vue = request.args.get('vue') if request.args.get('vue') in ('cours', 'soldees', 'valider') else 'cours'
+    valideur = peut('boutique.valider_paiement_creance')
+    ouvertes = creances.ouvertes(b.id)
+    # Regroupées par client (même numéro = même client)
+    clients = {}
+    for c in ouvertes:
+        k = msg.numero_wa(c.client_telephone) or c.client_nom.lower()
+        g = clients.setdefault(k, {'nom': c.client_nom, 'telephone': c.client_telephone, 'du': 0, 'ventes': []})
+        g['du'] += c.reste_du
+        g['ventes'].append(c)
+    soldees = []
+    if vue == 'soldees':
+        soldees = (Commande.query.join(PaiementCreance).filter(Commande.boutique_id == b.id, Commande.reste_du <= 0.001)
+                   .order_by(Commande.date_commande.desc()).distinct().limit(100).all())
+    return render_template('boutique/creances.html', vue=vue, clients=sorted(clients.values(), key=lambda g: -g['du']),
+                           total=sum(g['du'] for g in clients.values()), attente=creances.en_attente(b.id) if valideur else [],
+                           valideur=valideur, soldees=soldees, modes=comptoir.MODES_PAIEMENT,
+                           relance=lambda c: msg.lien_whatsapp(c.client_telephone, creances.message_relance(c)),
+                           attente_sur=creances.attente_sur)
+
+
+@boutique_bp.route('/creances/<int:commande_id>/payer', methods=['POST'])
+@login_required
+def payer_creance(commande_id):
+    """Le client rembourse (tout ou partie). Par un vendeur : en attente de validation du gérant."""
+    commande = Commande.query.filter_by(id=commande_id, boutique_id=boutique_connectee().id).first_or_404()
+    valideur = peut('boutique.valider_paiement_creance')
+    p, erreur = creances.payer(commande, request.form.get('montant'), request.form.get('mode'),
+                               qui() or boutique_connectee().nom_boutique, valideur)
+    if erreur:
+        flash(erreur, 'danger')
+    elif valideur:
+        flash(f'{msg.fcfa(p.montant)} encaissés de {commande.client_nom}.'
+              + (f' Il reste {msg.fcfa(commande.reste_du)}.' if commande.reste_du else ' Créance soldée ✓'), 'success')
+    else:
+        flash(f'{msg.fcfa(p.montant)} de {commande.client_nom} enregistrés : en attente de validation du gérant.', 'info')
+        notifications.envoyer_boutique(boutique_connectee().id, f'💰 Paiement de créance à valider',
+                                       f'{p.par} a reçu {msg.fcfa(p.montant)} de {commande.client_nom}.',
+                                       url_for('boutique.page_creances', vue='valider', _external=True), tag=f'creance-{p.id}')
+    return redirect(request.form.get('retour') or url_for('boutique.page_creances'))
+
+
+def _paiement_de_la_boutique(paiement_id):
+    p = db.session.get(PaiementCreance, paiement_id)
+    if not p or p.boutique_id != boutique_connectee().id:
+        abort(404)
+    return p
+
+
+@boutique_bp.route('/creances/paiement/<int:paiement_id>/valider', methods=['POST'])
+@login_required
+def valider_paiement_creance(paiement_id):
+    p = _paiement_de_la_boutique(paiement_id)
+    erreur = creances.valider(p, qui() or boutique_connectee().nom_boutique)
+    flash(erreur or f'Paiement de {msg.fcfa(p.montant)} validé : entré en caisse.', 'danger' if erreur else 'success')
+    return redirect(url_for('boutique.page_creances', vue='valider'))
+
+
+@boutique_bp.route('/creances/paiement/<int:paiement_id>/refuser', methods=['POST'])
+@login_required
+def refuser_paiement_creance(paiement_id):
+    p = _paiement_de_la_boutique(paiement_id)
+    erreur = creances.refuser(p, qui() or boutique_connectee().nom_boutique, request.form.get('motif'))
+    flash(erreur or f'Paiement de {msg.fcfa(p.montant)} refusé : la créance reste due.', 'danger' if erreur else 'warning')
+    return redirect(url_for('boutique.page_creances', vue='valider'))
+
+
+# ==================== ÉTIQUETTES CODE-BARRES ====================
+
+def _lignes_etiquettes(boutique_id):
+    """Une ligne par article (ou par variante) : de quoi imprimer son étiquette."""
+    lignes = []
+    for a in Article.query.filter_by(boutique_id=boutique_id, archive=False).order_by(Article.numero).all():
+        if a.options:
+            for cle, choisis in a.combinaisons():
+                cb_v = ((a.variantes or {}).get(cle) or {}).get('cb')
+                lignes.append({'id': f'{a.id}::{cle}', 'n': a.numero, 'nom': a.nom, 'choix': a.libelle_choix(choisis),
+                               'prix': a.prix_de(cle), 'code': cb_v or a.code_barre, 'propre': bool(cb_v),
+                               'stock': a.stock_variante(cle) if a.suit_variantes else None})
+        else:
+            lignes.append({'id': str(a.id), 'n': a.numero, 'nom': a.nom, 'choix': None, 'prix': a.prix,
+                           'code': a.code_barre, 'propre': True, 'stock': a.stock})
+    return lignes
+
+
+@boutique_bp.route('/etiquettes')
+@login_required
+def etiquettes():
+    """Choisir les articles, créer les codes manquants, imprimer les étiquettes à coller."""
+    b = boutique_connectee()
+    return render_template('boutique/etiquettes.html', lignes=_lignes_etiquettes(b.id), boutique=b)
+
+
+@boutique_bp.route('/etiquettes/codes', methods=['POST'])
+@login_required
+def etiquettes_codes():
+    """Crée un code-barres interne pour chaque article / variante choisi qui n'en a pas."""
+    b = boutique_connectee()
+    crees = 0
+    for ident in request.form.getlist('ids'):
+        article_id, _, cle = ident.partition('::')
+        a = Article.query.filter_by(id=int(article_id) if article_id.isdigit() else 0, boutique_id=b.id).first()
+        if not a:
+            continue
+        if cle and cle in dict(a.combinaisons()):
+            tableau = {c: dict(v) for c, v in (a.variantes or {}).items()}
+            if not (tableau.get(cle) or {}).get('cb'):
+                tableau.setdefault(cle, {})['cb'] = comptoir.code_interne(b.id)
+                a.variantes = tableau
+                crees += 1
+        elif not cle and not a.code_barre:
+            a.code_barre = comptoir.code_interne(b.id)
+            crees += 1
+        db.session.flush()
+    db.session.commit()
+    flash(f'{crees} code{"s" if crees > 1 else ""}-barres créé{"s" if crees > 1 else ""}. Imprimez maintenant les étiquettes.' if crees
+          else 'Les articles choisis ont déjà leur code-barres.', 'success' if crees else 'info')
+    return redirect(url_for('boutique.etiquettes', choix=','.join(request.form.getlist('ids'))))
 
 
 @boutique_bp.route('/code-barres/nouveau', methods=['POST'])
@@ -1892,9 +2033,14 @@ def retour_commande(commande_id):
             stock.mouvement_ligne(l, commande.boutique_id, l['quantite'], 'retour', commande,
                                   f"{retour.type_libelle} - commande n°{commande.numero}" + (f" : {motif}" if motif else ''))
         if type_retour == 'retour':
-            caisse.ajouter(commande.boutique_id, 'remboursement', -retour.montant,
-                           f'Remboursement retour commande n°{commande.numero} ({commande.client_nom})',
-                           commande_id=commande.id)
+            a_rendre = creances.appliquer_retour(commande, retour.montant)
+            if a_rendre < retour.montant:
+                flash(f'Vente à crédit : {msg.fcfa(retour.montant - a_rendre)} déduits de ce que le client devait'
+                      + (f', {msg.fcfa(a_rendre)} à lui rendre.' if a_rendre else ' (rien à lui rendre).'), 'info')
+            if a_rendre:
+                caisse.ajouter(commande.boutique_id, 'remboursement', -a_rendre,
+                               f'Remboursement retour commande n°{commande.numero} ({commande.client_nom})',
+                               commande_id=commande.id)
             if not any(stock.quantites_retournables(commande).values()):
                 commande.statut = 'retournee'
         db.session.commit()
@@ -2029,8 +2175,9 @@ def injecter_compteurs():
     if current_user.is_authenticated and hasattr(current_user, 'nom_boutique') and request.blueprint == 'boutique':
         return {'nouvelles_commandes': Commande.query.filter_by(boutique_id=current_user.id, statut='nouvelle').count(),
                 'messages_non_lus': discussions.non_lus_boutique(current_user.id),
-                'demandes_a_traiter': demandes.nombre_a_traiter(current_user.id)}
-    return {'nouvelles_commandes': 0, 'messages_non_lus': 0, 'demandes_a_traiter': 0}
+                'demandes_a_traiter': demandes.nombre_a_traiter(current_user.id),
+                'paiements_a_valider': len(creances.en_attente(current_user.id)) if peut('boutique.valider_paiement_creance') else 0}
+    return {'nouvelles_commandes': 0, 'messages_non_lus': 0, 'demandes_a_traiter': 0, 'paiements_a_valider': 0}
 
 @boutique_bp.route('/mot_de_passe', methods=['GET', 'POST'])
 @login_required

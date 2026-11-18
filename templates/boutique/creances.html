@@ -1,0 +1,105 @@
+{% extends "base.html" %}
+
+{% block title %}Créances - {{ current_user.nom_boutique }}{% endblock %}
+
+{% macro f(v) %}{{ "{:,.0f}".format(v or 0).replace(',', ' ') }}{% endmacro %}
+
+{% block content %}
+<div class="max-w-4xl mx-auto px-4 space-y-4 pb-24">
+    <div>
+        <h1 class="text-2xl font-extrabold text-gray-900"><i class="fas fa-hand-holding-dollar text-orange-500 mr-1"></i> Créances</h1>
+        <p class="text-sm text-gray-500">Clients qui ont acheté à crédit et doivent encore de l'argent.</p>
+    </div>
+
+    <div class="bg-orange-500 text-white rounded-2xl p-4">
+        <p class="text-sm opacity-90">Total à recevoir</p>
+        <p class="text-3xl font-extrabold">{{ f(total) }} <span class="text-base">FCFA</span></p>
+        <p class="text-sm opacity-90">{{ clients|length }} client{{ 's' if clients|length > 1 }}</p>
+    </div>
+
+    <div class="flex border-b border-gray-200 text-sm">
+        <a href="{{ url_for('boutique.page_creances') }}" class="px-4 py-2 -mb-px border-b-2 {{ 'border-orange-500 text-orange-700 font-semibold' if vue == 'cours' else 'border-transparent text-gray-500' }}">En cours</a>
+        {% if valideur %}
+        <a href="{{ url_for('boutique.page_creances', vue='valider') }}" class="px-4 py-2 -mb-px border-b-2 {{ 'border-orange-500 text-orange-700 font-semibold' if vue == 'valider' else 'border-transparent text-gray-500' }}">
+            À valider {% if attente %}<span class="ml-1 bg-red-500 text-white rounded-full px-2 text-xs">{{ attente|length }}</span>{% endif %}</a>
+        {% endif %}
+        <a href="{{ url_for('boutique.page_creances', vue='soldees') }}" class="px-4 py-2 -mb-px border-b-2 {{ 'border-orange-500 text-orange-700 font-semibold' if vue == 'soldees' else 'border-transparent text-gray-500' }}">Soldées</a>
+    </div>
+
+    {% if vue == 'valider' %}
+    <!-- Paiements encaissés par les vendeurs : le gérant valide (l'argent entre alors en caisse) -->
+    {% for p in attente %}
+    <div class="bg-white rounded-2xl shadow-sm p-4 border-2 border-yellow-300">
+        <p class="font-bold text-gray-900">{{ f(p.montant) }} FCFA · {{ modes[p.mode][0] if p.mode in modes else p.mode }}</p>
+        <p class="text-sm text-gray-600">De <b>{{ p.commande.client_nom }}</b> (vente n°{{ p.commande.numero }}, reste {{ f(p.commande.reste_du) }} FCFA)</p>
+        <p class="text-xs text-gray-500">Reçu par {{ p.par or '—' }} le {{ p.date.strftime('%d/%m à %H:%M') }}</p>
+        <div class="flex gap-2 mt-3">
+            <form method="POST" action="{{ url_for('boutique.valider_paiement_creance', paiement_id=p.id) }}">
+                <button type="submit" class="bg-green-600 text-white px-4 py-2 rounded-xl font-semibold"><i class="fas fa-check mr-1"></i> Valider (j'ai l'argent)</button>
+            </form>
+            <form method="POST" action="{{ url_for('boutique.refuser_paiement_creance', paiement_id=p.id) }}"
+                  onsubmit="const m = prompt('Refuser ce paiement ? Motif :', ''); if (m === null) return false; this.motif.value = m; return true;">
+                <input type="hidden" name="motif">
+                <button type="submit" class="bg-red-50 text-red-700 px-4 py-2 rounded-xl font-semibold">Refuser</button>
+            </form>
+        </div>
+    </div>
+    {% else %}
+    <p class="text-center text-gray-500 py-10">Aucun paiement à valider.</p>
+    {% endfor %}
+
+    {% elif vue == 'soldees' %}
+    {% for c in soldees %}
+    <div class="bg-white rounded-2xl shadow-sm p-3 flex justify-between gap-2">
+        <div><p class="font-semibold">{{ c.client_nom }} <span class="text-gray-500 text-sm">· vente n°{{ c.numero }} du {{ c.date_commande.strftime('%d/%m/%Y') }}</span></p>
+            <p class="text-xs text-green-700">✓ Soldée · {{ c.paiements_creance|selectattr('statut', 'equalto', 'valide')|list|length }} paiement(s)</p></div>
+        <p class="font-bold whitespace-nowrap">{{ f(c.total) }} F</p>
+    </div>
+    {% else %}
+    <p class="text-center text-gray-500 py-10">Aucune créance soldée pour l'instant.</p>
+    {% endfor %}
+
+    {% else %}
+    {% for g in clients %}
+    <div class="bg-white rounded-2xl shadow-sm p-4">
+        <div class="flex items-start justify-between gap-2">
+            <div class="min-w-0">
+                <p class="font-bold text-gray-900">{{ g.nom }}</p>
+                {% if g.telephone %}<a href="tel:{{ g.telephone }}" class="text-sm text-purple-700 underline">{{ g.telephone }}</a>{% endif %}
+            </div>
+            <div class="text-right"><p class="text-xs text-gray-500">Doit</p><p class="text-xl font-extrabold text-orange-600 whitespace-nowrap">{{ f(g.du) }} F</p></div>
+        </div>
+        {% for c in g.ventes %}
+        {% set attente_c = attente_sur(c) %}
+        <div class="mt-3 border-t border-gray-100 pt-3">
+            <div class="flex justify-between text-sm">
+                <span>Vente n°{{ c.numero }} du {{ c.date_commande.strftime('%d/%m/%Y') }}</span>
+                <span>Total {{ f(c.total) }} · payé {{ f(c.montant_paye) }}</span>
+            </div>
+            <p class="text-xs text-gray-500 truncate">{% for l in c.articles_json %}{{ l.quantite }}× {{ l.nom }}{{ ', ' if not loop.last }}{% endfor %}</p>
+            <p class="text-sm font-bold text-orange-700 mt-1">Reste {{ f(c.reste_du) }} FCFA{% if attente_c %} <span class="font-normal text-yellow-700">· {{ f(attente_c) }} en attente de validation</span>{% endif %}</p>
+            {% for p in c.paiements_creance %}
+            <p class="text-xs {{ 'text-green-700' if p.statut == 'valide' else 'text-yellow-700' if p.statut == 'en_attente' else 'text-red-600 line-through' }}">
+                {{ p.date.strftime('%d/%m') }} : {{ f(p.montant) }} F ({{ modes[p.mode][0] if p.mode in modes else p.mode }}, {{ p.par }})
+                {{ '✓' if p.statut == 'valide' else '⏳ à valider' if p.statut == 'en_attente' else '✗ refusé' ~ (' : ' ~ p.motif_refus if p.motif_refus else '') }}</p>
+            {% endfor %}
+            <form method="POST" action="{{ url_for('boutique.payer_creance', commande_id=c.id) }}" class="flex flex-wrap items-center gap-2 mt-2">
+                <input type="number" name="montant" min="1" max="{{ (c.reste_du - attente_c)|int }}" step="any" required inputmode="numeric"
+                       placeholder="Montant reçu" class="w-32 border-2 border-gray-200 rounded-xl px-3 py-2 font-bold">
+                <select name="mode" class="border border-gray-300 rounded-xl px-2 py-2">
+                    {% for cle, (nom, icone) in modes.items() if cle != 'autre' %}<option value="{{ cle }}">{{ nom }}</option>{% endfor %}
+                </select>
+                <button type="submit" class="bg-green-600 text-white px-4 py-2 rounded-xl font-semibold"><i class="fas fa-coins mr-1"></i> Encaisser</button>
+                {% if c.client_telephone %}<a href="{{ relance(c) }}" target="_blank" rel="noopener" class="px-3 py-2 rounded-xl border-2 border-green-500 text-green-700 font-semibold"><i class="fab fa-whatsapp"></i> Relancer</a>{% endif %}
+                <a href="{{ url_for('boutique.ticket_vente', commande_id=c.id, retour=request.full_path) }}" class="px-3 py-2 rounded-xl bg-gray-100"><i class="fas fa-receipt"></i></a>
+            </form>
+        </div>
+        {% endfor %}
+    </div>
+    {% else %}
+    <div class="text-center text-gray-500 py-12"><i class="fas fa-face-smile text-4xl text-gray-300 mb-2"></i><p>Aucune créance : tout le monde a payé.</p></div>
+    {% endfor %}
+    {% if not valideur %}<p class="text-xs text-gray-500">Les paiements que vous encaissez sont validés par le gérant avant d'entrer en caisse.</p>{% endif %}
+    {% endif %}
+</div>
+{% endblock %}

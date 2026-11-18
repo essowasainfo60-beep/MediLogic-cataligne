@@ -38,17 +38,32 @@ def commande_livree(commande):
         commande.reglee = False      # l'argent est chez le livreur jusqu'au versement
         commande.frais_payes = commande.garde_frais
     else:
-        commande.reglee = True       # remise en main propre : encaissé tout de suite
+        # Remise en main propre : encaissé tout de suite (vente à crédit : seulement la part payée)
+        credit = commande.source == 'comptoir' and commande.montant_paye is not None
+        montant = commande.montant_paye if credit else commande.total
+        commande.reglee = not (credit and (commande.reste_du or 0) > 0.001)
         commande.frais_payes = True
-        commande.date_reglement = datetime.utcnow()
+        commande.date_reglement = datetime.utcnow() if commande.reglee else None
         libelle = (f'Vente au comptoir n°{commande.numero}' + (f' ({commande.client_nom})' if commande.client_nom != 'Client comptoir' else '')
                    if commande.source == 'comptoir' else f'Commande n°{commande.numero} remise en boutique ({commande.client_nom})')
-        ajouter(commande.boutique_id, 'vente_directe', commande.total, libelle, commande_id=commande.id)
+        if credit and (commande.reste_du or 0) > 0.001:
+            libelle += f' · à crédit, reste {commande.reste_du:,.0f} FCFA'.replace(',', ' ')
+        if montant:
+            ajouter(commande.boutique_id, 'vente_directe', montant, libelle, commande_id=commande.id)
 
 
 def commande_plus_livree(commande):
     """Une commande livrée revient en arrière (erreur, annulation) : on corrige la caisse."""
-    if commande.reglee:
+    if commande.source == 'comptoir' and commande.montant_paye is not None:
+        # Vente à crédit annulée : on rend ce que le client a payé, la créance disparaît
+        if commande.montant_paye:
+            ajouter(commande.boutique_id, 'correction', -commande.montant_paye,
+                    f'Annulation de la vente n°{commande.numero} : argent à rendre', commande_id=commande.id)
+        for p in commande.paiements_creance:
+            if p.statut == 'en_attente':
+                p.statut, p.motif_refus = 'refuse', 'Vente annulée'
+        commande.montant_paye, commande.reste_du = 0, 0
+    elif commande.reglee:
         montant = commande.total if not commande.livree_par_livreur else a_remettre(commande)
         ajouter(commande.boutique_id, 'correction', -montant,
                 f'Annulation de la livraison n°{commande.numero} : argent à rendre', commande_id=commande.id)

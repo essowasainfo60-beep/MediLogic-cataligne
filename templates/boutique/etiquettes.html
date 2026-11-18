@@ -1,0 +1,170 @@
+{% extends "base.html" %}
+
+{% block title %}Étiquettes code-barres - {{ boutique.nom_boutique }}{% endblock %}
+
+{% block extra_css %}
+<style>
+    #planche { display: none; }
+    .etiquette { box-sizing: border-box; overflow: hidden; text-align: center; font-family: Arial, sans-serif; color: #000; background: #fff;
+                 display: flex; flex-direction: column; align-items: center; justify-content: center; page-break-inside: avoid; }
+    .etiquette .e-boutique { font-size: 6.5pt; line-height: 1; opacity: .8; }
+    .etiquette .e-nom { font-size: 7.5pt; font-weight: bold; line-height: 1.05; max-height: 2.2em; overflow: hidden; }
+    .etiquette .e-prix { font-size: 10pt; font-weight: bold; line-height: 1.1; }
+    .etiquette svg { max-width: 100%; height: auto; }
+    /* Planche A4 : 5 × 13 étiquettes de 38 × 21 mm */
+    .format-a4 { display: grid; grid-template-columns: repeat(5, 38mm); grid-auto-rows: 21.2mm; gap: 0 2.5mm; padding: 10.7mm 4.75mm; width: 210mm; }
+    .format-a4 .etiquette { width: 38mm; height: 21.2mm; padding: .8mm; }
+    /* Imprimante d'étiquettes : une étiquette 50 × 30 mm par page */
+    .format-rouleau .etiquette { width: 50mm; height: 30mm; padding: 1.2mm; page-break-after: always; }
+    @media print {
+        body * { visibility: hidden !important; }
+        #planche, #planche * { visibility: visible !important; }
+        #planche { display: block !important; position: absolute; left: 0; top: 0; }
+        .format-a4 { display: grid !important; }
+        @page { margin: 0; }
+    }
+    @media screen { #planche.apercu { display: grid; } #planche.apercu.format-rouleau { display: flex; flex-wrap: wrap; gap: 4px; }
+                    #planche.apercu .etiquette { outline: 1px dashed #d1d5db; } }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="max-w-4xl mx-auto px-4 space-y-4 pb-28">
+    <div>
+        <h1 class="text-2xl font-extrabold text-gray-900"><i class="fas fa-barcode text-purple-600 mr-1"></i> Étiquettes code-barres</h1>
+        <p class="text-sm text-gray-500">Créez les codes de vos articles qui n'en ont pas, puis imprimez les étiquettes à coller : à la caisse, il suffit de scanner.</p>
+    </div>
+
+    <details class="bg-purple-50 border border-purple-100 rounded-2xl px-4 py-3 text-sm text-purple-900">
+        <summary class="font-semibold cursor-pointer">Comment faire ?</summary>
+        <ol class="mt-2 space-y-1 list-decimal ml-5">
+            <li>Cochez les articles (ou tailles / couleurs) à étiqueter et indiquez combien d'étiquettes (bouton « = stock » pour une par pièce).</li>
+            <li>Ceux qui n'ont pas de code : touchez <b>« Créer les codes manquants »</b>. Les articles qui ont déjà un code d'usine le gardent.</li>
+            <li>Choisissez le papier puis <b>« Imprimer »</b> : planche A4 d'étiquettes autocollantes (38 × 21 mm, 65 par feuille) ou imprimante d'étiquettes (50 × 30 mm).</li>
+        </ol>
+    </details>
+
+    <div class="bg-white rounded-2xl shadow-sm p-3 flex flex-wrap items-center gap-2 sticky top-16 z-20">
+        <input type="search" id="filtre" placeholder="Filtrer…" class="flex-1 min-w-[140px] border border-gray-300 rounded-xl px-3 py-2">
+        <label class="text-sm flex items-center gap-1"><input type="checkbox" id="toutCocher"> Tout</label>
+        <label class="text-sm flex items-center gap-1"><input type="checkbox" id="sansCode"> Sans code seulement</label>
+    </div>
+
+    <form method="POST" action="{{ url_for('boutique.etiquettes_codes') }}" id="formCodes">
+        <div class="bg-white rounded-2xl shadow-sm divide-y divide-gray-100" id="liste">
+            {% for l in lignes %}
+            <div class="ligne flex items-center gap-3 px-3 py-2.5" data-texte="{{ ('n°' ~ l.n ~ ' ' ~ l.nom ~ ' ' ~ (l.choix or '') ~ ' ' ~ (l.code or ''))|lower }}"
+                 data-sans="{{ '1' if not l.code or not l.propre else '' }}">
+                <input type="checkbox" name="ids" value="{{ l.id }}" class="coche h-5 w-5 flex-shrink-0"
+                       data-nom="{{ l.nom }}" data-choix="{{ l.choix or '' }}" data-prix="{{ l.prix }}" data-code="{{ l.code or '' }}" data-stock="{{ l.stock if l.stock is not none else '' }}">
+                <div class="flex-1 min-w-0">
+                    <p class="font-semibold text-gray-900 text-sm truncate"><span class="text-purple-600">n°{{ l.n }}</span> · {{ l.nom }}{% if l.choix %} <span class="text-purple-700">({{ l.choix }})</span>{% endif %}</p>
+                    <p class="text-xs {{ 'text-gray-500 font-mono' if l.code else 'text-orange-600 font-semibold' }}">
+                        {% if l.code %}{{ l.code }}{% if not l.propre %} <span class="font-sans text-orange-600">(code de l'article : à la caisse il faudra choisir la taille / couleur)</span>{% endif %}{% else %}Pas encore de code-barres{% endif %}
+                        · {{ "{:,.0f}".format(l.prix).replace(',', ' ') }} F{% if l.stock is not none %} · {{ l.stock }} en stock{% endif %}</p>
+                </div>
+                <div class="flex items-center gap-1 flex-shrink-0">
+                    <input type="number" min="1" max="500" value="1" class="nb w-14 border border-gray-300 rounded-lg px-1 py-1 text-center" aria-label="Nombre d'étiquettes">
+                    {% if l.stock %}<button type="button" class="egal-stock text-xs px-2 py-1 rounded-lg bg-gray-100" title="Une étiquette par pièce en stock">= stock</button>{% endif %}
+                </div>
+            </div>
+            {% else %}
+            <p class="text-center text-gray-500 py-10">Aucun article : ajoutez d'abord vos articles.</p>
+            {% endfor %}
+        </div>
+    </form>
+</div>
+
+<!-- Barre d'actions -->
+<div class="fixed inset-x-0 bottom-16 md:bottom-0 z-40 p-3 bg-white/95 backdrop-blur border-t border-gray-200">
+    <div class="max-w-4xl mx-auto flex flex-wrap items-center gap-2">
+        <span id="resume" class="text-sm text-gray-600 flex-1 min-w-[120px]">Aucun article choisi</span>
+        <select id="format" class="border border-gray-300 rounded-xl px-2 py-2 text-sm">
+            <option value="a4">Planche A4 (38 × 21 mm)</option>
+            <option value="rouleau">Imprimante d'étiquettes (50 × 30 mm)</option>
+        </select>
+        <button type="button" id="btnCodes" class="px-3 py-2 rounded-xl border-2 border-purple-500 text-purple-700 font-semibold text-sm">Créer les codes manquants</button>
+        <button type="button" id="btnImprimer" class="px-4 py-2 rounded-xl bg-purple-600 text-white font-bold"><i class="fas fa-print mr-1"></i> Imprimer</button>
+    </div>
+</div>
+
+<div id="planche"></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jsbarcode/3.11.5/JsBarcode.all.min.js"></script>
+<script>
+(function () {
+    const NOM_BOUTIQUE = {{ boutique.nom_boutique|tojson }};
+    const lignes = [...document.querySelectorAll('.ligne')];
+    const coches = () => lignes.map((l) => l.querySelector('.coche')).filter((c) => c.checked);
+    const ean13Valide = (c) => /^\d{13}$/.test(c) && (10 - [...c.slice(0, 12)].reduce((s, d, i) => s + d * (i % 2 ? 3 : 1), 0) % 10) % 10 === +c[12];
+
+    function filtrer() {
+        const q = document.getElementById('filtre').value.trim().toLowerCase();
+        const sans = document.getElementById('sansCode').checked;
+        lignes.forEach((l) => { l.style.display = (!q || l.dataset.texte.includes(q)) && (!sans || l.dataset.sans) ? '' : 'none'; });
+    }
+    function resume() {
+        const c = coches();
+        const nb = c.reduce((n, x) => n + (parseInt(x.closest('.ligne').querySelector('.nb').value, 10) || 0), 0);
+        const sansCode = c.filter((x) => !x.dataset.code).length;
+        document.getElementById('resume').textContent = c.length
+            ? c.length + ' article(s) · ' + nb + ' étiquette(s)' + (sansCode ? ' · ' + sansCode + ' sans code' : '')
+            : 'Aucun article choisi';
+    }
+    document.getElementById('filtre').addEventListener('input', filtrer);
+    document.getElementById('sansCode').addEventListener('change', filtrer);
+    document.getElementById('toutCocher').addEventListener('change', (e) => {
+        lignes.forEach((l) => { if (l.style.display !== 'none') l.querySelector('.coche').checked = e.target.checked; }); resume();
+    });
+    lignes.forEach((l) => {
+        l.querySelector('.coche').addEventListener('change', resume);
+        l.querySelector('.nb').addEventListener('input', resume);
+        l.querySelector('.egal-stock')?.addEventListener('click', () => {
+            l.querySelector('.nb').value = l.querySelector('.coche').dataset.stock || 1;
+            l.querySelector('.coche').checked = true; resume();
+        });
+    });
+    // Revenir sur la page après la création des codes : les articles restent cochés
+    const deja = new URLSearchParams(location.search).get('choix');
+    if (deja) deja.split(',').forEach((id) => { const c = lignes.map((l) => l.querySelector('.coche')).find((x) => x.value === id); if (c) c.checked = true; });
+    resume();
+
+    document.getElementById('btnCodes').addEventListener('click', () => {
+        const c = coches();
+        if (!c.length) return alert('Cochez d\'abord les articles.');
+        if (!c.some((x) => !x.dataset.code || x.closest('.ligne').dataset.sans)) return alert('Les articles choisis ont déjà leur code-barres.');
+        document.getElementById('formCodes').submit();
+    });
+
+    document.getElementById('btnImprimer').addEventListener('click', () => {
+        const c = coches();
+        if (!c.length) return alert('Cochez d\'abord les articles à étiqueter.');
+        const sans = c.filter((x) => !x.dataset.code);
+        if (sans.length) return alert(sans.length + ' article(s) n\'ont pas encore de code-barres : touchez « Créer les codes manquants » d\'abord.');
+        if (!window.JsBarcode) return alert('Le générateur de codes-barres ne s\'est pas chargé : vérifiez la connexion internet puis actualisez.');
+        const format = document.getElementById('format').value;
+        const planche = document.getElementById('planche');
+        planche.className = 'format-' + format;
+        planche.innerHTML = '';
+        c.forEach((x) => {
+            const n = Math.min(500, parseInt(x.closest('.ligne').querySelector('.nb').value, 10) || 1);
+            for (let i = 0; i < n; i++) {
+                const e = document.createElement('div');
+                e.className = 'etiquette';
+                e.innerHTML = '<div class="e-boutique"></div><div class="e-nom"></div><svg></svg><div class="e-prix"></div>';
+                e.querySelector('.e-boutique').textContent = NOM_BOUTIQUE;
+                e.querySelector('.e-nom').textContent = x.dataset.nom + (x.dataset.choix ? ' · ' + x.dataset.choix : '');
+                e.querySelector('.e-prix').textContent = Math.round(x.dataset.prix).toLocaleString('fr-FR').replace(/ | /g, ' ') + ' FCFA';
+                const code = x.dataset.code;
+                JsBarcode(e.querySelector('svg'), code, {
+                    format: ean13Valide(code) ? 'EAN13' : 'CODE128', width: format === 'a4' ? 1.1 : 1.5,
+                    height: format === 'a4' ? 26 : 40, fontSize: format === 'a4' ? 10 : 13, margin: 0, textMargin: 0,
+                });
+                planche.appendChild(e);
+            }
+        });
+        setTimeout(() => window.print(), 150);
+    });
+})();
+</script>
+{% endblock %}

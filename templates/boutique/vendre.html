@@ -130,8 +130,17 @@
             <div class="flex flex-wrap gap-1.5 mt-2" data-billets></div>
             <p data-monnaie class="hidden mt-2 text-center font-bold rounded-xl py-2"></p>
         </div>
-        <details class="text-sm">
-            <summary class="cursor-pointer text-gray-600"><i class="fas fa-user mr-1"></i> Client (facultatif : pour le ticket WhatsApp et la fidélité)</summary>
+        <label class="flex items-center gap-2 text-sm font-semibold text-orange-700 bg-orange-50 rounded-xl px-3 py-2">
+            <input type="checkbox" data-credit class="h-5 w-5"> Le client paie une partie (vente à crédit)</label>
+        <div data-bloc-credit class="hidden">
+            <div class="flex items-center gap-2">
+                <label class="text-sm font-semibold text-gray-700 flex-1">Payé maintenant</label>
+                <input data-paye type="number" min="0" inputmode="numeric" placeholder="0" class="w-36 border-2 border-orange-300 rounded-xl px-3 py-2 text-right font-bold">
+            </div>
+            <p data-reste class="mt-2 text-center font-bold rounded-xl py-2 bg-orange-50 text-orange-800"></p>
+        </div>
+        <details class="text-sm" data-details-client>
+            <summary class="cursor-pointer text-gray-600"><i class="fas fa-user mr-1"></i> Client <span data-client-oblig>(facultatif : pour le ticket WhatsApp et la fidélité)</span></summary>
             <div class="grid grid-cols-2 gap-2 mt-2">
                 <input data-client-nom maxlength="100" placeholder="Nom" class="border border-gray-300 rounded-lg px-2 py-2">
                 <input data-client-tel type="tel" maxlength="30" placeholder="Téléphone" class="border border-gray-300 rounded-lg px-2 py-2">
@@ -327,10 +336,12 @@
             conteneur.querySelector('[data-remise]').addEventListener('input', (e) => { champs.remise = e.target.value; dessinerPanier(false, conteneur); });
             conteneur.querySelector('[data-remise-type]').addEventListener('change', (e) => { champs.remiseType = e.target.value; dessinerPanier(false, conteneur); });
             conteneur.querySelector('[data-recu]').addEventListener('input', (e) => { champs.recu = e.target.value; dessinerPanier(false, conteneur); });
-            conteneur.querySelector('[data-client-nom]').addEventListener('input', (e) => { champs.nom = e.target.value; });
-            conteneur.querySelector('[data-client-tel]').addEventListener('input', (e) => { champs.tel = e.target.value; });
+            conteneur.querySelector('[data-client-nom]').addEventListener('input', (e) => { champs.nom = e.target.value; dessinerPanier(false, conteneur); });
+            conteneur.querySelector('[data-client-tel]').addEventListener('input', (e) => { champs.tel = e.target.value; dessinerPanier(false, conteneur); });
             conteneur.querySelectorAll('[data-mode]').forEach((b) => b.addEventListener('click', () => { mode = b.dataset.mode; dessinerPanier(); }));
             conteneur.querySelector('[data-valider]').addEventListener('click', valider);
+            conteneur.querySelector('[data-credit]').addEventListener('change', (e) => { champs.credit = e.target.checked; if (champs.credit) champs.paye = champs.paye || ''; dessinerPanier(); });
+            conteneur.querySelector('[data-paye]').addEventListener('input', (e) => { champs.paye = e.target.value; dessinerPanier(false, conteneur); });
         }
         const t = totaux();
         const ul = conteneur.querySelector('[data-lignes]');
@@ -363,7 +374,17 @@
         conteneur.querySelector('[data-remise-type]').value = champs.remiseType || 'f';
         if (document.activeElement !== conteneur.querySelector('[data-recu]')) conteneur.querySelector('[data-recu]').value = champs.recu || '';
         conteneur.querySelectorAll('[data-mode]').forEach((b) => b.classList.toggle('choisi', b.dataset.mode === mode));
-        conteneur.querySelector('[data-bloc-recu]').classList.toggle('hidden', mode !== 'especes');
+        conteneur.querySelector('[data-bloc-recu]').classList.toggle('hidden', mode !== 'especes' || !!champs.credit);
+        // Vente à crédit : payé maintenant, reste dû, client obligatoire
+        conteneur.querySelector('[data-credit]').checked = !!champs.credit;
+        conteneur.querySelector('[data-bloc-credit]').classList.toggle('hidden', !champs.credit);
+        if (document.activeElement !== conteneur.querySelector('[data-paye]')) conteneur.querySelector('[data-paye]').value = champs.paye || '';
+        conteneur.querySelector('[data-reste]').textContent = 'Reste à payer plus tard : ' + fcfa(Math.max(0, t.total - (parseFloat(champs.paye) || 0)));
+        conteneur.querySelector('[data-client-oblig]').textContent = champs.credit ? '(obligatoire : nom et téléphone)' : '(facultatif : pour le ticket WhatsApp et la fidélité)';
+        conteneur.querySelector('[data-client-oblig]').className = champs.credit ? 'text-orange-700 font-semibold' : '';
+        if (champs.credit) conteneur.querySelector('[data-details-client]').open = true;
+        if (document.activeElement !== conteneur.querySelector('[data-client-nom]')) conteneur.querySelector('[data-client-nom]').value = champs.nom || '';
+        if (document.activeElement !== conteneur.querySelector('[data-client-tel]')) conteneur.querySelector('[data-client-tel]').value = champs.tel || '';
         // Billets rapides : le montant exact, puis les billets au-dessus
         const billets = conteneur.querySelector('[data-billets]');
         billets.innerHTML = '';
@@ -384,7 +405,8 @@
             mon.textContent = r >= 0 ? 'Monnaie à rendre : ' + fcfa(r) : 'Il manque ' + fcfa(-r);
             mon.className = 'mt-2 text-center font-bold rounded-xl py-2 ' + (r >= 0 ? 'bg-green-50 text-green-800' : 'bg-red-50 text-red-700');
         }
-        conteneur.querySelector('[data-valider]').disabled = !panier.length || (mode === 'especes' && recu > 0 && recu < t.total);
+        const creditOk = !champs.credit || ((champs.nom || '').trim() && (champs.tel || '').replace(/\D/g, '').length >= 8);
+        conteneur.querySelector('[data-valider]').disabled = !panier.length || !creditOk || (!champs.credit && mode === 'especes' && recu > 0 && recu < t.total);
     }
     function dessinerPanier(eclair, sauf) {
         const t = totaux();
@@ -407,14 +429,16 @@
         try {
             const r = await fetch(URL_VENTE, { method: 'POST', headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
                 body: JSON.stringify({ lignes: panier.map((l) => ({ article_id: l.id, cle: l.cle, quantite: l.q })), remise: t.remise,
-                                       mode, recu: mode === 'especes' ? (champs.recu || null) : null, client_nom: champs.nom || '', client_tel: champs.tel || '' }) });
+                                       mode, recu: mode === 'especes' && !champs.credit ? (champs.recu || null) : null, client_nom: champs.nom || '', client_tel: champs.tel || '',
+                                       paye: champs.credit ? (champs.paye || '0') : null }) });
             const d = await r.json();
             if (!d.success) throw new Error(d.message || 'Vente refusée');
             CATALOGUE = d.catalogue;
             $('okNumero').textContent = 'Ticket n°' + d.numero;
             $('okTotal').textContent = fcfa(d.total);
-            $('okMonnaie').classList.toggle('hidden', !(d.monnaie > 0));
-            $('okMonnaie').textContent = 'Monnaie à rendre : ' + fcfa(d.monnaie || 0);
+            $('okMonnaie').classList.toggle('hidden', !(d.monnaie > 0 || d.reste_du > 0));
+            $('okMonnaie').textContent = d.reste_du > 0 ? 'À crédit : reste ' + fcfa(d.reste_du) + ' (voir Créances)' : 'Monnaie à rendre : ' + fcfa(d.monnaie || 0);
+            $('okMonnaie').className = 'mt-2 text-lg font-bold rounded-xl py-2 ' + (d.reste_du > 0 ? 'text-orange-700 bg-orange-50' : 'text-green-700 bg-green-50');
             $('okTicket').href = d.ticket;
             $('feuilleCaisse').classList.add('hidden');
             $('feuilleOk').classList.remove('hidden');

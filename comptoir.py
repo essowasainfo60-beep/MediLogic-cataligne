@@ -89,8 +89,9 @@ def catalogue_caisse(boutique_id):
     return res
 
 
-def vendre(boutique, lignes, remise=0, mode='especes', recu=None, client_nom='', client_tel='', par=None):
+def vendre(boutique, lignes, remise=0, mode='especes', recu=None, client_nom='', client_tel='', par=None, paye=None):
     """Enregistre la vente. lignes : [{'article_id', 'cle' (variante ou None), 'quantite'}].
+    paye : vente à crédit, somme payée maintenant (le reste devient une créance au nom du client).
     Renvoie (commande, None) ou (None, message d'erreur)."""
     if not lignes:
         return None, 'Le panier est vide'
@@ -149,7 +150,18 @@ def vendre(boutique, lignes, remise=0, mode='especes', recu=None, client_nom='',
         recu = float(recu) if recu not in (None, '') else None
     except (TypeError, ValueError):
         recu = None
-    if mode == 'especes' and recu is not None and recu + 0.001 < total:
+    credit = paye not in (None, '')
+    if credit:
+        try:
+            paye = round(max(0.0, min(float(paye), total)), 2)
+        except (TypeError, ValueError):
+            return None, 'Montant payé invalide'
+        if paye >= total - 0.001:
+            credit, paye = False, None                      # tout est payé : vente normale
+        elif not (client_nom or '').strip() or len(''.join(c for c in (client_tel or '') if c.isdigit())) < 8:
+            return None, 'Vente à crédit : le nom et le téléphone du client sont obligatoires (pour le relancer)'
+        recu = None
+    if not credit and mode == 'especes' and recu is not None and recu + 0.001 < total:
         return None, 'La somme reçue est inférieure au total'
     commande = Commande(
         boutique_id=boutique.id, client_nom=(client_nom or '').strip()[:100] or 'Client comptoir',
@@ -157,6 +169,7 @@ def vendre(boutique, lignes, remise=0, mode='especes', recu=None, client_nom='',
         articles_json=articles_json, total=total, remise=remise, frais_livraison=0, source='comptoir',
         statut='confirmee', saisie_par=(par or '')[:120] or None, confirmee_par=(par or '')[:120] or None,
         mode_paiement=mode, montant_recu=recu if mode == 'especes' else None, livre_par='boutique', lu=True,
+        montant_paye=paye if credit else total, reste_du=round(total - paye, 2) if credit else 0,
     )
     enregistrer_avec_numero(commande, 'numero_commande', Commande.prochain_numero)
     stock.changer_statut(commande, 'livree')       # stock sorti + argent en caisse (vente directe)

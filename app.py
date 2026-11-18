@@ -156,7 +156,9 @@ def mettre_a_jour_schema():
                                 ('livraison_avant_retrait', 'JSON'),
                                 ('mode_frais', 'VARCHAR(20)'),
                                 ('mode_paiement', 'VARCHAR(20)'),
-                                ('montant_recu', 'FLOAT')]:
+                                ('montant_recu', 'FLOAT'),
+                                ('montant_paye', 'FLOAT'),
+                                ('reste_du', 'FLOAT NOT NULL DEFAULT 0')]:
             if nom not in colonnes_commandes:
                 conn.execute(text(f"ALTER TABLE commandes ADD COLUMN {nom} {definition}"))
         if 'frais' not in {c['name'] for c in inspecteur.get_columns('zones')}:

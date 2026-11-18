@@ -56,6 +56,12 @@
             {% if commande.mode_paiement %}
             <tr><td>Payé : {{ modes[commande.mode_paiement][0] if commande.mode_paiement in modes else commande.mode_paiement }}</td>
                 <td class="num">{% if commande.montant_recu %}{{ "{:,.0f}".format(commande.montant_recu).replace(',', ' ') }}{% endif %}</td></tr>
+            {% if commande.reste_du and commande.reste_du > 0 %}
+            <tr><td>Déjà payé</td><td class="num">{{ "{:,.0f}".format(commande.montant_paye or 0).replace(',', ' ') }}</td></tr>
+            <tr class="total"><td>RESTE À PAYER</td><td class="num">{{ "{:,.0f}".format(commande.reste_du).replace(',', ' ') }} FCFA</td></tr>
+            {% elif commande.montant_paye is not none and commande.montant_paye < commande.total and commande.statut == 'livree' %}
+            <tr><td>Crédit soldé ✓</td><td></td></tr>
+            {% endif %}
             {% if commande.montant_recu and commande.montant_recu > commande.total %}
             <tr><td>Monnaie rendue</td><td class="num">{{ "{:,.0f}".format(commande.montant_recu - commande.total).replace(',', ' ') }}</td></tr>
             {% endif %}

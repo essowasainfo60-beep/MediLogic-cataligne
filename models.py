@@ -407,6 +407,9 @@ class Commande(db.Model):
     # Vente au comptoir : moyen de paiement et somme reçue (pour la monnaie rendue sur le ticket)
     mode_paiement = db.Column(db.String(20), nullable=True)
     montant_recu = db.Column(db.Float, nullable=True)
+    # Vente à crédit : ce qui est déjà payé (cumul) et ce que le client doit encore (créance)
+    montant_paye = db.Column(db.Float, nullable=True)
+    reste_du = db.Column(db.Float, nullable=False, default=0, server_default='0')
 
     boutique = db.relationship('Boutique', backref=db.backref('commandes', cascade='all, delete-orphan'))
     livreur = db.relationship('Livreur', backref='commandes')
@@ -585,6 +588,27 @@ class Video(db.Model):
     boutique = db.relationship('Boutique', backref=db.backref('videos', cascade='all, delete-orphan', lazy='dynamic'))
 
 
+class PaiementCreance(db.Model):
+    """Remboursement (partiel ou total) d'une vente à crédit. Encaissé par un vendeur :
+    en attente jusqu'à la validation du gérant / caissier (comme dans Ma Boutik)."""
+    __tablename__ = 'paiements_creances'
+
+    id = db.Column(db.Integer, primary_key=True)
+    boutique_id = db.Column(db.Integer, db.ForeignKey('boutiques.id'), nullable=False, index=True)
+    commande_id = db.Column(db.Integer, db.ForeignKey('commandes.id', ondelete='CASCADE'), nullable=False, index=True)
+    montant = db.Column(db.Float, nullable=False)
+    mode = db.Column(db.String(20), nullable=False, default='especes')
+    statut = db.Column(db.String(12), nullable=False, default='valide', index=True)   # valide | en_attente | refuse
+    par = db.Column(db.String(120), nullable=True)
+    valide_par = db.Column(db.String(120), nullable=True)
+    motif_refus = db.Column(db.String(200), nullable=True)
+    date = db.Column(db.DateTime, default=datetime.utcnow, index=True)
+    date_validation = db.Column(db.DateTime, nullable=True)
+
+    commande = db.relationship('Commande', backref=db.backref('paiements_creance', cascade='all, delete-orphan',
+                                                               order_by='PaiementCreance.date'))
+
+
 class CleBiometrique(db.Model):
     """Appareil autorisé à se connecter par Face ID / empreinte / Windows Hello
     (WebAuthn). On ne stocke que la clé publique : la biométrie reste sur l'appareil."""
@@ -714,6 +738,7 @@ class MouvementCaisse(db.Model):
     TYPES = {
         'versement': ('Versement livreur', 'bg-green-100 text-green-800'),
         'vente_directe': ('Vente en boutique', 'bg-green-100 text-green-800'),
+        'creance': ('Paiement de créance', 'bg-green-100 text-green-800'),
         'apport': ('Apport', 'bg-blue-100 text-blue-800'),
         'charge': ('Charge', 'bg-red-100 text-red-800'),
         'paiement_livreur': ('Paiement livreur', 'bg-purple-100 text-purple-800'),
