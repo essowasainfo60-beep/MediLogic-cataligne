@@ -33,6 +33,11 @@
     .vue-video video { width: 100%; height: 100%; object-fit: contain; }
     .badge-son { position: absolute; left: 8px; bottom: 26px; background: rgba(17,24,39,.7); color: #fff; font-size: 11px; padding: 3px 9px; border-radius: 9999px; pointer-events: none; }
     .vue-video.son .badge-son { display: none; }
+    .btn-grand { position: absolute; right: 8px; bottom: 26px; background: rgba(17,24,39,.75); color: #fff; font-size: 12px; font-weight: 600; padding: 6px 11px; border-radius: 9999px; z-index: 3; }
+    #grandeVideo { position: fixed; inset: 0; background: #000; z-index: 70; display: none; align-items: center; justify-content: center; }
+    #grandeVideo.ouverte { display: flex; }
+    #grandeVideo video { width: 100%; height: 100%; object-fit: contain; }
+    #grandeVideo .fermer { position: absolute; top: max(12px, env(safe-area-inset-top)); right: 12px; width: 44px; height: 44px; border-radius: 9999px; background: rgba(255,255,255,.18); color: #fff; font-size: 28px; line-height: 1; z-index: 2; }
     .badge-video { position: absolute; top: 8px; left: 8px; background: #dc2626; color: #fff; font-size: 11px; font-weight: 700; padding: 2px 9px; border-radius: 9999px; z-index: 2; }
 
     /* ===== Description ===== */
@@ -209,6 +214,7 @@
                     <div class="vue-video">
                         <video src="{{ video }}#t=0.1" muted playsinline preload="metadata" data-video {% if photos %}poster="{{ photos[0] }}"{% endif %}></video>
                         <span class="badge-son"><i class="fas fa-volume-xmark"></i> Touchez pour le son</span>
+                        <button type="button" class="btn-grand" data-grand aria-label="Voir la vidéo en grand"><i class="fas fa-expand"></i> En grand</button>
                     </div>
                     {% endif %}
                     {% for url in photos %}
@@ -312,6 +318,12 @@
     </div>
 </div>
 <div id="espacePanier" class="{{ 'h-24' if panier_quantite else '' }}"></div>
+
+<!-- Vidéo en grand -->
+<div id="grandeVideo" role="dialog" aria-modal="true" aria-label="Vidéo en grand">
+    <button type="button" class="fermer" aria-label="Fermer">&times;</button>
+    <video controls playsinline></video>
+</div>
 
 <!-- Visionneuse plein écran -->
 <div id="visionneuse" class="galerie" role="dialog" aria-modal="true">
@@ -469,6 +481,33 @@
         }), { threshold: [0, 0.6] });
         films.forEach((v) => obs.observe(v));
     }
+    // En grand : la vidéo occupe tout l'écran, avec le son et les commandes (pause, avance…)
+    const grande = document.getElementById('grandeVideo');
+    const grandeV = grande.querySelector('video');
+    function fermerGrande() {
+        grandeV.pause();
+        grande.classList.remove('ouverte');
+        document.body.style.overflow = '';
+        if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
+    }
+    document.querySelectorAll('[data-grand]').forEach((b) => b.addEventListener('click', (ev) => {
+        ev.stopPropagation();
+        const v = b.parentElement.querySelector('video');
+        const depart = v.ended ? 0 : v.currentTime;
+        v.pause();
+        grandeV.src = v.getAttribute('src').split('#')[0];
+        grandeV.poster = v.poster || '';
+        grandeV.muted = false;
+        grande.classList.add('ouverte');
+        document.body.style.overflow = 'hidden';
+        grandeV.addEventListener('loadedmetadata', () => { try { grandeV.currentTime = depart; } catch (e) {} }, { once: true });
+        grandeV.play().catch(() => {});
+        if (grande.requestFullscreen) grande.requestFullscreen().catch(() => {});   // vrai plein écran (Android, ordinateur)
+    }));
+    grande.querySelector('.fermer').addEventListener('click', fermerGrande);
+    document.addEventListener('fullscreenchange', () => { if (!document.fullscreenElement && grande.classList.contains('ouverte')) fermerGrande(); });
+    document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && grande.classList.contains('ouverte')) fermerGrande(); });
+
     films.forEach((v) => v.parentElement.addEventListener('click', () => {
         v.muted = !v.muted;
         v.parentElement.classList.toggle('son', !v.muted);
