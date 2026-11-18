@@ -21,7 +21,7 @@ def abonnes(boutique_id):
 
 
 def en_attente(boutique_id):
-    return (Article.query.filter_by(boutique_id=boutique_id, annonce=EN_ATTENTE, archive=False)
+    return (Article.query.filter_by(boutique_id=boutique_id, annonce=EN_ATTENTE, archive=False, en_ligne=True)
             .order_by(Article.created_at).all())
 
 

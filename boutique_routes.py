@@ -52,7 +52,7 @@ GESTION = {
     'ajouter_zone', 'modifier_zone', 'zones_modele', 'envoyer_espace_livreur', 'nouveau_lien_livreur',
     'statistiques', 'historique', 'message_statut', 'historique_csv', 'retour_commande', 'codes_promo', 'modifier_code_promo', 'regler_fidelite',
     'annoncer_article', 'annoncer_nouveautes', 'envoyer_video', 'code_barre_nouveau', 'etiquettes', 'etiquettes_codes',
-    'approvisionnement', 'approvisionner', 'payer_approvisionnement',
+    'approvisionnement', 'approvisionner', 'payer_approvisionnement', 'basculer_en_ligne',
 }
 # Module « Ma Boutique » : réservé aux abonnements à partir de 10 000 FCFA (voir abonnement.module_boutique)
 MODULE_BOUTIQUE = {
@@ -315,7 +315,9 @@ def enregistrer_variantes(article, form, type_mouvement, note):
 
 
 def _lire_caisse_article(article, form):
-    """Code-barres (unique dans la boutique) et prix d'achat saisis sur la fiche article."""
+    """Code-barres (unique dans la boutique), prix d'achat et affichage en ligne saisis sur la fiche article."""
+    if 'en_ligne_present' in form:
+        article.en_ligne = bool(form.get('en_ligne'))
     if 'prix_achat' in form:
         article.prix_achat = lire_prix(form.get('prix_achat')) if (form.get('prix_achat') or '').strip() else None
     if 'code_barre' in form:
@@ -1122,6 +1124,19 @@ def payer_approvisionnement(bon_id):
 def code_barre_nouveau():
     """Code interne pour un article sans code d'usine (à imprimer en étiquette)."""
     return jsonify(code=comptoir.code_interne(boutique_connectee().id))
+
+
+@boutique_bp.route('/articles/<int:article_id>/en-ligne', methods=['POST'])
+@login_required
+def basculer_en_ligne(article_id):
+    """Afficher / cacher l'article dans le catalogue en ligne (il reste vendable au comptoir)."""
+    article = article_de_la_boutique(article_id)
+    if article:
+        article.en_ligne = not article.en_ligne
+        db.session.commit()
+        flash(f'« {article.nom} » ' + ('est de nouveau visible dans votre catalogue en ligne.' if article.en_ligne
+              else "n'apparaît plus dans le catalogue en ligne (toujours vendable au comptoir)."), 'success')
+    return redirect(request.form.get('retour') or url_for('boutique.articles'))
 
 
 @boutique_bp.route('/articles_archives')

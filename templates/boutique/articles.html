@@ -71,10 +71,28 @@
     </div>
 
     {% if articles %}
-        {{ recherche('#listeArticles', 'Rechercher un article : nom, n°, description…', '#aucunArticle', 'mb-5') }}
+        {{ recherche('#listeArticles', 'Rechercher un article : nom, n°, description…', '#aucunArticle', 'mb-3') }}
+        {% if not archives %}
+        {% set caches = articles|rejectattr('en_ligne')|list|length %}
+        <div class="flex flex-wrap gap-2 mb-5 text-sm" id="filtreEnLigne">
+            <button type="button" data-f="" class="px-3 py-1.5 rounded-full border-2 border-purple-600 bg-purple-600 text-white font-semibold">Tous ({{ articles|length }})</button>
+            <button type="button" data-f="1" class="px-3 py-1.5 rounded-full border-2 border-gray-200 bg-white font-semibold">🌐 En ligne ({{ articles|length - caches }})</button>
+            <button type="button" data-f="0" class="px-3 py-1.5 rounded-full border-2 border-gray-200 bg-white font-semibold">🙈 Cachés ({{ caches }})</button>
+        </div>
+        <script>
+        document.querySelectorAll('#filtreEnLigne button').forEach((b) => b.addEventListener('click', () => {
+            document.querySelectorAll('#filtreEnLigne button').forEach((x) => { const a = x === b;
+                x.classList.toggle('bg-purple-600', a); x.classList.toggle('text-white', a); x.classList.toggle('border-purple-600', a);
+                x.classList.toggle('bg-white', !a); x.classList.toggle('border-gray-200', !a); });
+            document.querySelectorAll('.carte-article').forEach((c) => {
+                c.classList.toggle('hidden', b.dataset.f !== '' && (c.dataset.enLigne ? '1' : '0') !== b.dataset.f);
+            });
+        }));
+        </script>
+        {% endif %}
         <div id="listeArticles" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {% for article in articles %}
-                <div data-item="n°{{ article.numero }} {{ article.nom }} {{ article.description or '' }}" class="bg-white rounded-xl shadow-md overflow-hidden hover:shadow-lg transition {{ 'opacity-75' if archives }}">
+                <div data-item="n°{{ article.numero }} {{ article.nom }} {{ article.description or '' }} {{ 'caché hors catalogue' if not article.en_ligne else 'en ligne' }}" data-en-ligne="{{ '1' if article.en_ligne else '' }}" class="carte-article bg-white rounded-xl shadow-md overflow-hidden hover:shadow-lg transition {{ 'opacity-75' if archives }}">
                     <!-- Images -->
                     <div class="relative h-48 bg-gray-100">
                         {% if article.video_url %}<div class="absolute top-2 left-2 z-10 bg-red-600 text-white text-xs font-bold px-2 py-1 rounded-full"><i class="fas fa-play mr-1"></i>Vidéo</div>{% endif %}
@@ -108,6 +126,14 @@
                         {% if demandes_par_article is defined and demandes_par_article.get(article.id) %}
                         <a href="{{ url_for('boutique.demandes_clients') }}" class="block mb-3 text-xs font-semibold bg-purple-50 text-purple-800 rounded-lg px-2 py-1.5">
                             🔔 {{ demandes_par_article[article.id] }} client{{ 's' if demandes_par_article[article.id] > 1 }} attend{{ 'ent' if demandes_par_article[article.id] > 1 }} cet article ›</a>
+                        {% endif %}
+                        {% if not archives %}
+                        <form method="POST" action="{{ url_for('boutique.basculer_en_ligne', article_id=article.id) }}" class="mb-3">
+                            <button type="submit" class="w-full flex items-center justify-between gap-2 rounded-lg px-3 py-2 text-sm font-semibold {{ 'bg-green-50 text-green-800' if article.en_ligne else 'bg-gray-100 text-gray-600' }}">
+                                <span>{% if article.en_ligne %}🌐 Visible dans le catalogue{% else %}🙈 Caché du catalogue (comptoir seulement){% endif %}</span>
+                                <span class="text-xs underline">{{ 'Cacher' if article.en_ligne else 'Afficher' }}</span>
+                            </button>
+                        </form>
                         {% endif %}
                         <!-- Actions -->
                         <div class="flex space-x-2">

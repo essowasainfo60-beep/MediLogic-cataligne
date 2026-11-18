@@ -1,5 +1,11 @@
 {# Prix d'achat + code-barres de l'article (variable « article » facultative) #}
 {% set art_c = article if article is defined else none %}
+<label class="flex items-start gap-3 rounded-xl border-2 border-purple-200 bg-purple-50 p-3 mb-3 cursor-pointer">
+    <input type="hidden" name="en_ligne_present" value="1">
+    <input type="checkbox" name="en_ligne" value="1" class="mt-1 h-5 w-5" {{ 'checked' if not art_c or art_c.en_ligne }}>
+    <span class="text-sm"><b>🌐 Afficher dans mon catalogue en ligne</b>
+        <span class="block text-xs text-gray-600">Décoché : l'article reste dans votre stock et se vend au comptoir, mais vos clients ne le voient pas en ligne.</span></span>
+</label>
 <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
     <div>
         <label class="block text-gray-700 text-sm font-bold mb-1">Prix d'achat <span class="font-normal text-gray-400">(facultatif)</span></label>

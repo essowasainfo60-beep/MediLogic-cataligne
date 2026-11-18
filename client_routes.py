@@ -97,7 +97,7 @@ def catalogue(code):
     promos_affichees = [p for p in boutique.codes_promo if p.actif and p.affiche
                         and (not p.date_fin or p.date_fin >= date.today())
                         and (not p.utilisations_max or p.utilisations < p.utilisations_max)]
-    articles = (Article.query.filter_by(boutique_id=boutique_id, archive=False)
+    articles = (Article.query.filter_by(boutique_id=boutique_id, archive=False, en_ligne=True)
                 .order_by(Article.created_at.desc()).all())
     reserves = stock.reserves(boutique_id)
     for a in articles:
@@ -156,7 +156,7 @@ def demande_article(code):
     except (TypeError, ValueError):
         article_id = 0
     article = db.session.get(Article, article_id)
-    if not article or article.boutique_id != boutique.id or article.archive:
+    if not article or article.boutique_id != boutique.id or article.archive or not article.en_ligne:
         return jsonify(ok=False, message='Article introuvable'), 404
     if article.stock is None:
         return jsonify(ok=False, message="Cet article n'est pas épuisé : ajoutez-le au panier."), 400
@@ -213,7 +213,7 @@ def ajouter_panier():
     reserves = stock.reserves(article.boutique_id)
     dispo_article = stock.disponible(article, None, reserves)
     epuise = dispo_article is not None and dispo_article <= 0
-    if article.archive or epuise or not visitee or article.boutique_id != visitee.id:
+    if article.archive or not article.en_ligne or epuise or not visitee or article.boutique_id != visitee.id:
         if veut_json:
             return jsonify(success=False, message='Article épuisé' if epuise else 'Article indisponible'), 400
         flash('Article indisponible', 'danger')
@@ -290,7 +290,7 @@ def rafraichir_panier(panier):
     messages, propre = [], {}
     for cle, item in panier.items():
         article = db.session.get(Article, item.get('article_id')) if item.get('article_id') else None
-        if not article or article.archive or article.boutique_id != item.get('boutique_id'):
+        if not article or article.archive or not article.en_ligne or article.boutique_id != item.get('boutique_id'):
             messages.append(f"« {item['nom']} » n'est plus en vente : retiré de votre panier.")
             continue
         variante = item.get('variante')

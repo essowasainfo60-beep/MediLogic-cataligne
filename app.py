@@ -182,6 +182,8 @@ def mettre_a_jour_schema():
             conn.execute(text("CREATE INDEX IF NOT EXISTS ix_articles_code_barre ON articles (code_barre)"))
         if 'prix_achat' not in colonnes_articles:
             conn.execute(text("ALTER TABLE articles ADD COLUMN prix_achat FLOAT"))
+        if 'en_ligne' not in colonnes_articles:
+            conn.execute(text("ALTER TABLE articles ADD COLUMN en_ligne BOOLEAN NOT NULL DEFAULT TRUE"))
         if 'stock_par_variante' not in colonnes_articles:
             conn.execute(text("ALTER TABLE articles ADD COLUMN stock_par_variante BOOLEAN NOT NULL DEFAULT FALSE"))
         colonnes_mvt = {c['name'] for c in inspecteur.get_columns('mouvements_stock')}
