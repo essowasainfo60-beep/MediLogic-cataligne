@@ -1,5 +1,5 @@
 {# Formulaire de paiement de l'abonnement (page Abonnement et caisse). Variables : situation, modes, retour #}
-<form method="POST" action="{{ url_for('boutique.abonnement_payer') }}" class="form-abonnement bg-white rounded-2xl shadow-md p-5 space-y-3">
+<form method="POST" action="{{ url_for('boutique.abonnement_payer') }}" enctype="multipart/form-data" class="form-abonnement bg-white rounded-2xl shadow-md p-5 space-y-3">
     <input type="hidden" name="retour" value="{{ retour or '' }}">
     <h2 class="font-bold text-gray-900"><i class="fas fa-file-signature text-purple-500 mr-1"></i> Enregistrer le paiement de {{ situation.libelle_mois_a_payer }}</h2>
     <label class="block text-sm text-gray-500">Montant (fixé par LivraPlus)
@@ -22,6 +22,10 @@
         </label>
     </div>
     <p class="aide-reference text-xs text-gray-500">La référence figure dans le SMS de confirmation (Mixx, Moov) ou sur le bordereau de la banque.</p>
+    <label class="block text-sm text-gray-500">Capture d'écran du paiement <span class="text-gray-400">(facultatif)</span>
+        <input type="file" name="preuve" accept="image/*,application/pdf" class="mt-1 block w-full text-sm file:mr-3 file:rounded-lg file:border-0 file:bg-purple-50 file:px-3 file:py-2 file:font-semibold file:text-purple-700">
+        <span class="block text-xs text-gray-400 mt-1">Photo ou capture du SMS Mixx / Flooz, ou bordereau en PDF : preuve pour la vérification.</span>
+    </label>
     <button type="submit" class="w-full bg-purple-600 text-white py-3 rounded-xl font-semibold hover:bg-purple-700">
         Enregistrer le paiement · {{ fcfa(situation.prix) }}
     </button>

@@ -1005,6 +1005,9 @@ class PaiementAbonnement(db.Model):
     # Déclaré par la boutique : à vérifier par la boutique gestionnaire (encaissé par elle : déjà vérifié)
     verifie = db.Column(db.Boolean, nullable=False, default=False)
     verifie_le = db.Column(db.DateTime, nullable=True)
+    # Preuve facultative (capture d'écran Mixx / Flooz, bordereau en PDF) : chargée seulement quand on l'affiche
+    preuve = db.deferred(db.Column(db.LargeBinary, nullable=True))
+    preuve_mime = db.Column(db.String(30), nullable=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
     boutique = db.relationship('Boutique', backref=db.backref('paiements_abonnement', cascade='all, delete-orphan',

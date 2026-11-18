@@ -236,7 +236,7 @@
             {% if x.etat.exige %}
             <details class="rounded-xl border border-gray-200" {{ 'open' if x.etat.niveau in ['rouge', 'bloque'] }}>
                 <summary class="px-3 py-2 text-sm font-semibold text-green-700 cursor-pointer"><i class="fas fa-money-bill-wave mr-1"></i> Encaisser {{ x.etat.libelle_mois_a_payer }} ({{ fcfa(x.etat.prix) }})</summary>
-                <form method="POST" action="{{ url_for('boutique.gestion_encaisser', boutique_id=b.id) }}" class="p-3 pt-1 flex flex-wrap items-end gap-2 text-sm"
+                <form method="POST" action="{{ url_for('boutique.gestion_encaisser', boutique_id=b.id) }}" enctype="multipart/form-data" class="p-3 pt-1 flex flex-wrap items-end gap-2 text-sm"
                       data-question="Enregistrer le paiement de {{ x.etat.libelle_mois_a_payer }} ({{ fcfa(x.etat.prix) }}) pour {{ b.nom_boutique }} ?" onsubmit="return confirm(this.dataset.question)">
                     <label class="text-gray-500">Moyen
                         <select name="mode" class="block mt-1 border border-gray-300 rounded-lg px-2 py-1.5">
@@ -246,6 +246,8 @@
                         <input type="text" name="reference" placeholder="sauf espèces" class="block mt-1 w-40 border border-gray-300 rounded-lg px-2 py-1.5"></label>
                     <label class="text-gray-500">Date
                         <input type="date" name="date_paiement" value="{{ aujourdhui.isoformat() }}" max="{{ aujourdhui.isoformat() }}" class="block mt-1 border border-gray-300 rounded-lg px-2 py-1.5"></label>
+                    <label class="text-gray-500">Capture (facultatif)
+                        <input type="file" name="preuve" accept="image/*,application/pdf" class="block mt-1 w-52 text-xs"></label>
                     <button class="bg-green-600 text-white px-4 py-2 rounded-lg font-semibold">Encaisser</button>
                 </form>
             </details>
@@ -273,6 +275,7 @@
                     <td class="px-3 py-2 text-right whitespace-nowrap">{{ fcfa(p.montant) }}</td>
                     <td class="px-3 py-2 text-right whitespace-nowrap space-y-1">
                         <a href="{{ url_for('boutique.recu_abonnement', paiement_id=p.id) }}" class="block text-purple-700 text-xs font-semibold"><i class="fas fa-receipt"></i> Reçu</a>
+                        {% if p.preuve_mime %}<a href="{{ url_for('boutique.preuve_abonnement', paiement_id=p.id) }}" target="_blank" rel="noopener" class="block text-sky-700 text-xs font-semibold"><i class="fas fa-image"></i> Preuve</a>{% endif %}
                         {% if p.statut == 'valide' and not p.verifie %}
                         <form method="POST" action="{{ url_for('boutique.gestion_verifier_paiement', paiement_id=p.id) }}">
                             <button class="text-green-700 text-xs font-semibold"><i class="fas fa-check-double"></i> Confirmer</button>

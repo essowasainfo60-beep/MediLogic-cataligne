@@ -32,6 +32,7 @@
             <dt class="text-gray-500">Moyen</dt><dd class="text-right">{{ p.mode_libelle }}</dd>
             {% if p.reference %}<dt class="text-gray-500">Référence</dt><dd class="font-mono text-right">{{ p.reference }}</dd>{% endif %}
             <dt class="text-gray-500">Date du dépôt</dt><dd class="text-right">{{ p.date_paiement.strftime('%d/%m/%Y') }}</dd>
+            {% if p.preuve_mime %}<dt class="text-gray-500">Preuve</dt><dd class="text-right"><a href="{{ url_for('boutique.preuve_abonnement', paiement_id=p.id) }}" target="_blank" rel="noopener" class="text-purple-700 font-semibold"><i class="fas {{ 'fa-file-pdf' if p.preuve_mime == 'application/pdf' else 'fa-image' }}"></i> Voir la capture</a></dd>{% endif %}
             <dt class="text-gray-500">Enregistré par</dt><dd class="text-right text-gray-600">{{ p.par or '—' }}</dd>
         </dl>
         <div class="flex items-center justify-between border-t border-dashed border-gray-300 pt-4">

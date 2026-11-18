@@ -223,6 +223,28 @@ def certifie(boutique):
     return not etat(boutique)['bloque']
 
 
+PREUVE_MAX = 4 * 1024 * 1024     # 4 Mo
+
+
+def lire_preuve(fichier):
+    """Capture d'écran (image, recompressée) ou PDF. Renvoie ((octets, mime), None), (None, None) sans fichier,
+    ou (None, erreur)."""
+    if not fichier or not fichier.filename:
+        return None, None
+    debut = fichier.stream.read(5)
+    fichier.stream.seek(0)
+    if debut.startswith(b'%PDF'):
+        donnees = fichier.stream.read(PREUVE_MAX + 1)
+        if len(donnees) > PREUVE_MAX:
+            return None, 'Preuve de paiement trop lourde (4 Mo au maximum).'
+        return (donnees, 'application/pdf'), None
+    from utils import compresser_image
+    image = compresser_image(fichier, 1600)
+    if not image:
+        return None, "La preuve de paiement doit être une capture d'écran (photo) ou un PDF."
+    return image, None
+
+
 def texte_recu(p, pour_gestionnaire=False):
     """Message WhatsApp du reçu d'abonnement."""
     from messages_whatsapp import fcfa
@@ -341,7 +363,7 @@ def etat(boutique, aujourdhui=None):
 MODES = PaiementAbonnement.MODES
 
 
-def enregistrer(boutique, mode, reference, date_paiement, par=None, verifie=False):
+def enregistrer(boutique, mode, reference, date_paiement, par=None, verifie=False, preuve=None):
     """Enregistre le paiement du mois dû. Renvoie (paiement, erreur)."""
     situation = etat(boutique)
     if not situation['exige']:
@@ -375,7 +397,8 @@ def enregistrer(boutique, mode, reference, date_paiement, par=None, verifie=Fals
     db.session.flush()
     paiement = PaiementAbonnement(boutique_id=boutique.id, mois=mois, montant=situation['prix'], mode=mode,
                                   reference=reference, date_paiement=date_paiement, par=par, mouvement_id=mouvement.id,
-                                  verifie=verifie, verifie_le=datetime.utcnow() if verifie else None)
+                                  verifie=verifie, verifie_le=datetime.utcnow() if verifie else None,
+                                  preuve=preuve[0] if preuve else None, preuve_mime=preuve[1] if preuve else None)
     db.session.add(paiement)
     db.session.commit()
     return paiement, None

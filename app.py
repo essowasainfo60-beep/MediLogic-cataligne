@@ -222,6 +222,10 @@ def mettre_a_jour_schema():
             # paiements déjà enregistrés (par l'administrateur) : considérés comme vérifiés
             conn.execute(text("ALTER TABLE paiements_abonnement ADD COLUMN verifie BOOLEAN NOT NULL DEFAULT TRUE"))
             conn.execute(text("ALTER TABLE paiements_abonnement ADD COLUMN verifie_le TIMESTAMP"))
+        if inspecteur.has_table('paiements_abonnement') and 'preuve_mime' not in {c['name'] for c in inspecteur.get_columns('paiements_abonnement')}:
+            binaire = 'BYTEA' if db.engine.dialect.name == 'postgresql' else 'BLOB'
+            conn.execute(text(f"ALTER TABLE paiements_abonnement ADD COLUMN preuve {binaire}"))
+            conn.execute(text("ALTER TABLE paiements_abonnement ADD COLUMN preuve_mime VARCHAR(30)"))
         if 'derniere_activite' not in {c['name'] for c in inspecteur.get_columns('vendeurs')}:
             conn.execute(text("ALTER TABLE vendeurs ADD COLUMN derniere_activite TIMESTAMP"))
         if 'par' not in {c['name'] for c in inspecteur.get_columns('mouvements_caisse')}:

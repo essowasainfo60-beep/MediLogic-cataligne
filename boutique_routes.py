@@ -132,7 +132,7 @@ def qui():
 
 
 # Abonnement non payé après le 7 : seules ces pages restent ouvertes
-OUVERT_SI_BLOQUE = {'dashboard', 'logout', 'abonnement_page', 'abonnement_payer', 'recu_abonnement', 'changer_mot_de_passe', 'api_nouvelles',
+OUVERT_SI_BLOQUE = {'dashboard', 'logout', 'abonnement_page', 'abonnement_payer', 'recu_abonnement', 'preuve_abonnement', 'changer_mot_de_passe', 'api_nouvelles',
                     'alertes_abonner', 'alertes_tester'}
 
 
@@ -2876,9 +2876,11 @@ def gestion_encaisser(boutique_id):
     """Enregistrer un paiement reçu pour le mois dû de cette boutique."""
     b = _boutique_geree(boutique_id)
     date_depot = _lire_date(request.form.get('date_paiement'))
-    paiement, erreur = abonnement.enregistrer(b, request.form.get('mode') or 'especes', request.form.get('reference'),
-                                              date_depot.date() if date_depot else datetime.utcnow().date(),
-                                              par=_gestionnaire_nom() + " (gestion des abonnements)", verifie=True)
+    preuve, erreur = abonnement.lire_preuve(request.files.get('preuve'))
+    if not erreur:
+        paiement, erreur = abonnement.enregistrer(b, request.form.get('mode') or 'especes', request.form.get('reference'),
+                                                  date_depot.date() if date_depot else datetime.utcnow().date(),
+                                                  par=_gestionnaire_nom() + " (gestion des abonnements)", verifie=True, preuve=preuve)
     if erreur:
         flash(f'{b.nom_boutique} : {erreur}', 'danger')
         return redirect(url_for('boutique.gestion_abonnements', _anchor=f'b{b.id}'))
@@ -2968,9 +2970,11 @@ def gestion_annuler_paiement(paiement_id):
 def abonnement_payer():
     boutique = boutique_connectee()
     date_depot = _lire_date(request.form.get('date_paiement'))
-    paiement, erreur = abonnement.enregistrer(boutique, request.form.get('mode'), request.form.get('reference'),
-                                              date_depot.date() if date_depot else None,
-                                              par=getattr(current_user, 'nom_utilisateur', None))
+    preuve, erreur = abonnement.lire_preuve(request.files.get('preuve'))
+    if not erreur:
+        paiement, erreur = abonnement.enregistrer(boutique, request.form.get('mode'), request.form.get('reference'),
+                                                  date_depot.date() if date_depot else None,
+                                                  par=getattr(current_user, 'nom_utilisateur', None), preuve=preuve)
     if erreur:
         flash(erreur, 'danger')
     else:
@@ -2989,16 +2993,36 @@ def abonnement_payer():
                     else url_for('boutique.abonnement_page'))
 
 
-@boutique_bp.route('/abonnement/recu/<int:paiement_id>')
-@login_ou_admin
-def recu_abonnement(paiement_id):
-    """Reçu d'un paiement d'abonnement : pour la boutique qui a payé, et pour la boutique gestionnaire."""
+def _paiement_visible(paiement_id):
+    """Le paiement, s'il est visible par l'utilisateur : la boutique qui a payé, ou la gestion des abonnements."""
     p = db.session.get(PaiementAbonnement, paiement_id) or abort(404)
     moi = boutique_connectee() if current_user.is_authenticated else None
     gestion = peut('boutique.gestion_abonnements')
     a_moi = moi is not None and p.boutique_id == moi.id
     if not a_moi and not gestion:
         abort(404)
+    return p, a_moi, gestion
+
+
+@boutique_bp.route('/abonnement/recu/<int:paiement_id>/preuve')
+@login_ou_admin
+def preuve_abonnement(paiement_id):
+    """La capture d'écran / le PDF joint au paiement (jamais public)."""
+    p, _, _ = _paiement_visible(paiement_id)
+    if not p.preuve_mime or not p.preuve:
+        abort(404)
+    r = Response(p.preuve, mimetype=p.preuve_mime)
+    r.headers['Content-Disposition'] = f'inline; filename="preuve-{p.numero_recu}.' + ('pdf' if p.preuve_mime == 'application/pdf' else 'jpg') + '"'
+    r.headers['Cache-Control'] = 'private, max-age=3600'
+    r.headers['X-Content-Type-Options'] = 'nosniff'
+    return r
+
+
+@boutique_bp.route('/abonnement/recu/<int:paiement_id>')
+@login_ou_admin
+def recu_abonnement(paiement_id):
+    """Reçu d'un paiement d'abonnement : pour la boutique qui a payé, et pour la boutique gestionnaire."""
+    p, a_moi, gestion = _paiement_visible(paiement_id)
     pour_gestionnaire = gestion and not a_moi
     if pour_gestionnaire:
         destinataire = p.boutique                                   # on renvoie le reçu à la boutique cliente
