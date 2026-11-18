@@ -122,7 +122,40 @@ def envoyer_livreur(livreur, titre, corps, url, tag='livreur'):
     return _envoyer(list(livreur.abonnements_push), titre, corps, url, tag)
 
 
-def _envoyer(abonnements, titre, corps, url, tag):
+def abonner_nouveautes(boutique_id, donnees, telephone=None):
+    """Le client accepte d'être prévenu des nouveautés de cette boutique."""
+    from models import AbonnementNouveautes
+    try:
+        endpoint = donnees['endpoint']
+        p256dh, auth = donnees['keys']['p256dh'], donnees['keys']['auth']
+    except (KeyError, TypeError):
+        return False
+    if not str(endpoint).startswith('https://') or len(endpoint) > 1000:
+        return False
+    existant = AbonnementNouveautes.query.filter_by(boutique_id=boutique_id, endpoint=endpoint).first()
+    if existant:
+        existant.cle_p256dh, existant.cle_auth = p256dh, auth
+        existant.telephone = telephone or existant.telephone
+    else:
+        db.session.add(AbonnementNouveautes(boutique_id=boutique_id, endpoint=endpoint, cle_p256dh=p256dh,
+                                            cle_auth=auth, telephone=telephone))
+    db.session.commit()
+    return True
+
+
+def desabonner_nouveautes(boutique_id, endpoint):
+    from models import AbonnementNouveautes
+    n = AbonnementNouveautes.query.filter_by(boutique_id=boutique_id, endpoint=endpoint or '').delete()
+    db.session.commit()
+    return n > 0
+
+
+def envoyer_abonnes(abonnements, titre, corps, url, tag, **extra):
+    """Envoi à une liste d'abonnements (ex. clients abonnés aux nouveautés)."""
+    return _envoyer(abonnements, titre, corps, url, tag, **extra)
+
+
+def _envoyer(abonnements, titre, corps, url, tag, **extra):
     if not abonnements:
         return 0
     try:
@@ -131,14 +164,16 @@ def _envoyer(abonnements, titre, corps, url, tag):
         log.warning('pywebpush absent : notification non envoyée')
         return 0
     _, cle_privee = cles_vapid()
-    message = json.dumps({'titre': titre, 'corps': corps, 'url': url, 'tag': tag})
+    message = json.dumps({'titre': titre, 'corps': corps, 'url': url, 'tag': tag,
+                          **{k: v for k, v in extra.items() if v is not None}})
     envoyes = 0
     for abonnement in abonnements:
         try:
             webpush(subscription_info={'endpoint': abonnement.endpoint,
                                        'keys': {'p256dh': abonnement.cle_p256dh, 'auth': abonnement.cle_auth}},
                     data=message, vapid_private_key=cle_privee, vapid_claims={'sub': CONTACT},
-                    ttl=3600, headers={'Urgency': 'high'}, timeout=8)
+                    ttl=86400 if extra.get('doux') else 3600,
+                    headers={'Urgency': 'normal' if extra.get('doux') else 'high'}, timeout=8)
             envoyes += 1
         except WebPushException as e:
             statut = getattr(e.response, 'status_code', None)

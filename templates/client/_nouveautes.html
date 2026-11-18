@@ -1,0 +1,16 @@
+{# Bouton « Être prévenu des nouveautés » (variables : boutique, cle_push) #}
+{% if cle_push %}
+<div data-nouveautes
+     data-abonner="{{ url_for('client.nouveautes_abonner', code=boutique.lien_public) }}"
+     data-desabonner="{{ url_for('client.nouveautes_desabonner', code=boutique.lien_public) }}"
+     data-etat="{{ url_for('client.nouveautes_etat', code=boutique.lien_public) }}"
+     data-cle="{{ cle_push }}"
+     class="flex items-center gap-3 bg-white border border-purple-200 rounded-2xl px-4 py-3 text-sm shadow-sm [&.nouv-actif]:border-green-300 [&.nouv-actif]:bg-green-50">
+    <div class="flex-1 min-w-0">
+        <p data-nouv-titre class="font-semibold text-gray-900">🔔 Être prévenu des nouveautés</p>
+        <p data-nouv-texte class="text-xs text-gray-600">Recevez une notification quand {{ boutique.nom_boutique }} ajoute de nouveaux articles (au plus 1 par jour).</p>
+    </div>
+    <button type="button" data-nouv-btn class="flex-shrink-0 bg-purple-600 text-white px-4 py-2 rounded-xl font-semibold text-sm">Activer</button>
+</div>
+<script src="{{ url_for('static', filename='nouveautes.js') }}" defer></script>
+{% endif %}

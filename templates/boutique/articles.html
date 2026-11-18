@@ -26,6 +26,38 @@
         </div>
     </div>
 
+    {% if not archives and peut('boutique.annoncer_nouveautes') %}
+    <!-- Annonces de nouveautés aux clients -->
+    <div id="annonces" class="bg-white rounded-2xl shadow-sm border border-green-200 p-4 mb-5 scroll-mt-24">
+        <div class="flex flex-wrap items-start justify-between gap-3">
+            <div class="min-w-0">
+                <p class="font-bold text-gray-900">📣 Prévenir mes clients des nouveautés</p>
+                <p class="text-sm text-gray-600"><b>{{ nb_abonnes }}</b> client{{ 's' if nb_abonnes != 1 }} abonné{{ 's' if nb_abonnes != 1 }} aux notifications
+                    {% if derniere_annonce %}· dernière annonce le {{ derniere_annonce.strftime('%d/%m à %H:%M') }}{% endif %}</p>
+                {% if en_attente %}
+                <p class="text-sm text-orange-700 mt-1">En attente : {{ en_attente|map(attribute='nom')|join(', ') }}
+                    {% if not annonce_possible %}<span class="block text-xs">Partira demain automatiquement (1 annonce par jour au plus).</span>{% endif %}</p>
+                {% endif %}
+            </div>
+            <div class="flex flex-wrap gap-2">
+                {% if en_attente and annonce_possible and nb_abonnes %}
+                <form method="POST" action="{{ url_for('boutique.annoncer_nouveautes') }}"
+                      data-question="Envoyer une notification à {{ nb_abonnes }} client(s) pour : {{ en_attente|map(attribute='nom')|join(', ') }} ?"
+                      onsubmit="return confirm(this.dataset.question)">
+                    <button type="submit" class="bg-green-600 text-white px-4 py-2 rounded-xl font-semibold"><i class="fas fa-bell mr-1"></i> Prévenir maintenant</button>
+                </form>
+                {% endif %}
+                {% if lien_wa_nouveautes %}
+                <a href="{{ lien_wa_nouveautes }}" target="_blank" rel="noopener" class="bg-white border-2 border-green-500 text-green-700 px-4 py-2 rounded-xl font-semibold">
+                    <i class="fab fa-whatsapp mr-1"></i> Partager sur WhatsApp</a>
+                {% endif %}
+            </div>
+        </div>
+        <p class="text-xs text-gray-500 mt-2">Les clients s'abonnent depuis votre catalogue, après leur commande ou sur la page de suivi.
+            Pour ceux qui n'ont pas activé les notifications : « Partager sur WhatsApp » prépare un message (statut ou liste de diffusion) avec vos derniers articles et le lien du catalogue.</p>
+    </div>
+    {% endif %}
+
     <!-- Onglets -->
     <div class="flex gap-2 mb-6 border-b border-gray-200">
         <a href="{{ url_for('boutique.articles') }}"
@@ -85,6 +117,13 @@
                                 </button>
                             </form>
                             {% else %}
+                            {% if peut('boutique.annoncer_article') %}
+                            <form method="POST" action="{{ url_for('boutique.annoncer_article', article_id=article.id) }}"
+                                  data-question="Annoncer « {{ article.nom }} » à vos clients abonnés ?" onsubmit="return confirm(this.dataset.question)">
+                                <button type="submit" title="Annoncer aux clients" class="h-full px-3 rounded-lg {{ 'bg-orange-100 text-orange-700' if article.annonce == 'en_attente' else 'bg-green-100 text-green-700 hover:bg-green-200' }}">
+                                    <i class="fas fa-bullhorn"></i></button>
+                            </form>
+                            {% endif %}
                             <form method="POST" action="{{ url_for('boutique.archiver_article', article_id=article.id) }}" class="flex-1"
                                   onsubmit="return confirm('Archiver cet article ? Il ne sera plus visible par les clients.')">
                                 <button type="submit" class="w-full bg-red-500 text-white py-2 rounded-lg hover:bg-red-600 transition">

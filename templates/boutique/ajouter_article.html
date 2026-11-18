@@ -54,6 +54,13 @@
                 </div>
             </div>
 
+            <label class="mt-5 flex items-start gap-3 rounded-xl border-2 border-green-200 bg-green-50 p-3 cursor-pointer">
+                <input type="checkbox" name="annoncer" value="1" class="mt-1 h-5 w-5" checked>
+                <span class="text-sm"><b>📣 Prévenir mes clients de cette nouveauté</b>
+                    <span class="block text-xs text-gray-600">{% if nb_abonnes %}{{ nb_abonnes }} client{{ 's' if nb_abonnes > 1 }} abonné{{ 's' if nb_abonnes > 1 }} recevr{{ 'ont' if nb_abonnes > 1 else 'a' }} une notification sur son téléphone{% else %}Aucun client abonné pour l'instant : ils pourront s'abonner depuis votre catalogue{% endif %}.
+                        Au plus 1 notification par jour : les nouveautés du même jour partent ensemble.</span></span>
+            </label>
+
             <button type="submit" id="submitBtn"
                     class="w-full mt-6 bg-primary text-white py-3 rounded-lg hover:bg-blue-700 transition font-semibold">
                 <span id="btnText"><i class="fas fa-save mr-2"></i> Ajouter l'article</span>

@@ -8,7 +8,7 @@
 // ne sert qu'en dernier recours hors-ligne.
 // ============================================================
 
-const CACHE_NAME = 'livraplus-v1';
+const CACHE_NAME = 'livraplus-v2';
 const ASSETS_STATIQUES = [
     '/app-manifest.json',
     '/static/icons/icon-192.png',
@@ -62,14 +62,17 @@ self.addEventListener('fetch', (event) => {
 self.addEventListener('push', (event) => {
     let d = {};
     try { d = event.data ? event.data.json() : {}; } catch (e) { d = { corps: event.data ? event.data.text() : '' }; }
+    // Nouveautés d'une boutique : notification discrète (pas de sonnerie insistante), avec la photo
+    const doux = !!d.doux;
     event.waitUntil(self.registration.showNotification(d.titre || 'LivraPlus', {
         body: d.corps || '',
         icon: '/static/icons/icon-192.png',
         badge: '/static/icons/icon-192.png',
+        image: d.image || undefined,
         tag: d.tag || 'livraplus',
-        renotify: true,
-        requireInteraction: true,
-        vibrate: [400, 150, 400, 150, 400, 150, 800],
+        renotify: !doux,
+        requireInteraction: !doux,
+        vibrate: doux ? [200] : [400, 150, 400, 150, 400, 150, 800],
         data: { url: d.url || '/' },
     }));
 });

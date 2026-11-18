@@ -42,6 +42,8 @@ class Boutique(UserMixin, db.Model):
     # Frais de livraison : 'livreur_garde' (il garde ses frais et ne remet que les articles)
     # ou 'boutique_collecte' (il remet tout, la boutique le paie ensuite). Voir caisse.py.
     mode_frais = db.Column(db.String(20), nullable=False, default='livreur_garde', server_default='livreur_garde')
+    # Dernière annonce de nouveautés envoyée aux clients (au plus une par jour)
+    derniere_annonce = db.Column(db.DateTime, nullable=True)
     # Déconnexion automatique après X minutes sans activité (0 = jamais)
     deconnexion_minutes = db.Column(db.Integer, nullable=False, default=15, server_default='15')
     date_inscription = db.Column(db.DateTime, default=datetime.utcnow)
@@ -197,6 +199,8 @@ class Article(db.Model):
     variantes = db.Column(db.JSON, nullable=True)
     # Vrai = le stock est compté variante par variante (le stock de l'article est alors leur somme)
     stock_par_variante = db.Column(db.Boolean, nullable=False, default=False, server_default='0')
+    # Annonce aux clients abonnés : 'en_attente' (partira à la prochaine annonce), 'annoncee', ou vide
+    annonce = db.Column(db.String(12), nullable=True)
     # Photo à montrer quand le client choisit une valeur : {"Couleur": {"Noir": "<url de la photo>"}}
     photos_choix = db.Column(db.JSON, nullable=True)
 
@@ -770,6 +774,23 @@ class AbonnementPush(db.Model):
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
     commande = db.relationship('Commande', backref=db.backref('abonnements_push', cascade='all, delete-orphan'))
+
+
+class AbonnementNouveautes(db.Model):
+    """Téléphone d'un client qui veut être prévenu des nouveautés d'une boutique."""
+    __tablename__ = 'abonnements_nouveautes'
+    __table_args__ = (db.UniqueConstraint('boutique_id', 'endpoint', name='uq_nouveautes_boutique_endpoint'),)
+
+    id = db.Column(db.Integer, primary_key=True)
+    boutique_id = db.Column(db.Integer, db.ForeignKey('boutiques.id'), nullable=False, index=True)
+    endpoint = db.Column(db.String(1000), nullable=False)
+    cle_p256dh = db.Column(db.String(200), nullable=False)
+    cle_auth = db.Column(db.String(100), nullable=False)
+    telephone = db.Column(db.String(30), nullable=True)      # si le client a déjà commandé sur ce téléphone
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    derniere_notif = db.Column(db.DateTime, nullable=True)
+
+    boutique = db.relationship('Boutique', backref=db.backref('abonnements_nouveautes', cascade='all, delete-orphan', lazy='dynamic'))
 
 
 class Parametre(db.Model):

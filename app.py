@@ -169,6 +169,8 @@ def mettre_a_jour_schema():
         for nom in ('variantes', 'photos_choix'):
             if nom not in colonnes_articles:
                 conn.execute(text(f"ALTER TABLE articles ADD COLUMN {nom} JSON"))
+        if 'annonce' not in colonnes_articles:
+            conn.execute(text("ALTER TABLE articles ADD COLUMN annonce VARCHAR(12)"))
         if 'stock_par_variante' not in colonnes_articles:
             conn.execute(text("ALTER TABLE articles ADD COLUMN stock_par_variante BOOLEAN NOT NULL DEFAULT FALSE"))
         colonnes_mvt = {c['name'] for c in inspecteur.get_columns('mouvements_stock')}
@@ -218,6 +220,7 @@ def mettre_a_jour_schema():
         for nom, definition in [('description', 'TEXT'), ('adresse', 'VARCHAR(255)'),
                                 ('mode_frais', "VARCHAR(20) NOT NULL DEFAULT 'livreur_garde'"),
                                 ('deconnexion_minutes', 'INTEGER NOT NULL DEFAULT 15'),
+                                ('derniere_annonce', 'TIMESTAMP'),
                                 ('abonnement_prix', 'FLOAT'), ('abonnement_debut', 'VARCHAR(7)'),
                                 ('derniere_activite', 'TIMESTAMP'), ('latitude', 'FLOAT'), ('longitude', 'FLOAT'),
                                 ('message_statut', 'TEXT'),

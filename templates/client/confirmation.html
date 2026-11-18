@@ -46,6 +46,8 @@
         </form>
         <p class="text-xs text-gray-500 mb-3">La messagerie LivraPlus : vous discutez avec la boutique{{ '' if commande.est_retrait else ' et le livreur' }} (texte, photo, message vocal) et suivez votre commande au même endroit.</p>
 
+        <div class="mt-4 text-left">{% include 'client/_nouveautes.html' %}</div>
+
         <div class="mt-6 pt-4 border-t border-gray-200">
             <a href="{{ url_for('client.catalogue', code=boutique.lien_public) }}" 
                class="text-primary hover:underline">

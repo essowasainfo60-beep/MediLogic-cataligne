@@ -104,7 +104,39 @@ def catalogue(code):
                            promos_affichees=promos_affichees,
                            boutique=boutique,
                            articles=articles,
+                           cle_push=notifications.cles_vapid()[0],
                            panier=session.get('panier', {}))
+
+def _boutique_du_lien(code):
+    boutique = Boutique.query.filter_by(lien_public=code).first()
+    if not boutique or not boutique.active:
+        abort(404)
+    return boutique
+
+
+@client_bp.route('/c/<code>/nouveautes/abonner', methods=['POST'])
+def nouveautes_abonner(code):
+    """Le client veut être prévenu des nouveaux articles de cette boutique."""
+    boutique = _boutique_du_lien(code)
+    telephone = (client_connu() or {}).get('telephone')
+    return jsonify(ok=notifications.abonner_nouveautes(boutique.id, request.get_json(silent=True), telephone))
+
+
+@client_bp.route('/c/<code>/nouveautes/desabonner', methods=['POST'])
+def nouveautes_desabonner(code):
+    boutique = _boutique_du_lien(code)
+    notifications.desabonner_nouveautes(boutique.id, (request.get_json(silent=True) or {}).get('endpoint'))
+    return jsonify(ok=True)
+
+
+@client_bp.route('/c/<code>/nouveautes/etat', methods=['POST'])
+def nouveautes_etat(code):
+    """Ce téléphone est-il abonné aux nouveautés de cette boutique ?"""
+    from models import AbonnementNouveautes
+    boutique = _boutique_du_lien(code)
+    endpoint = (request.get_json(silent=True) or {}).get('endpoint') or ''
+    return jsonify(abonne=AbonnementNouveautes.query.filter_by(boutique_id=boutique.id, endpoint=endpoint).first() is not None)
+
 
 @client_bp.route('/c/<code>/article/<int:numero>')
 def voir_article(code, numero):
@@ -421,6 +453,7 @@ def valider_commande():
     return render_template('client/confirmation.html',
                            whatsapp_boutique_url=whatsapp_boutique_url,
                            commande=commande,
+                           cle_push=notifications.cles_vapid()[0],
                            boutique=boutique)
 
 # ==================== PAGE DU LIVREUR (lien secret, sans compte) ====================
@@ -803,9 +836,10 @@ def suivi(code):
         return render_template('client/lien_invalide.html'), 404
     memoriser_commande(commande)
     cle_push = notifications.cles_vapid()[0] if commande.statut in ('nouvelle', 'confirmee', 'en_livraison') else None
+    cle_nouveautes = notifications.cles_vapid()[0]
     return render_template('client/suivi.html', commande=commande, boutique=commande.boutique, fcfa=msg.fcfa,
                            messages_non_lus=discussions.non_lus(commande.discussion, 'client') if commande.discussion else 0,
-                           cle_push=cle_push, position=suivi_gps.situation(commande))
+                           cle_push=cle_push, cle_nouveautes=cle_nouveautes, position=suivi_gps.situation(commande))
 
 @client_bp.route('/suivi/<code>/etat')
 def suivi_etat(code):

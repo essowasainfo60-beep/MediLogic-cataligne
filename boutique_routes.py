@@ -13,6 +13,7 @@ import abonnement
 import caisse
 import discussions
 import notifications
+import nouveautes
 import suivi_gps
 import stats_avancees
 import promos
@@ -44,6 +45,7 @@ GESTION = {
     'photo_principale', 'archiver_article', 'restaurer_article', 'articles_archives', 'livreurs', 'basculer_livreur', 'modifier_livreur',
     'ajouter_zone', 'modifier_zone', 'zones_modele', 'envoyer_espace_livreur', 'nouveau_lien_livreur',
     'statistiques', 'historique', 'message_statut', 'historique_csv', 'retour_commande', 'codes_promo', 'modifier_code_promo', 'regler_fidelite',
+    'annoncer_article', 'annoncer_nouveautes',
 }
 ROLES_AUTORISES = {'vendeur': set(), 'caissier': CAISSE, 'gestionnaire': CAISSE | GESTION}
 
@@ -116,6 +118,25 @@ def deconnexion_inactivite():
         return redirect(url_for('boutique.connexion'))
     if request.endpoint.split('.')[-1] not in ARRIERE_PLAN:
         session['vu_a'] = maintenant
+    return None
+
+
+@boutique_bp.before_request
+def annonce_differee():
+    """Nouveautés ajoutées après l'annonce du jour : elles partent le lendemain,
+    dès que quelqu'un de la boutique ouvre LivraPlus."""
+    if (request.method != 'GET' or not current_user.is_authenticated or not request.endpoint
+            or request.endpoint.split('.')[-1] in ARRIERE_PLAN):
+        return None
+    boutique = boutique_connectee()
+    if boutique and nouveautes.annonce_possible(boutique) and nouveautes.abonnes(boutique.id) and \
+            Article.query.filter_by(boutique_id=boutique.id, annonce=nouveautes.EN_ATTENTE, archive=False).first():
+        try:
+            n, envoyes = nouveautes.annoncer(boutique)
+            if n:
+                flash(f'📣 Vos {n} nouveauté(s) d\'hier ont été annoncées : {envoyes} client(s) prévenu(s).', 'success')
+        except Exception:                      # une annonce ratée ne bloque jamais la boutique
+            db.session.rollback()
     return None
 
 
@@ -588,7 +609,12 @@ def profil():
 @login_required
 def articles():
     articles_list = Article.query.filter_by(boutique_id=current_user.id, archive=False).order_by(Article.created_at.desc()).all()
-    return render_template('boutique/articles.html', articles=articles_list, archives=False)
+    b = boutique_connectee()
+    recentes = [a for a in articles_list if a.annonce == nouveautes.EN_ATTENTE] or articles_list[:5]
+    return render_template('boutique/articles.html', articles=articles_list, archives=False,
+                           nb_abonnes=nouveautes.abonnes(b.id), en_attente=nouveautes.en_attente(b.id),
+                           annonce_possible=nouveautes.annonce_possible(b), derniere_annonce=b.derniere_annonce,
+                           lien_wa_nouveautes='https://wa.me/?text=' + quote(nouveautes.message_whatsapp(b, recentes)) if recentes else None)
 
 @boutique_bp.route('/articles_archives')
 @login_required
@@ -627,6 +653,10 @@ def ajouter_article():
             stock.mouvement(article, stock_initial, 'entree', note='Stock initial')
         db.session.commit()
 
+        if request.form.get('annoncer'):
+            article.annonce = nouveautes.EN_ATTENTE
+            db.session.commit()
+            _annoncer_et_dire(boutique_connectee())
         flash(f'Article n°{article.numero} ajouté avec succès !'
               + (f' {len(article.combinaisons())} variantes, {article.stock} en stock.' if article.suit_variantes else ''), 'success')
         if echecs:
@@ -636,7 +666,41 @@ def ajouter_article():
             return redirect(url_for('boutique.modifier_article', article_id=article.id) + '#photosChoix')
         return redirect(url_for('boutique.articles'))
 
-    return render_template('boutique/ajouter_article.html')
+    return render_template('boutique/ajouter_article.html', nb_abonnes=nouveautes.abonnes(current_user.id))
+
+def _annoncer_et_dire(boutique):
+    """Envoie l'annonce si c'est possible aujourd'hui, et explique ce qui s'est passé."""
+    abonnes = nouveautes.abonnes(boutique.id)
+    if not abonnes:
+        flash("📣 Aucun client n'est encore abonné aux nouveautés : partagez-les par WhatsApp (page Articles). "
+              "L'annonce partira aussi automatiquement aux clients qui s'abonneront d'ici là.", 'info')
+        return
+    if not nouveautes.annonce_possible(boutique):
+        flash("📣 Une annonce est déjà partie aujourd'hui : cette nouveauté partira demain avec les suivantes "
+              "(au plus une notification par jour, pour ne pas lasser vos clients).", 'info')
+        return
+    n, envoyes = nouveautes.annoncer(boutique)
+    flash(f'📣 {n} nouveauté(s) annoncée(s) : {envoyes} client(s) prévenu(s) sur leur téléphone.', 'success')
+
+
+@boutique_bp.route('/articles/<int:article_id>/annoncer', methods=['POST'])
+@login_required
+def annoncer_article(article_id):
+    """Annoncer un article déjà en vente (retour en stock, promotion…)."""
+    article = article_de_la_boutique(article_id)
+    if article and not article.archive:
+        article.annonce = nouveautes.EN_ATTENTE
+        db.session.commit()
+        _annoncer_et_dire(boutique_connectee())
+    return redirect(url_for('boutique.articles') + '#annonces')
+
+
+@boutique_bp.route('/nouveautes/annoncer', methods=['POST'])
+@login_required
+def annoncer_nouveautes():
+    _annoncer_et_dire(boutique_connectee())
+    return redirect(url_for('boutique.articles') + '#annonces')
+
 
 @boutique_bp.route('/modifier_article/<int:article_id>', methods=['GET', 'POST'])
 @login_required
