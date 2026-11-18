@@ -26,6 +26,8 @@
         .ligne { display: flex; justify-content: space-between; padding: 2px 0; }
         .total { border-top: 1px solid #111; font-weight: bold; margin-top: 2px; padding-top: 3px; }
         .barre { position: sticky; top: 0; background: #111; color: #fff; padding: 8px; text-align: center; }
+        .barre { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; z-index: 10; }
+        .barre a { background: #fff; color: #111; padding: 8px 14px; border-radius: 6px; font-weight: bold; text-decoration: none; }
         .barre button { background: #8b5cf6; color: #fff; border: 0; padding: 8px 18px; border-radius: 6px; font-weight: bold; cursor: pointer; }
         tr, .kpi { page-break-inside: avoid; }
         @media print { body { background: #fff; } .page { padding: 0; max-width: none; } .barre { display: none; } }
@@ -33,7 +35,10 @@
 </head>
 <body>
 {% macro heures(h) %}{% if h is none %}—{% elif h < 1 %}{{ (h * 60)|round|int }} min{% elif h < 48 %}{{ '%.1f'|format(h)|replace('.', ',') }} h{% else %}{{ (h / 24)|round(1)|string|replace('.', ',') }} j{% endif %}{% endmacro %}
-<div class="barre"><button onclick="window.print()">🖨 Imprimer / Enregistrer en PDF</button></div>
+<div class="barre">
+    <a href="{{ url_for('boutique.statistiques', du=du.strftime('%Y-%m-%dT%H:%M'), au=au.strftime('%Y-%m-%dT%H:%M')) }}">← Retour aux statistiques</a>
+    <button onclick="window.print()">🖨 Imprimer / Enregistrer en PDF</button>
+</div>
 <div class="page">
     <header>
         {% if boutique.logo_url %}<img src="{{ boutique.logo_url }}" alt="">{% endif %}

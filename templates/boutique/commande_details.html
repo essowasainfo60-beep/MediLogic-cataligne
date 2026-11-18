@@ -305,7 +305,7 @@
         <div class="mt-2 rounded-2xl border-2 border-amber-300 bg-amber-50 p-4 text-sm text-amber-900 space-y-3">
             <div class="flex items-start justify-between gap-2">
                 <p class="font-bold">🚕 Livreur externe : {{ c.livreur.nom }}{% if c.livreur.telephone %}<br><a href="tel:{{ c.livreur.telephone|replace(' ', '') }}" class="underline font-normal"><i class="fas fa-phone mr-1"></i>{{ c.livreur.telephone }}</a>{% endif %}</p>
-                <a href="{{ url_for('boutique.bon_course', commande_id=c.id) }}" target="_blank" class="shrink-0 bg-white border border-amber-300 rounded-lg px-3 py-1.5 font-semibold"><i class="fas fa-print mr-1"></i> Bon de course</a>
+                <a href="{{ url_for('boutique.bon_course', commande_id=c.id) }}" class="shrink-0 bg-white border border-amber-300 rounded-lg px-3 py-1.5 font-semibold"><i class="fas fa-print mr-1"></i> Bon de course</a>
             </div>
             {% if c.date_depart %}<p><i class="fas fa-clock mr-1"></i> Parti avec le colis à <strong>{{ c.date_depart.strftime('%H:%M') }}</strong>
                 {% if minutes is not none %}<span class="{{ 'text-red-700 font-bold' if minutes > 120 else '' }}">(il y a {% if minutes >= 60 %}{{ minutes // 60 }} h {% endif %}{{ minutes % 60 }} min)</span>{% endif %}</p>{% endif %}
