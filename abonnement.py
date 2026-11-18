@@ -15,6 +15,20 @@ from models import db, MouvementCaisse, PaiementAbonnement
 
 CATEGORIE = 'Abonnement logiciel'
 JOUR_LIMITE = 8
+
+# ---- Module « Ma Boutique » (vente au comptoir, tickets, scanner, créances, approvisionnement…) ----
+# Réservé aux abonnements d'au moins PRIX_MODULE_BOUTIQUE FCFA par mois. Tant que les formules
+# d'abonnement ne sont pas en place, MODULE_BOUTIQUE_RESERVE = False : tout le monde y a accès.
+# Le jour où l'on active les formules : passer à True (rien d'autre à changer).
+MODULE_BOUTIQUE_RESERVE = False
+PRIX_MODULE_BOUTIQUE = 10000
+
+
+def module_boutique(boutique):
+    """La boutique a-t-elle accès à la vente au comptoir et aux outils « Ma Boutique » ?"""
+    if not MODULE_BOUTIQUE_RESERVE or boutique is None:
+        return True
+    return (boutique.abonnement_prix or 0) >= PRIX_MODULE_BOUTIQUE
 MOIS_FR = ['janvier', 'février', 'mars', 'avril', 'mai', 'juin', 'juillet', 'août',
            'septembre', 'octobre', 'novembre', 'décembre']
 

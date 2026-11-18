@@ -54,6 +54,13 @@ GESTION = {
     'annoncer_article', 'annoncer_nouveautes', 'envoyer_video', 'code_barre_nouveau', 'etiquettes', 'etiquettes_codes',
     'approvisionnement', 'approvisionner', 'payer_approvisionnement',
 }
+# Module « Ma Boutique » : réservé aux abonnements à partir de 10 000 FCFA (voir abonnement.module_boutique)
+MODULE_BOUTIQUE = {
+    'vendre', 'vendre_valider', 'ticket_vente', 'ventes_jour', 'annuler_vente', 'code_barre_nouveau',
+    'page_creances', 'payer_creance', 'valider_paiement_creance', 'refuser_paiement_creance',
+    'validations', 'demander_charge', 'demander_annulation', 'traiter_demande_gerant',
+    'etiquettes', 'etiquettes_codes', 'approvisionnement', 'approvisionner', 'payer_approvisionnement',
+}
 ROLES_AUTORISES = {'vendeur': set(), 'caissier': CAISSE, 'gestionnaire': CAISSE | GESTION}
 
 
@@ -189,7 +196,15 @@ def verifier_abonnement_et_activite():
         if qui is not boutique:
             boutique.derniere_activite = maintenant
         db.session.commit()
-    if request.endpoint.split('.')[-1] in OUVERT_SI_BLOQUE or not abonnement.etat(boutique)['bloque']:
+    nom_page = request.endpoint.split('.')[-1]
+    if nom_page in MODULE_BOUTIQUE and not abonnement.module_boutique(boutique):
+        message = (f"La vente au comptoir (caisse, tickets, scanner, créances, approvisionnement…) est incluse dans "
+                   f"les abonnements à partir de {abonnement.PRIX_MODULE_BOUTIQUE:,} FCFA par mois.".replace(',', ' '))
+        if request.accept_mimetypes.best == 'application/json' or request.is_json:
+            return jsonify(success=False, message=message), 402
+        flash(message, 'warning')
+        return redirect(url_for('boutique.abonnement_page'))
+    if nom_page in OUVERT_SI_BLOQUE or not abonnement.etat(boutique)['bloque']:
         return None
     if request.accept_mimetypes.best == 'application/json' or request.is_json:
         return jsonify(success=False, message="Abonnement LivraPlus non payé : espace suspendu"), 402
@@ -211,7 +226,7 @@ def verifier_droits():
 @boutique_bp.app_context_processor
 def injecter_droits():
     boutique = boutique_connectee() if request.blueprint == 'boutique' else None
-    return {'peut': peut, 'etat_abonnement': abonnement.etat(boutique) if boutique else None,
+    return {'peut': peut, 'module_boutique': abonnement.module_boutique(boutique), 'etat_abonnement': abonnement.etat(boutique) if boutique else None,
             'deconnexion_minutes': (boutique.deconnexion_minutes if boutique and boutique.deconnexion_minutes is not None else 15),
             'durees_deconnexion': DUREES_DECONNEXION,
             'cle_push_boutique': notifications.cles_vapid()[0] if boutique else None}
