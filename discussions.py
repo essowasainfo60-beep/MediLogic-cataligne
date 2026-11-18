@@ -11,7 +11,7 @@ from datetime import datetime
 from flask import url_for
 
 import notifications
-from models import db, Commande, Discussion, LectureDiscussion, Livreur, MediaMessage, Message
+from models import db, Commande, Discussion, LectureDiscussion, Livreur, MediaMessage, Message, Vendeur
 from utils import compresser_image
 
 TEXTE_MAX = 2000
@@ -51,7 +51,7 @@ def discussion_privee(livreur):
 
 
 def discussion_generale(boutique_id):
-    d = Discussion.query.filter_by(boutique_id=boutique_id, commande_id=None, livreur_id=None).first()
+    d = Discussion.query.filter_by(boutique_id=boutique_id, commande_id=None, livreur_id=None, equipe=None).first()
     if d is None:
         d = Discussion(boutique_id=boutique_id, commande_id=None)
         db.session.add(d)
@@ -59,8 +59,58 @@ def discussion_generale(boutique_id):
     return d
 
 
+# ---------- Équipe de la boutique (gérant et vendeurs, comme dans Ma Boutik) ----------
+
+def discussion_equipe(boutique_id, cle='tous'):
+    d = Discussion.query.filter_by(boutique_id=boutique_id, commande_id=None, livreur_id=None, equipe=cle).first()
+    if d is None:
+        d = Discussion(boutique_id=boutique_id, equipe=cle)
+        db.session.add(d)
+        db.session.commit()
+    return d
+
+
+def discussion_vendeur(vendeur):
+    """Discussion privée entre le gérant et ce vendeur."""
+    return discussion_equipe(vendeur.boutique_id, f'vendeur:{vendeur.id}')
+
+
+def voit_equipe(discussion, moi):
+    """moi : 'gerant' ou 'vendeur:<id>'."""
+    if not discussion.equipe:
+        return False
+    return discussion.equipe == 'tous' or moi == 'gerant' or discussion.equipe == moi
+
+
+def discussions_equipe(boutique_id, moi):
+    """Le gérant : groupe + un fil par vendeur actif ; le vendeur : groupe + son fil avec le gérant."""
+    res = [discussion_equipe(boutique_id)]
+    if moi == 'gerant':
+        for v in Vendeur.query.filter_by(boutique_id=boutique_id, actif=True).order_by(Vendeur.prenom).all():
+            res.append(discussion_vendeur(v))
+    else:
+        res.append(discussion_equipe(boutique_id, moi))
+    return res
+
+
+def non_lus_equipe(boutique_id, moi):
+    return sum(non_lus(d, moi) for d in Discussion.query.filter(
+        Discussion.boutique_id == boutique_id, Discussion.equipe.isnot(None), Discussion.dernier_message_at.isnot(None)).all()
+        if voit_equipe(d, moi))
+
+
+def nom_personne(boutique, cle):
+    """Nom d'utilisateur (celui des téléphones abonnés) pour 'gerant' ou 'vendeur:<id>'."""
+    if cle == 'gerant':
+        return boutique.nom_utilisateur
+    v = db.session.get(Vendeur, int(cle.split(':')[1])) if cle.startswith('vendeur:') else None
+    return f'{v.prenom} {v.nom} ({v.role_libelle.lower()})' if v else None
+
+
 def peut_lire(discussion, qui, livreur=None):
     """Le livreur ne voit que la discussion générale de sa boutique et celles de SES commandes."""
+    if discussion.equipe:                     # interne à l'équipe : jamais les livreurs ni les clients
+        return False
     if qui == 'boutique':
         return True
     if qui == 'client':
@@ -196,7 +246,8 @@ def non_lus(discussion, qui):
 def non_lus_boutique(boutique_id):
     """Nombre total de messages non lus par la boutique (badge du menu)."""
     total = 0
-    for d in Discussion.query.filter(Discussion.boutique_id == boutique_id, Discussion.dernier_message_at.isnot(None)).all():
+    for d in Discussion.query.filter(Discussion.boutique_id == boutique_id, Discussion.dernier_message_at.isnot(None),
+                                     Discussion.equipe.is_(None)).all():
         total += non_lus(d, 'boutique')
     return total
 
@@ -219,6 +270,21 @@ def _prevenir(discussion, msg):
     """Fait sonner les téléphones des autres participants."""
     texte = f'{msg.auteur_nom} : {apercu(msg)}'
     tag = f'discussion-{discussion.id}'
+    if discussion.equipe:
+        b = discussion.boutique
+        if discussion.equipe == 'tous':
+            cles = ['gerant'] + [f'vendeur:{v.id}' for v in Vendeur.query.filter_by(boutique_id=b.id, actif=True).all()]
+            titre = '👥 Équipe'
+        else:
+            cles = ['gerant', discussion.equipe]
+            titre = '🔒 Message privé'
+        noms = [n for n in (nom_personne(b, c) for c in cles if c != msg.auteur) if n]
+        try:
+            notifications.envoyer_personnes(b.id, noms, titre, texte,
+                                            url_for('boutique.discussion', discussion_id=discussion.id), tag=tag)
+        except Exception:
+            pass
+        return
     commande = discussion.commande
     titre = (f'💬 Commande n°{commande.numero}' if commande else
              '🔒 Message privé' if discussion.est_privee else '💬 Discussion livreurs')

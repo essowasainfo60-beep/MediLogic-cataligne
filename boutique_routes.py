@@ -2308,7 +2308,7 @@ def injecter_compteurs():
     """Pastille « nouvelles commandes » dans la barre du haut."""
     if current_user.is_authenticated and hasattr(current_user, 'nom_boutique') and request.blueprint == 'boutique':
         return {'nouvelles_commandes': Commande.query.filter_by(boutique_id=current_user.id, statut='nouvelle').count(),
-                'messages_non_lus': discussions.non_lus_boutique(current_user.id),
+                'messages_non_lus': discussions.non_lus_boutique(current_user.id) + discussions.non_lus_equipe(current_user.id, moi_equipe()),
                 'demandes_a_traiter': demandes.nombre_a_traiter(current_user.id),
                 'paiements_a_valider': (len(creances.en_attente(current_user.id)) + len(demandes_gerant.en_attente(current_user.id)))
                                        if peut('boutique.valider_paiement_creance') else 0}
@@ -2508,9 +2508,27 @@ def api_trajet_commande(commande_id):
 
 # ==================== DISCUSSIONS ====================
 
+def moi_equipe():
+    """Qui je suis dans les discussions d'équipe : 'gerant' ou 'vendeur:<id>'."""
+    return f'vendeur:{current_user.vendeur.id}' if getattr(current_user, 'est_vendeur', False) else 'gerant'
+
+
 def _discussion_de_la_boutique(discussion_id):
     from models import Discussion
-    return Discussion.query.filter_by(id=discussion_id, boutique_id=current_user.id).first_or_404()
+    d = Discussion.query.filter_by(id=discussion_id, boutique_id=current_user.id).first_or_404()
+    if d.equipe and not discussions.voit_equipe(d, moi_equipe()):
+        abort(404)                      # discussion privée d'un autre vendeur
+    return d
+
+
+def _titre_equipe(d):
+    if d.equipe == 'tous':
+        return "👥 Toute l'équipe", 'Le gérant et tous les vendeurs (les livreurs et les clients ne voient pas)'
+    if moi_equipe() == 'gerant':
+        from models import Vendeur
+        v = db.session.get(Vendeur, d.vendeur_id)
+        return f'🔒 {v.prenom} {v.nom} (privé)' if v else '🔒 Vendeur', 'Seuls vous et ce vendeur voyez cette discussion'
+    return '🔒 Le gérant (privé)', 'Seuls vous et le gérant voyez cette discussion'
 
 
 @boutique_bp.route('/discussions')
@@ -2530,7 +2548,13 @@ def discussions_liste():
         dernier = discussions.dernier_message(d)
         lignes.append({'d': d, 'dernier': dernier, 'apercu': discussions.apercu(dernier) if dernier else '',
                        'non_lus': discussions.non_lus(d, 'boutique')})
-    return render_template('boutique/discussions.html', lignes=lignes)
+    moi = moi_equipe()
+    equipe = []
+    for d in discussions.discussions_equipe(current_user.id, moi):
+        dernier = discussions.dernier_message(d)
+        equipe.append({'d': d, 'titre': _titre_equipe(d)[0], 'dernier': dernier,
+                       'apercu': discussions.apercu(dernier) if dernier else '', 'non_lus': discussions.non_lus(d, moi)})
+    return render_template('boutique/discussions.html', lignes=lignes, equipe=equipe)
 
 
 @boutique_bp.route('/discussions/<int:discussion_id>')
@@ -2543,6 +2567,9 @@ def discussion(discussion_id):
         sous_titre = 'Vous, le client' + (f' et le livreur {c.livreur.nom}' if c.livreur else ' (pas encore de livreur)')
         secours = msg.lien_whatsapp(c.client_telephone, f"Bonjour {c.client_nom}, nous vous avons écrit au sujet de votre commande n°{c.numero} : "
                                     + url_for('client.discussion_client', code=c.code_suivi, _external=True))
+    elif d.equipe:
+        titre, sous_titre = _titre_equipe(d)
+        secours = None
     elif d.est_privee:
         titre = f'🔒 {d.livreur.nom} (privé)'
         sous_titre, secours = 'Seuls vous et ce livreur voyez cette discussion', msg.lien_whatsapp(d.livreur.telephone, 'Bonjour, je vous ai écrit dans LivraPlus.')
@@ -2552,8 +2579,9 @@ def discussion(discussion_id):
                            retour=url_for('boutique.commande_details', commande_id=c.id) if c else url_for('boutique.discussions_liste'),
                            url_messages=url_for('boutique.api_discussion_messages', discussion_id=d.id),
                            url_envoyer=url_for('boutique.api_discussion_messages', discussion_id=d.id),
-                           rapides=discussions.MESSAGES_RAPIDES['boutique'] if c else ['Bonjour à tous 👋', 'Pensez à faire vos versements',
-                                                                                        'Nouvelles courses disponibles'])
+                           rapides=discussions.MESSAGES_RAPIDES['boutique'] if c else
+                           (['Bonjour 👋', "J'arrive à la boutique", 'Le stock de … est presque fini', 'Bien reçu ✅']
+                            if d.equipe else ['Bonjour à tous 👋', 'Pensez à faire vos versements', 'Nouvelles courses disponibles']))
 
 
 @boutique_bp.route('/livreur/<int:livreur_id>/discussion')
@@ -2574,7 +2602,8 @@ def discussion_commande_boutique(commande_id):
 @login_required
 def api_discussion_messages(discussion_id):
     d = _discussion_de_la_boutique(discussion_id)
-    return _api_discussion(d, 'boutique', getattr(current_user, 'nom_utilisateur', None) or current_user.nom_boutique)
+    qui_ = moi_equipe() if d.equipe else 'boutique'
+    return _api_discussion(d, qui_, getattr(current_user, 'nom_utilisateur', None) or current_user.nom_boutique)
 
 
 def _api_discussion(d, qui, nom):
@@ -2593,7 +2622,7 @@ def _api_discussion(d, qui, nom):
 @boutique_bp.route('/api/discussions/non-lus')
 @login_required
 def api_discussions_non_lus():
-    return jsonify(non_lus=discussions.non_lus_boutique(current_user.id))
+    return jsonify(non_lus=discussions.non_lus_boutique(current_user.id) + discussions.non_lus_equipe(current_user.id, moi_equipe()))
 
 # ==================== MESSAGE POUR LE STATUT WHATSAPP ====================
 

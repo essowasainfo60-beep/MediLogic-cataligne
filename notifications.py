@@ -97,6 +97,13 @@ def envoyer_boutique(boutique_id, titre, corps, url, tag='boutique'):
     return _envoyer(abonnements, titre, corps, url, tag)
 
 
+def envoyer_personnes(boutique_id, noms, titre, corps, url, tag='equipe'):
+    """Prévient seulement les téléphones de ces personnes de l'équipe (nom_utilisateur)."""
+    abonnements = AbonnementPushBoutique.query.filter(AbonnementPushBoutique.boutique_id == boutique_id,
+                                                      AbonnementPushBoutique.qui.in_(list(noms))).all()
+    return _envoyer(abonnements, titre, corps, url, tag)
+
+
 def abonner_livreur(livreur, donnees):
     """Téléphone du livreur : il sonnera pour une nouvelle course ou un nouveau message."""
     try:

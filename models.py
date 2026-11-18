@@ -1022,6 +1022,9 @@ class Discussion(db.Model):
     boutique_id = db.Column(db.Integer, db.ForeignKey('boutiques.id', ondelete='CASCADE'), nullable=False, index=True)
     commande_id = db.Column(db.Integer, db.ForeignKey('commandes.id', ondelete='CASCADE'), nullable=True)
     livreur_id = db.Column(db.Integer, db.ForeignKey('livreurs.id', ondelete='CASCADE'), nullable=True)   # discussion privée
+    # Discussion interne de l'équipe (sans livreurs ni clients) : 'tous' = gérant + vendeurs,
+    # 'vendeur:<id>' = gérant + ce vendeur seulement
+    equipe = db.Column(db.String(30), nullable=True, index=True)
     dernier_message_at = db.Column(db.DateTime, nullable=True, index=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
@@ -1032,7 +1035,12 @@ class Discussion(db.Model):
     @property
     def est_generale(self):
         """Boutique + tous ses livreurs."""
-        return self.commande_id is None and self.livreur_id is None
+        return self.commande_id is None and self.livreur_id is None and not self.equipe
+
+    @property
+    def vendeur_id(self):
+        """Discussion privée gérant ↔ vendeur : l'id du vendeur."""
+        return int(self.equipe.split(':')[1]) if (self.equipe or '').startswith('vendeur:') else None
 
     @property
     def est_privee(self):

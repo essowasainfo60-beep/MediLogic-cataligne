@@ -1,8 +1,8 @@
 // static/discussion.js — discussion LivraPlus (texte, photo, message vocal, position).
 // Utilisation : Discussion.demarrer(document.getElementById('discussion'), { urlMessages, urlEnvoyer, rapides: [...] })
 (function () {
-    const ROLES = { boutique: 'Boutique', livreur: 'Livreur', client: 'Client' };
-    const COULEURS = { boutique: 'text-purple-700', livreur: 'text-orange-600', client: 'text-green-700' };
+    const ROLES = { boutique: 'Boutique', livreur: 'Livreur', client: 'Client', gerant: 'Gérant', vendeur: 'Vendeur' };
+    const COULEURS = { boutique: 'text-purple-700', livreur: 'text-orange-600', client: 'text-green-700', gerant: 'text-purple-700', vendeur: 'text-blue-700' };
 
     function echapper(t) {
         return String(t == null ? '' : t).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
