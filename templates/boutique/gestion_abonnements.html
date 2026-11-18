@@ -120,7 +120,7 @@
                 {% if b.logo_url %}<img src="{{ b.logo_url }}" alt="" class="h-11 w-11 rounded-xl object-contain border flex-shrink-0">
                 {% else %}<span class="h-11 w-11 rounded-xl bg-[#0b1d35] text-teal-300 flex items-center justify-center font-bold flex-shrink-0">{{ b.nom_boutique[:1]|upper }}</span>{% endif %}
                 <div class="flex-1 min-w-0">
-                    <p class="font-bold text-gray-900">{{ b.nom_boutique }}
+                    <p class="font-bold text-gray-900">{{ b.nom_boutique }} {% include '_certifie.html' %}
                         {% if not b.active %}<span class="text-xs font-semibold text-yellow-800 bg-yellow-100 rounded-full px-2">{{ 'désactivée' if b.formule or b.paiements_abonnement else 'à activer' }}</span>{% endif %}</p>
                     <p class="text-sm text-gray-600 truncate">{{ b.proprietaire_prenom }} {{ b.proprietaire_nom }}{% if b.whatsapp %} · <a class="text-green-700" href="https://wa.me/{{ b.whatsapp|replace('+', '')|replace(' ', '') }}" target="_blank" rel="noopener"><i class="fab fa-whatsapp"></i> {{ b.whatsapp }}</a>{% endif %}</p>
                     <p class="text-xs text-gray-400 truncate">{{ b.email }} · inscrite le {{ b.date_inscription.strftime('%d/%m/%Y') if b.date_inscription else '—' }}</p>

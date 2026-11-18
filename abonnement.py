@@ -204,6 +204,24 @@ def enregistrer_formule(f, donnees, appliquer_aux_boutiques=False):
     return f, suivies, None
 
 
+# ---- Compte certifié (rond bleu coché à côté du nom, comme sur TikTok) ----
+# Boutique qui paie au moins SEUIL_CERTIFIE FCFA par mois, a déjà payé et n'est pas suspendue
+# (et toujours la boutique phare). Les boutiques gratuites ou en essai n'ont pas le badge.
+SEUIL_CERTIFIE = 5000
+
+
+def certifie(boutique):
+    if boutique is None or not getattr(boutique, 'id', None):
+        return False
+    if est_gestionnaire(boutique):
+        return True
+    if (boutique.abonnement_prix or 0) < SEUIL_CERTIFIE:
+        return False
+    if not any(p.statut == 'valide' for p in boutique.paiements_abonnement):
+        return False
+    return not etat(boutique)['bloque']
+
+
 def nb_boutiques(code):
     from models import Boutique
     return Boutique.query.filter_by(formule=code).count()

@@ -118,7 +118,7 @@
                     </div>
                 {% endif %}
                 <div class="min-w-0">
-                    <h1 class="text-2xl md:text-4xl font-bold truncate">{{ boutique.nom_boutique }}</h1>
+                    <h1 class="text-2xl md:text-4xl font-bold flex items-center gap-2 min-w-0"><span class="truncate">{{ boutique.nom_boutique }}</span>{% with b=boutique, taille=26 %}{% include '_certifie.html' %}{% endwith %}</h1>
                     <p class="text-blue-100 text-sm md:text-lg">{{ articles|length }} article{{ 's' if articles|length > 1 }} · commande livrée chez vous</p>
                 </div>
             </div>

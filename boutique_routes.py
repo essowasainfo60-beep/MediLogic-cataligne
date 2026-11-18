@@ -245,7 +245,7 @@ def verifier_droits():
 def injecter_droits():
     boutique = boutique_connectee() if request.blueprint == 'boutique' else None
     return {'peut': peut, 'module_boutique': abonnement.module_boutique(boutique), 'etat_abonnement': abonnement.etat(boutique) if boutique else None,
-            'formule_boutique': abonnement.infos_formule(boutique),
+            'formule_boutique': abonnement.infos_formule(boutique), 'certifie': abonnement.certifie,
             'deconnexion_minutes': (boutique.deconnexion_minutes if boutique and boutique.deconnexion_minutes is not None else 15),
             'durees_deconnexion': DUREES_DECONNEXION,
             'cle_push_boutique': notifications.cles_vapid()[0] if boutique else None}

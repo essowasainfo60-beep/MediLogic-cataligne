@@ -285,7 +285,7 @@
             <span class="h-10 w-10 rounded-xl bg-[#0b1d35] text-teal-300 flex items-center justify-center font-bold flex-shrink-0">{{ current_user.nom_boutique[:1]|upper }}</span>
             {% endif %}
             <span class="min-w-0 flex-1">
-                <span class="block font-bold text-gray-900 truncate leading-tight">{{ current_user.nom_boutique }}</span>
+                <span class="flex items-center gap-1 font-bold text-gray-900 leading-tight min-w-0"><span class="truncate">{{ current_user.nom_boutique }}</span>{% with b=current_user, taille=16 %}{% include '_certifie.html' %}{% endwith %}</span>
                 <span class="block text-xs text-gray-500 truncate">{{ current_user.proprietaire_prenom }} · {{ current_user.role_libelle }}</span>
                 {% if formule_boutique %}<span class="block mt-0.5">{% with f=formule_boutique, taille='mini' %}{% include '_badge_formule.html' %}{% endwith %}</span>{% endif %}
             </span>

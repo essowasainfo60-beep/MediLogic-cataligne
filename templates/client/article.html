@@ -5,7 +5,7 @@
 {% block content %}
 <div class="max-w-3xl mx-auto px-4 space-y-4">
     <div>
-        <p class="text-sm text-gray-500">{{ boutique.nom_boutique }}</p>
+        <p class="text-sm text-gray-500 flex items-center gap-1">{{ boutique.nom_boutique }} {% with b=boutique, taille=15 %}{% include '_certifie.html' %}{% endwith %}</p>
         <h1 class="text-2xl font-extrabold text-gray-900"><span class="text-purple-600">n°{{ article.numero }}</span> · {{ article.nom }}</h1>
         <p class="text-xl font-bold text-purple-700">{{ "{:,.0f}".format(article.prix).replace(',', ' ') }} FCFA</p>
     </div>
