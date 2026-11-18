@@ -450,6 +450,7 @@ def connexion():
                 flash("Votre compte est désactivé. Contactez le gérant de la boutique.", 'warning')
                 return redirect(url_for('boutique.connexion'))
             securite.succes(request, email)
+            db.session.commit()            # (mot de passe repris de Ma Boutik : converti au format sûr)
             login_user(EspaceVendeur(vendeur), remember=True)
             ouvrir_session()
             flash(f'Bonjour {vendeur.prenom} ! ({vendeur.role_libelle} · {vendeur.boutique.nom_boutique})', 'success')

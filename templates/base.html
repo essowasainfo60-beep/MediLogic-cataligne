@@ -72,6 +72,7 @@
         .transition-smooth { transition: all 0.3s ease; }
     </style>
     {% block extra_css %}{% endblock %}
+<style>@media print{nav,.no-print,#alerteCommande{display:none!important}body{background:#fff!important}}</style>
 </head>
 <body class="min-h-screen flex flex-col">
     {% if request.blueprint in ['boutique', 'admin'] %}{% include '_splash.html' %}{% endif %}

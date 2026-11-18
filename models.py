@@ -7,6 +7,8 @@ from flask_login import UserMixin
 from datetime import datetime
 from werkzeug.security import generate_password_hash, check_password_hash
 
+HASH_MABOUTIK = 'maboutik-sha256$'   # mot de passe repris tel quel de Ma Boutik (converti à la 1re connexion)
+
 db = SQLAlchemy()
 
 
@@ -129,7 +131,17 @@ class Vendeur(UserMixin, db.Model):
         self.mot_de_passe_hash = generate_password_hash(mot_de_passe)
 
     def verifier_mot_de_passe(self, mot_de_passe):
-        return check_password_hash(self.mot_de_passe_hash, mot_de_passe)
+        h = self.mot_de_passe_hash or ''
+        if h.startswith(HASH_MABOUTIK):
+            # Compte repris de Ma Boutik : même mot de passe qu'avant (SHA-256 de Ma Boutik) ;
+            # au premier passage réussi, il est converti au format sûr de LivraPlus.
+            import hashlib
+            import hmac
+            if not hmac.compare_digest(h[len(HASH_MABOUTIK):], hashlib.sha256((mot_de_passe or '').encode()).hexdigest()):
+                return False
+            self.set_mot_de_passe(mot_de_passe)
+            return True
+        return check_password_hash(h, mot_de_passe)
 
     def get_id(self):
         return f"vendeur_{self.id}"

@@ -9,11 +9,14 @@
             <h1 class="text-2xl font-extrabold text-gray-900"><i class="fas fa-receipt text-green-600 mr-1"></i> {{ 'Ventes du jour' if tout_voir else 'Mes ventes du jour' }}</h1>
             <p class="text-sm text-gray-500">Ventes au comptoir · {{ jour.strftime('%d/%m/%Y') }}{% if vendeur %} · {{ vendeur }}{% endif %}</p>
         </div>
-        <a href="{{ url_for('boutique.vendre') }}" class="bg-green-600 text-white px-4 py-2.5 rounded-xl font-semibold"><i class="fas fa-cash-register mr-1"></i> Vendre</a>
+        <div class="flex gap-2 no-print">
+            <button type="button" onclick="window.print()" class="bg-gray-800 text-white px-4 py-2.5 rounded-xl font-semibold"><i class="fas fa-print mr-1"></i> Imprimer</button>
+            <a href="{{ url_for('boutique.vendre') }}" class="bg-green-600 text-white px-4 py-2.5 rounded-xl font-semibold"><i class="fas fa-cash-register mr-1"></i> Vendre</a>
+        </div>
     </div>
 
     <!-- Jour / vendeur -->
-    <form method="GET" class="flex flex-wrap items-center gap-2 bg-white rounded-2xl shadow-sm p-3">
+    <form method="GET" class="no-print flex flex-wrap items-center gap-2 bg-white rounded-2xl shadow-sm p-3">
         <a href="{{ url_for('boutique.ventes_jour', jour=hier.isoformat(), vendeur=vendeur if tout_voir else None) }}" class="px-3 py-2 rounded-lg bg-gray-100" aria-label="Jour précédent"><i class="fas fa-chevron-left"></i></a>
         <input type="date" name="jour" value="{{ jour.isoformat() }}" max="{{ aujourdhui_iso }}" onchange="this.form.submit()" class="border border-gray-300 rounded-lg px-2 py-1.5">
         {% if demain %}<a href="{{ url_for('boutique.ventes_jour', jour=demain.isoformat(), vendeur=vendeur if tout_voir else None) }}" class="px-3 py-2 rounded-lg bg-gray-100" aria-label="Jour suivant"><i class="fas fa-chevron-right"></i></a>{% endif %}

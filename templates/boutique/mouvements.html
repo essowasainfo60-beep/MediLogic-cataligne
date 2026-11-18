@@ -7,7 +7,10 @@
 <div class="max-w-6xl mx-auto px-4 py-6">
     <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
         <h1 class="text-2xl font-bold text-gray-800"><i class="fas fa-list text-purple-500 mr-2"></i> Mouvements de stock</h1>
-        <a href="{{ url_for('boutique.inventaire') }}" class="text-purple-700 hover:underline"><i class="fas fa-arrow-left mr-1"></i> Inventaire</a>
+        <div class="flex items-center gap-3 no-print">
+            <button type="button" onclick="window.print()" class="bg-gray-800 text-white px-4 py-2 rounded-lg"><i class="fas fa-print mr-1"></i> Imprimer</button>
+            <a href="{{ url_for('boutique.inventaire') }}" class="text-purple-700 hover:underline"><i class="fas fa-arrow-left mr-1"></i> Inventaire</a>
+        </div>
     </div>
 
     <form method="GET" class="mb-4">
