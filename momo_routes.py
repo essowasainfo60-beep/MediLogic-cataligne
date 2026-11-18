@@ -9,11 +9,12 @@ from flask_login import login_required
 import abonnement
 import messages_whatsapp as msg
 import momo
+import momo_sms
 from boutique_routes import (boutique_bp, boutique_connectee, qui, peut, MODULE_BOUTIQUE, GERANT_SEUL, CAISSE, _bornes)
 from models import db, OperationMomo
 
 PAGES = {'momo_accueil', 'momo_operateur', 'momo_operation', 'momo_detail', 'momo_photo', 'momo_annuler',
-         'momo_caisses', 'momo_point', 'momo_reglages', 'momo_journal_csv', 'momo_historique', 'momo_recu'}
+         'momo_caisses', 'momo_point', 'momo_reglages', 'momo_journal_csv', 'momo_historique', 'momo_recu', 'momo_lire_sms', 'momo_partage'}
 MODULE_BOUTIQUE.update(PAGES)            # formules avec la vente au comptoir (Pro, Premium…)
 GERANT_SEUL.add('momo_reglages')
 CAISSE.add('momo_annuler')               # annuler : gérant, caissier, gestionnaire
@@ -78,7 +79,33 @@ def momo_operation(operateur, type_):
             flash(erreur, 'danger')
             return render_template('boutique/momo_operation.html', **_contexte_operation(b, operateur, type_), saisie=f), 400
         return redirect(url_for('boutique.momo_detail', op_id=op.id, nouveau=1))
-    return render_template('boutique/momo_operation.html', **_contexte_operation(b, operateur, type_), saisie={})
+    # Pré-remplissage (SMS partagé vers LivraPlus ou collé) : montant, numéro, référence
+    saisie = {k: v for k, v in request.args.items() if k in ('montant', 'telephone', 'sms_ref', 'client_telephone')}
+    if saisie and momo.a_code_marchand(b, operateur):
+        saisie['marchand'] = '1'
+    return render_template('boutique/momo_operation.html', **_contexte_operation(b, operateur, type_), saisie=saisie,
+                           depuis_sms=bool(request.args.get('sms')))
+
+
+@boutique_bp.route('/momo/lire-sms', methods=['POST'])
+@login_required
+def momo_lire_sms():
+    """Lit un SMS collé : opérateur, opération, montant, numéro, référence."""
+    d = request.get_json(silent=True) or {}
+    return jsonify(momo_sms.lire_sms(d.get('texte')))
+
+
+@boutique_bp.route('/momo/partage')
+@login_required
+def momo_partage():
+    """SMS partagé depuis les messages du téléphone (Android : Partager → LivraPlus) : ouvre l'opération pré-remplie."""
+    texte = ' '.join(filter(None, [request.args.get('title'), request.args.get('text'), request.args.get('url')]))
+    lu = momo_sms.lire_sms(texte)
+    if not lu['sms_ref'] and not lu['montant']:
+        flash("Ce message ne ressemble pas à un SMS Mixx ou Flooz : choisissez l'opération et saisissez-la.", 'warning')
+        return redirect(url_for('boutique.momo_accueil'))
+    params = {k: lu[k] for k in ('montant', 'telephone', 'sms_ref') if lu[k]}
+    return redirect(url_for('boutique.momo_operation', operateur=lu['operateur'] or 'mixx', type_=lu['type'] or 'depot', sms=1, **params))
 
 
 def _contexte_operation(b, operateur, type_):

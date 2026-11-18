@@ -11,13 +11,31 @@
         <span class="text-xs text-gray-600 text-right">Solde {{ court }} <b class="text-gray-900">{{ fcfa(s[op]) }}</b><br>Espèces <b class="text-gray-900">{{ fcfa(s.especes) }}</b></span>
     </div>
 
-    <!-- L'opération se fait sur le téléphone : ouvrir le menu Mixx / Flooz -->
-    <a href="tel:{{ '*145%23' if op == 'mixx' else '*155%23' }}" class="flex items-center gap-3 rounded-2xl px-4 py-3 font-bold {{ 'bg-yellow-400 text-gray-900' if op == 'mixx' else 'bg-blue-700 text-white' }}">
+    {% if depuis_sms %}
+    <p class="text-sm font-semibold text-green-800 bg-green-50 border border-green-200 rounded-xl px-3 py-2"><i class="fas fa-wand-magic-sparkles mr-1"></i> Rempli à partir du SMS : vérifiez le montant, le numéro et la référence avant de valider.</p>
+    {% endif %}
+    {% if type_ != 'retrait' %}
+    <!-- L'opération se fait sur le téléphone : ouvrir le menu Mixx / Flooz (code composé tout seul quand l'opérateur le permet) -->
+    <a id="lienUssd" href="tel:{{ '*145%23' if op == 'mixx' else '*155%23' }}" class="flex items-center gap-3 rounded-2xl px-4 py-3 font-bold {{ 'bg-yellow-400 text-gray-900' if op == 'mixx' else 'bg-blue-700 text-white' }}">
         <i class="fas fa-phone"></i>
-        <span class="flex-1">Ouvrir {{ court }} sur le téléphone <span class="font-normal">({{ '*145#' if op == 'mixx' else '*155#' }})</span></span>
+        <span class="flex-1">Ouvrir {{ court }} sur le téléphone <span id="codeUssd" class="block font-mono font-normal text-sm">{{ '*145#' if op == 'mixx' else '*155#' }}</span></span>
         <i class="fas fa-arrow-up-right-from-square text-sm"></i>
     </a>
-    <p class="text-xs text-gray-600 -mt-1">Faites l’opération sur le téléphone, puis revenez ici noter la référence du SMS reçu.</p>
+    <p id="aideUssd" class="text-xs text-gray-600 -mt-1">Faites l’opération sur le téléphone, puis revenez ici avec le SMS reçu.</p>
+    {% else %}
+    <p class="text-sm text-gray-700 bg-white border border-gray-200 rounded-xl px-3 py-2"><i class="fas fa-circle-info mr-1"></i> Pour un retrait, c’est le <b>client</b> qui envoie depuis son téléphone ({{ '*145*2#' if op == 'mixx' else '*155*5#' }}) vers votre numéro. Vous recevez le SMS : collez-le ci-dessous.</p>
+    {% endif %}
+
+    <!-- Lire le SMS reçu -->
+    <div class="bg-white border border-gray-200 rounded-2xl p-3 space-y-2">
+        <button type="button" id="collerSms" class="w-full flex items-center justify-center gap-2 bg-purple-600 text-white rounded-xl py-3 font-bold"><i class="fas fa-paste"></i> Coller le SMS {{ court }}</button>
+        <details id="blocSms">
+            <summary class="text-xs text-gray-600 cursor-pointer">Le bouton ne marche pas ? Collez le SMS ici</summary>
+            <textarea id="texteSms" rows="3" class="mt-2 w-full px-3 py-2 border border-gray-300 rounded-xl text-sm" placeholder="Appui long sur le SMS → Copier, puis appui long ici → Coller"></textarea>
+            <button type="button" id="lireSms" class="mt-1 bg-gray-800 text-white rounded-xl px-4 py-2 text-sm font-semibold">Lire le SMS</button>
+        </details>
+        <p id="resultatSms" class="hidden text-sm rounded-xl px-3 py-2"></p>
+    </div>
 
     <form id="formMomo" method="POST" enctype="multipart/form-data" class="space-y-3">
         <div class="flex items-center justify-between bg-white border border-gray-200 rounded-xl px-4 py-2.5">
@@ -130,7 +148,47 @@
         $('alerte').textContent = alerte;
         $('alerte').classList.toggle('hidden', !alerte);
     }
-    document.querySelectorAll('.raccourci').forEach((b) => b.addEventListener('click', () => { $('montant').value = b.dataset.montant; fraisTouche = false; maj(); }));
+    // Code USSD composé tout seul (Flooz : transfert direct publié par Moov ; le code secret est tapé par le vendeur)
+    const OP = {{ op|tojson }};
+    function majUssd() {
+        if (!$('lienUssd')) return;
+        const num = ((document.querySelector('[name=telephone]') || {}).value || '').replace(/\D/g, '').slice(-8);
+        const m = parseInt($('montant').value, 10) || 0;
+        let code = OP === 'mixx' ? (TYPE === 'transfert' ? '*145*1#' : '*145#') : '*155#', partiel = false;
+        if (OP === 'flooz' && TYPE === 'transfert' && num.length === 8 && m > 0) { code = '*155*1*1*' + num + '*' + m + '*'; partiel = true; }
+        $('codeUssd').textContent = code + (partiel ? ' + code secret + #' : '');
+        $('lienUssd').href = 'tel:' + code.replace(/#/g, '%23');
+        $('aideUssd').textContent = partiel ? 'Le numéro et le montant sont déjà tapés : ajoutez votre code secret puis # et appelez.'
+            : 'Faites l’opération sur le téléphone, puis revenez ici avec le SMS reçu.';
+    }
+    // Lire le SMS (collé) : référence, montant, numéro
+    async function lireSms(texte) {
+        const r = await fetch({{ url_for('boutique.momo_lire_sms')|tojson }}, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ texte: texte }) });
+        const d = await r.json();
+        const trouve = [];
+        if (d.sms_ref) { document.querySelector('[name=sms_ref]').value = d.sms_ref; trouve.push('référence ' + d.sms_ref); }
+        if (d.montant && !$('montant').value) { $('montant').value = d.montant; fraisTouche = false; trouve.push('montant ' + f(d.montant)); }
+        const tel = document.querySelector('[name=telephone]');
+        if (d.telephone && tel && !tel.value) { tel.value = d.telephone; trouve.push('numéro ' + d.telephone); }
+        const p = $('resultatSms');
+        p.classList.remove('hidden');
+        p.className = 'text-sm rounded-xl px-3 py-2 ' + (trouve.length ? 'bg-green-50 text-green-800' : 'bg-red-50 text-red-800');
+        p.textContent = trouve.length ? 'Lu dans le SMS : ' + trouve.join(', ') + '. Vérifiez avant de valider.'
+            : 'Aucune référence trouvée dans ce texte : saisissez-la à la main.';
+        if (d.operateur && d.operateur !== OP) { p.textContent += ' Attention : ce SMS semble venir de ' + (d.operateur === 'mixx' ? 'Mixx' : 'Flooz') + '.'; }
+        maj(); majUssd();
+    }
+    $('collerSms').addEventListener('click', async () => {
+        try {
+            const t = await navigator.clipboard.readText();
+            if (t && t.trim()) return lireSms(t);
+        } catch (e) {}
+        $('blocSms').open = true; $('texteSms').focus();
+    });
+    $('lireSms').addEventListener('click', () => lireSms($('texteSms').value));
+    document.querySelectorAll('[name=telephone], #montant').forEach((c) => c.addEventListener('input', majUssd));
+    majUssd();
+    document.querySelectorAll('.raccourci').forEach((b) => b.addEventListener('click', () => { $('montant').value = b.dataset.montant; fraisTouche = false; maj(); majUssd(); }));
     $('montant').addEventListener('input', () => { fraisTouche = false; maj(); });
     if ($('frais')) $('frais').addEventListener('input', () => { fraisTouche = true; maj(); });
     ['appliquer', 'marchand'].forEach((id) => { if ($(id)) $(id).addEventListener('change', maj); });
