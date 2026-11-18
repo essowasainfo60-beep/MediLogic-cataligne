@@ -50,11 +50,12 @@
     <div class="grid grid-cols-2 gap-3">
         <a href="{{ url_for('boutique.momo_caisses') }}" class="text-center bg-gray-900 text-white rounded-xl py-3 font-semibold"><i class="fas fa-chart-column mr-1"></i> Caisses, gains, stats</a>
         <a href="{{ url_for('boutique.momo_point') }}" class="text-center bg-white border border-gray-300 text-gray-800 rounded-xl py-3 font-semibold"><i class="fas fa-scale-balanced mr-1"></i> Point de la journée</a>
+        <a href="{{ url_for('boutique.momo_historique') }}" class="col-span-2 text-center bg-white border border-gray-300 text-gray-800 rounded-xl py-3 font-semibold"><i class="fas fa-clock-rotate-left mr-1"></i> Historique des transactions et reçus</a>
     </div>
 
     <!-- Dernières opérations -->
     <div class="bg-white rounded-2xl border border-gray-200 p-4">
-        <p class="font-bold text-gray-900 mb-2">Dernières opérations</p>
+        <div class="flex items-center justify-between mb-2"><p class="font-bold text-gray-900">Dernières opérations</p><a href="{{ url_for('boutique.momo_historique') }}" class="text-sm font-semibold text-purple-700">Tout voir</a></div>
         {% for o in dernieres %}
         <a href="{{ url_for('boutique.momo_detail', op_id=o.id) }}" class="flex items-center gap-3 py-2 border-t border-gray-100 {{ 'opacity-50' if o.annulee }}">
             <span class="text-[11px] font-extrabold rounded-lg px-2 py-1 {{ 'bg-yellow-400 text-gray-900' if o.operateur == 'mixx' else 'bg-blue-700 text-white' }}">{{ courts[o.operateur] }}</span>

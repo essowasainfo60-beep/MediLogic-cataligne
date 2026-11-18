@@ -80,7 +80,7 @@
             <form method="POST" action="{{ url_for('client.livreur_accepter', code=livreur.code_acces, commande_id=p.id) }}" class="mt-2"
                   data-question="Accepter la course n°{{ p.numero }} ? Vous passez la récupérer à la boutique{{ ' (' ~ livreur.boutique.adresse ~ ')' if livreur.boutique.adresse }}."
                   onsubmit="return confirm(this.dataset.question)">
-                <button type="submit" class="w-full bg-orange-500 text-white py-3 rounded-xl font-bold hover:bg-orange-600">✋ J'accepte : je passe la récupérer</button>
+                <button type="submit" class="w-full bg-orange-600 text-white py-3 rounded-xl font-bold hover:bg-orange-700">✋ J'accepte : je passe la récupérer</button>
             </form>
         </div>
         {% endfor %}
@@ -173,7 +173,7 @@
                 {% endif %}
                 <a href="{{ lien_arrivee(c) }}" target="_blank" rel="noopener"
                    data-arrive="{{ url_for('client.espace_livreur_arrive', code=livreur.code_acces, commande_id=c.id) }}"
-                   class="btn-arrive block w-full text-center {{ 'bg-orange-100 text-orange-800' if c.date_arrivee else 'bg-orange-500 text-white hover:bg-orange-600' }} py-3.5 rounded-xl text-lg font-bold">
+                   class="btn-arrive block w-full text-center {{ 'bg-orange-100 text-orange-800' if c.date_arrivee else 'bg-orange-600 text-white hover:bg-orange-700' }} py-3.5 rounded-xl text-lg font-bold">
                     📍 {{ 'Prévenir encore le client' if c.date_arrivee else 'Je suis arrivé' }}
                 </a>
                 <p class="etat-arrive text-[11px] text-gray-500 text-center mt-1">Fait sonner le téléphone du client et ouvre WhatsApp avec le message prêt à envoyer.</p>

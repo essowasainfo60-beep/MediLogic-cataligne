@@ -46,7 +46,7 @@
         {% endif %}
         <div class="grid grid-cols-2 gap-2">
             <a href="{{ url_for('boutique.momo_operation', operateur=o.operateur, type_=o.type if o.type != 'ajustement' else 'depot') }}" class="text-center bg-white border border-gray-300 rounded-2xl py-3 font-semibold text-gray-800">Nouvelle opération</a>
-            <button type="button" onclick="window.print()" class="bg-gray-800 text-white rounded-2xl py-3 font-semibold"><i class="fas fa-print mr-1"></i> Imprimer</button>
+            <a href="{{ url_for('boutique.momo_recu', op_id=o.id) }}" class="text-center bg-gray-800 text-white rounded-2xl py-3 font-semibold"><i class="fas fa-print mr-1"></i> Imprimer le reçu</a>
         </div>
         {% if annulable %}
         <details class="bg-white border border-red-200 rounded-2xl">

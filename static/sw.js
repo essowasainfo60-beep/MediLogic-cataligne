@@ -8,7 +8,7 @@
 // ne sert qu'en dernier recours hors-ligne.
 // ============================================================
 
-const CACHE_NAME = 'livraplus-v3';
+const CACHE_NAME = 'livraplus-v4';
 const ASSETS_STATIQUES = [
     '/app-manifest.json',
     '/static/icons/icon-192.png',

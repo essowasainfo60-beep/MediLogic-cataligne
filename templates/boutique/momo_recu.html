@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Reçu {{ o.ref }} - {{ o.boutique.nom_boutique }}</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: Arial, Helvetica, sans-serif; color: #111; background: #e5e7eb; }
+        .barre { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; padding: 12px; background: #0b1d35; }
+        .barre a, .barre button { font: 600 15px Arial; padding: 10px 16px; border-radius: 10px; border: none; cursor: pointer; text-decoration: none; color: #0b1d35; background: #e2eaf5; }
+        .barre .vert { background: #15803d; color: #fff; }
+        .ticket { width: 80mm; max-width: 100%; margin: 16px auto; background: #fff; padding: 5mm 4mm; font-size: 13px; box-shadow: 0 2px 10px rgba(0,0,0,.15); }
+        .centre { text-align: center; }
+        h1 { font-size: 17px; }
+        .sep { border-top: 1px dashed #000; margin: 7px 0; }
+        table { width: 100%; border-collapse: collapse; }
+        td { padding: 2px 0; vertical-align: top; }
+        .num { text-align: right; white-space: nowrap; }
+        .total td { font-size: 16px; font-weight: bold; padding-top: 4px; }
+        .petit { font-size: 11px; color: #333; }
+        .annule { text-align: center; font-weight: bold; font-size: 16px; border: 2px solid #000; padding: 4px; margin: 6px 0; }
+        @media print { body { background: #fff; } .barre { display: none; } .ticket { margin: 0; box-shadow: none; width: 80mm; } @page { size: 80mm auto; margin: 0; } }
+    </style>
+</head>
+<body>
+    <div class="barre">
+        <a href="{{ url_for('boutique.momo_detail', op_id=o.id) }}">← Retour</a>
+        <button type="button" onclick="window.print()">🖨 Imprimer</button>
+        {% if lien_wa %}<a href="{{ lien_wa }}" target="_blank" rel="noopener" class="vert">WhatsApp</a>{% endif %}
+    </div>
+    <div class="ticket">
+        <div class="centre">
+            <h1>{{ o.boutique.nom_boutique }}</h1>
+            {% if o.boutique.adresse %}<p class="petit">{{ o.boutique.adresse }}</p>{% endif %}
+            {% if o.boutique.whatsapp %}<p class="petit">Tél : {{ o.boutique.whatsapp }}</p>{% endif %}
+            <div class="sep"></div>
+            <p><b>Reçu {{ nom_op }} · {{ type_libelle }}</b></p>
+            <p class="petit">{{ o.date.strftime('%d/%m/%Y à %H:%M') }}{% if o.par %} · {{ o.par }}{% endif %}</p>
+        </div>
+        {% if o.annulee %}<p class="annule">OPÉRATION ANNULÉE</p>{% endif %}
+        <div class="sep"></div>
+        <table>
+            <tr><td>Référence</td><td class="num"><b>{{ o.ref }}</b></td></tr>
+            {% if o.sms_ref %}<tr><td>Réf. SMS</td><td class="num">{{ o.sms_ref }}</td></tr>{% endif %}
+            {% if o.telephone %}<tr><td>{{ 'Destinataire' if o.type == 'transfert' else 'Numéro client' }}</td><td class="num">{{ o.telephone }}</td></tr>{% endif %}
+            {% if o.client_telephone %}<tr><td>Payé par</td><td class="num">{{ o.client_telephone }}</td></tr>{% endif %}
+        </table>
+        <div class="sep"></div>
+        <table>
+            <tr><td>Montant</td><td class="num">{{ "{:,.0f}".format(o.montant).replace(',', ' ') }}</td></tr>
+            {% if o.type in ['depot', 'retrait', 'transfert'] %}
+            <tr><td>Frais{% if o.marchand %} (code marchand){% endif %}</td><td class="num">{{ "{:,.0f}".format(o.frais).replace(',', ' ') }}</td></tr>
+            <tr class="total"><td>{{ 'TOTAL REÇU' if o.type != 'retrait' else 'TOTAL ENVOYÉ' }}</td><td class="num">{{ "{:,.0f}".format(o.montant + o.frais).replace(',', ' ') }} FCFA</td></tr>
+            {% if o.type == 'retrait' %}<tr><td>Espèces remises</td><td class="num">{{ "{:,.0f}".format(o.montant).replace(',', ' ') }} FCFA</td></tr>{% endif %}
+            {% endif %}
+        </table>
+        <div class="sep"></div>
+        <p class="centre petit">Merci ! Gardez ce reçu.</p>
+    </div>
+</body>
+</html>

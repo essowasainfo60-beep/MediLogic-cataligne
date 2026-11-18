@@ -1,0 +1,70 @@
+{% extends "base.html" %}
+
+{% block title %}Historique Mixx & Flooz - {{ current_user.nom_boutique }}{% endblock %}
+
+{% block content %}
+<div class="max-w-5xl mx-auto px-4 space-y-4 pb-24">
+    <div class="flex flex-wrap items-end justify-between gap-2">
+        <div>
+            <a href="{{ url_for('boutique.momo_accueil') }}" class="no-print inline-flex items-center gap-1 text-sm font-semibold text-gray-700"><i class="fas fa-arrow-left"></i> Mixx & Flooz</a>
+            <h1 class="text-2xl font-extrabold text-gray-900">Historique des transactions</h1>
+        </div>
+        <div class="no-print flex gap-2">
+            <button type="button" onclick="window.print()" class="bg-gray-800 text-white px-3 py-2 rounded-xl text-sm font-semibold"><i class="fas fa-print mr-1"></i> Imprimer</button>
+            <a href="{{ url_for('boutique.momo_journal_csv', **f.to_dict()) }}" class="bg-green-700 text-white px-3 py-2 rounded-xl text-sm font-semibold"><i class="fas fa-file-excel mr-1"></i> Excel</a>
+        </div>
+    </div>
+
+    <form method="GET" class="no-print bg-white border border-gray-200 rounded-2xl p-4 grid grid-cols-2 md:grid-cols-6 gap-3 text-sm">
+        <label class="col-span-2 md:col-span-6 text-gray-700 font-semibold">Rechercher
+            <input type="search" name="q" value="{{ f.get('q', '') }}" placeholder="Numéro du client, référence SMS, MX-0012…" class="mt-1 w-full px-3 py-2 border border-gray-300 rounded-xl font-normal">
+        </label>
+        <label class="col-span-2 md:col-span-2 text-gray-700">Du (date et heure)
+            <input type="datetime-local" name="du" value="{{ f.get('du', '') }}" class="mt-1 w-full px-3 py-2 border border-gray-300 rounded-xl"></label>
+        <label class="col-span-2 md:col-span-2 text-gray-700">Au (date et heure)
+            <input type="datetime-local" name="au" value="{{ f.get('au', '') }}" class="mt-1 w-full px-3 py-2 border border-gray-300 rounded-xl"></label>
+        <label class="text-gray-700">Service
+            <select name="operateur" class="mt-1 w-full px-3 py-2 border border-gray-300 rounded-xl">
+                <option value="">Mixx et Flooz</option>
+                {% for code, nom in courts.items() %}<option value="{{ code }}" {{ 'selected' if f.get('operateur') == code }}>{{ nom }}</option>{% endfor %}
+            </select></label>
+        <label class="text-gray-700">Opération
+            <select name="type" class="mt-1 w-full px-3 py-2 border border-gray-300 rounded-xl">
+                <option value="">Toutes</option>
+                {% for code, lib in types.items() %}<option value="{{ code }}" {{ 'selected' if f.get('type') == code }}>{{ lib }}</option>{% endfor %}
+            </select></label>
+        <label class="text-gray-700">État
+            <select name="etat" class="mt-1 w-full px-3 py-2 border border-gray-300 rounded-xl">
+                <option value="">Valides</option>
+                <option value="annulees" {{ 'selected' if f.get('etat') == 'annulees' }}>Annulées</option>
+                <option value="toutes" {{ 'selected' if f.get('etat') == 'toutes' }}>Toutes</option>
+            </select></label>
+        <div class="col-span-2 md:col-span-5 flex items-end gap-2">
+            <button class="bg-purple-600 text-white px-4 py-2 rounded-xl font-semibold">Afficher</button>
+            <a href="{{ url_for('boutique.momo_historique') }}" class="px-3 py-2 text-gray-700 font-semibold">Effacer</a>
+        </div>
+    </form>
+
+    <div class="grid grid-cols-3 gap-3">
+        <div class="bg-white border border-gray-200 rounded-2xl p-3"><p class="text-xs text-gray-600">Transactions</p><p class="text-xl font-extrabold">{{ totaux.nb }}</p></div>
+        <div class="bg-white border border-gray-200 rounded-2xl p-3"><p class="text-xs text-gray-600">Montant (clients)</p><p class="text-xl font-extrabold">{{ fcfa(totaux.montant) }}</p></div>
+        <div class="bg-green-800 text-white rounded-2xl p-3"><p class="text-xs text-green-100">Frais gagnés</p><p class="text-xl font-extrabold">{{ fcfa(totaux.frais) }}</p></div>
+    </div>
+
+    <div class="space-y-2">
+        {% for o in ops %}
+        <div class="bg-white border border-gray-200 rounded-2xl p-3 flex items-center gap-3 {{ 'opacity-60' if o.annulee }}">
+            <span class="text-[11px] font-extrabold rounded-lg px-2 py-1 {{ 'bg-yellow-400 text-gray-900' if o.operateur == 'mixx' else 'bg-blue-700 text-white' }}">{{ courts[o.operateur] }}</span>
+            <a href="{{ url_for('boutique.momo_detail', op_id=o.id) }}" class="flex-1 min-w-0">
+                <span class="block text-sm font-bold text-gray-900">{{ types[o.type] }} · {{ fcfa(o.montant) }}{% if o.frais %} <span class="font-normal text-green-700">+{{ fcfa(o.frais) }}</span>{% endif %}{% if o.annulee %} <span class="text-red-700">(annulé)</span>{% endif %}</span>
+                <span class="block text-xs text-gray-600 truncate">{{ o.date.strftime('%d/%m/%Y %H:%M') }} · <span class="font-mono">{{ o.ref }}</span>{% if o.sms_ref %} · SMS {{ o.sms_ref }}{% endif %}{% if o.telephone %} · {{ o.telephone }}{% endif %}{% if o.par %} · {{ o.par }}{% endif %}</span>
+            </a>
+            <a href="{{ url_for('boutique.momo_recu', op_id=o.id) }}" class="no-print shrink-0 text-sm font-semibold text-purple-700 border border-gray-200 rounded-xl px-3 py-2" aria-label="Reçu de {{ o.ref }}"><i class="fas fa-receipt"></i> Reçu</a>
+        </div>
+        {% else %}
+        <p class="text-sm text-gray-600 bg-white border border-gray-200 rounded-2xl p-4">Aucune transaction pour ces critères.</p>
+        {% endfor %}
+        {% if ops|length == 500 %}<p class="text-xs text-gray-600">500 dernières transactions affichées : précisez les dates pour voir plus ancien (l’export Excel contient tout).</p>{% endif %}
+    </div>
+</div>
+{% endblock %}

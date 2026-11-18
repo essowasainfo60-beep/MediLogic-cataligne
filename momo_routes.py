@@ -9,11 +9,11 @@ from flask_login import login_required
 import abonnement
 import messages_whatsapp as msg
 import momo
-from boutique_routes import (boutique_bp, boutique_connectee, qui, peut, MODULE_BOUTIQUE, GERANT_SEUL, CAISSE)
+from boutique_routes import (boutique_bp, boutique_connectee, qui, peut, MODULE_BOUTIQUE, GERANT_SEUL, CAISSE, _bornes)
 from models import db, OperationMomo
 
 PAGES = {'momo_accueil', 'momo_operateur', 'momo_operation', 'momo_detail', 'momo_photo', 'momo_annuler',
-         'momo_caisses', 'momo_point', 'momo_reglages', 'momo_journal_csv'}
+         'momo_caisses', 'momo_point', 'momo_reglages', 'momo_journal_csv', 'momo_historique', 'momo_recu'}
 MODULE_BOUTIQUE.update(PAGES)            # formules avec la vente au comptoir (Pro, Premium…)
 GERANT_SEUL.add('momo_reglages')
 CAISSE.add('momo_annuler')               # annuler : gérant, caissier, gestionnaire
@@ -101,6 +101,59 @@ def momo_detail(op_id):
                            peut_annuler=peut_annuler, raison=raison)
 
 
+@boutique_bp.route('/momo/operation/<int:op_id>/recu')
+@login_required
+def momo_recu(op_id):
+    """Reçu de la transaction, au format ticket (imprimante 80 mm ou A4), à remettre au client."""
+    o = _operation(op_id)
+    tel = o.client_telephone or o.telephone
+    lien_wa = msg.lien_whatsapp(tel, momo.texte_recu(o)) if tel and o.type in momo.CLIENT and not o.annulee else None
+    return render_template('boutique/momo_recu.html', o=o, lien_wa=lien_wa, nom_op=momo.COURTS[o.operateur],
+                           type_libelle=momo.TYPES[o.type])
+
+
+def _filtre_historique(b, args):
+    q = OperationMomo.query.filter_by(boutique_id=b.id)
+    du, au = _bornes(args.get('du'), args.get('au'))
+    if du:
+        q = q.filter(OperationMomo.date >= du)
+    if au:
+        q = q.filter(OperationMomo.date < au)
+    if args.get('operateur') in momo.OPERATEURS:
+        q = q.filter_by(operateur=args['operateur'])
+    if args.get('type') in momo.TYPES:
+        q = q.filter_by(type=args['type'])
+    if args.get('etat') == 'annulees':
+        q = q.filter(OperationMomo.annulee.is_(True))
+    elif args.get('etat') != 'toutes':
+        q = q.filter(OperationMomo.annulee.is_(False))
+    cherche = (args.get('q') or '').strip()
+    if cherche:
+        chiffres = ''.join(c for c in cherche if c.isdigit())
+        motif = f'%{cherche.upper()}%'
+        conditions = [db.func.upper(OperationMomo.sms_ref).like(motif), db.func.upper(OperationMomo.note).like(motif)]
+        if chiffres:
+            conditions += [OperationMomo.telephone.like(f'%{chiffres}%'), OperationMomo.client_telephone.like(f'%{chiffres}%')]
+        ref = cherche.upper().replace(' ', '')
+        if ref[:3] in ('MX-', 'FL-') and ref[3:].isdigit():
+            conditions.append(db.and_(OperationMomo.operateur == ('mixx' if ref.startswith('MX') else 'flooz'),
+                                      OperationMomo.numero == int(ref[3:])))
+        q = q.filter(db.or_(*conditions))
+    return q
+
+
+@boutique_bp.route('/momo/historique')
+@login_required
+def momo_historique():
+    """Historique des transactions : filtres (date et heure, opérateur, opération, recherche), reçus."""
+    b = boutique_connectee()
+    ops = _filtre_historique(b, request.args).order_by(OperationMomo.date.desc()).limit(500).all()
+    clients = [o for o in ops if o.type in momo.CLIENT and not o.annulee]
+    totaux = {'nb': len(ops), 'montant': sum(o.montant for o in clients), 'frais': sum(o.frais for o in clients)}
+    return render_template('boutique/momo_historique.html', ops=ops, f=request.args, totaux=totaux, types=momo.TYPES,
+                           courts=momo.COURTS, operateurs=momo.OPERATEURS, fcfa=_fcfa)
+
+
 @boutique_bp.route('/momo/operation/<int:op_id>/photo')
 @login_required
 def momo_photo(op_id):
@@ -153,7 +206,7 @@ def momo_journal_csv():
     w = csv.writer(sortie, delimiter=';')
     w.writerow(['Date', 'Référence', 'Opérateur', 'Opération', 'Montant', 'Frais', 'Code marchand', 'Téléphone',
                 'Référence SMS', 'Par', 'Annulée', 'Motif'])
-    for o in OperationMomo.query.filter_by(boutique_id=b.id).order_by(OperationMomo.date.desc()).all():
+    for o in _filtre_historique(b, request.args.to_dict() | {'etat': request.args.get('etat') or 'toutes'}).order_by(OperationMomo.date.desc()).all():
         w.writerow([o.date.strftime('%d/%m/%Y %H:%M'), o.ref, momo.COURTS[o.operateur], momo.TYPES[o.type],
                     f'{o.montant:.0f}', f'{o.frais:.0f}', 'oui' if o.marchand else '', o.telephone or '', o.sms_ref or '',
                     o.par or '', 'oui' if o.annulee else '', o.annule_motif or o.note or ''])

@@ -74,7 +74,7 @@
 
     <!-- Journal -->
     <div class="bg-white border border-gray-200 rounded-2xl overflow-x-auto">
-        <p class="px-4 py-3 font-bold text-gray-900 border-b border-gray-100">Journal des opérations</p>
+        <div class="px-4 py-3 border-b border-gray-100 flex items-center justify-between"><p class="font-bold text-gray-900">Journal des opérations</p><a href="{{ url_for('boutique.momo_historique') }}" class="no-print text-sm font-semibold text-purple-700">Rechercher / reçus</a></div>
         <table class="w-full text-sm">
             <thead class="bg-gray-50 text-gray-600 text-left"><tr><th class="px-3 py-2">Date</th><th class="px-3 py-2">Réf.</th><th class="px-3 py-2">Opération</th><th class="px-3 py-2 text-right">Montant</th><th class="px-3 py-2 text-right">Frais</th><th class="px-3 py-2">SMS</th><th class="px-3 py-2">Par</th></tr></thead>
             <tbody class="divide-y divide-gray-100">

@@ -137,7 +137,7 @@
                 <form method="POST" action="{{ url_for('boutique.payer_frais_commande', commande_id=c.id) }}" class="mt-2"
                       data-question="Payer {{ fcfa(c.frais_a_payer_livreur) }} de frais de livraison à {{ c.livreur.nom }} (sortie de caisse) ?"
                       onsubmit="return confirm(this.dataset.question)">
-                    <button type="submit" class="w-full bg-orange-500 text-white py-2.5 rounded-xl font-bold">💵 Payer ses frais ({{ fcfa(c.frais_a_payer_livreur) }})</button>
+                    <button type="submit" class="w-full bg-orange-600 text-white py-2.5 rounded-xl font-bold">💵 Payer ses frais ({{ fcfa(c.frais_a_payer_livreur) }})</button>
                 </form>
                 {% endif %}
             </div>
@@ -212,12 +212,12 @@
             <p class="text-sm text-orange-900 bg-orange-50 border border-orange-200 rounded-xl p-3"><i class="fas fa-hourglass-half mr-1"></i>
                 Proposée aux livreurs à {{ c.proposee_at.strftime('%H:%M') }} : en attente qu'un livreur accepte. Vous serez prévenu dès qu'il passe la récupérer.</p>
             <form method="POST" action="{{ url_for('boutique.proposer_aux_livreurs', commande_id=c.id) }}" class="avec-frais mt-2 grid grid-cols-2 gap-2">
-                <button type="submit" class="bg-orange-500 text-white py-2.5 rounded-xl text-sm font-semibold"><i class="fas fa-rotate mr-1"></i> Relancer les livreurs</button>
+                <button type="submit" class="bg-orange-600 text-white py-2.5 rounded-xl text-sm font-semibold"><i class="fas fa-rotate mr-1"></i> Relancer les livreurs</button>
                 <button type="submit" name="annuler" value="1" class="bg-white border border-gray-300 text-gray-700 py-2.5 rounded-xl text-sm">Retirer la proposition</button>
             </form>
             {% elif internes %}
             <form method="POST" action="{{ url_for('boutique.proposer_aux_livreurs', commande_id=c.id) }}" class="avec-frais">
-                <button type="submit" class="w-full bg-orange-500 text-white py-3 rounded-xl font-bold hover:bg-orange-600"><i class="fas fa-bullhorn mr-1"></i> Proposer aux livreurs disponibles</button>
+                <button type="submit" class="w-full bg-orange-600 text-white py-3 rounded-xl font-bold hover:bg-orange-700"><i class="fas fa-bullhorn mr-1"></i> Proposer aux livreurs disponibles</button>
                 <p class="text-xs text-gray-500 mt-1 text-center">Le premier qui accepte passe récupérer la commande.</p>
             </form>
             {% endif %}

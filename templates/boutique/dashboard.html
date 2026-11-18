@@ -7,7 +7,7 @@
 
     {% if paiements_a_valider %}
     <a href="{{ url_for('boutique.validations') }}" class="flex items-center gap-3 bg-yellow-50 border-2 border-yellow-300 rounded-2xl px-4 py-3 hover:bg-yellow-100">
-        <span class="h-10 w-10 rounded-full bg-yellow-500 text-white flex items-center justify-center flex-shrink-0"><i class="fas fa-hand-holding-dollar"></i></span>
+        <span class="h-10 w-10 rounded-full bg-amber-700 text-white flex items-center justify-center flex-shrink-0"><i class="fas fa-hand-holding-dollar"></i></span>
         <span class="flex-1 min-w-0 text-sm"><b class="block text-yellow-900">{{ paiements_a_valider }} demande{{ 's' if paiements_a_valider > 1 }} à valider</b>
             <span class="text-yellow-800">Charges, annulations de vente ou paiements de créances demandés par vos vendeurs.</span></span>
         <i class="fas fa-chevron-right text-yellow-500"></i>

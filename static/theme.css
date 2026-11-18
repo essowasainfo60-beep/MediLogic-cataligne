@@ -129,3 +129,58 @@ html.dark img.bg-white { background-color: #fff !important; } /* logos : gardent
 @keyframes danse { 0%, 80%, 100% { transform: translateY(0); opacity: .45 } 40% { transform: translateY(-8px); opacity: 1 } }
 @keyframes defilement { from { background-position: 0 0 } to { background-position: -200% 0 } }
 @media (prefers-reduced-motion: reduce) { #chargementPage .bulle-chargement span, #chargementPage .barre-chargement { animation-duration: 3s; } }
+
+/* ============================================================
+   MODE NUIT : compléments (lisibilité des boutons, couleurs vives tamisées)
+   ============================================================ */
+/* Couleurs vives (jaune, orange) tamisées : moins éblouissantes, texte clair lisible */
+html.dark .bg-yellow-300, html.dark .bg-yellow-400, html.dark .bg-yellow-500,
+html.dark .bg-amber-300, html.dark .bg-amber-400, html.dark .bg-amber-500 { background-color: #7c5f12 !important; color: #fdf6e3 !important; }
+html.dark .bg-orange-400, html.dark .bg-orange-500 { background-color: #9a3f12 !important; color: #fff7ed !important; }
+html.dark .bg-amber-200, html.dark .bg-yellow-200 { background-color: rgba(245, 158, 11, .22) !important; }
+html.dark [class*="border-yellow-4"], html.dark [class*="border-amber-4"], html.dark [class*="border-amber-5"] { border-color: #8a6a14 !important; }
+html.dark .hover\:bg-yellow-50:hover, html.dark .hover\:bg-blue-50:hover { background-color: #1a2436 !important; }
+
+/* Boutons foncés : se détachent du fond de la page */
+html.dark .bg-gray-900, html.dark .bg-gray-800 { background-color: #334155 !important; color: #f1f5f9 !important; }
+html.dark .bg-gray-900 *, html.dark .bg-gray-800 * { color: inherit; }
+html.dark .bg-gray-400 { background-color: #475569 !important; }
+
+/* Pastilles et encadrés colorés clairs (badges de formule, statuts…) */
+html.dark .bg-sky-100, html.dark .bg-sky-50 { background-color: rgba(56, 189, 248, .16) !important; }
+html.dark .bg-indigo-100, html.dark .bg-indigo-50 { background-color: rgba(129, 140, 248, .18) !important; }
+html.dark .bg-amber-100 { background-color: rgba(245, 158, 11, .18) !important; }
+html.dark .bg-teal-100 { background-color: rgba(45, 212, 191, .16) !important; }
+html.dark .bg-rose-100, html.dark .bg-pink-100 { background-color: rgba(244, 114, 182, .16) !important; }
+html.dark .bg-emerald-100 { background-color: rgba(16, 185, 129, .16) !important; }
+html.dark .text-sky-800, html.dark .text-sky-900, html.dark .text-sky-700 { color: #7dd3fc !important; }
+html.dark .text-indigo-800, html.dark .text-indigo-900, html.dark .text-indigo-700 { color: #a5b4fc !important; }
+html.dark .text-amber-700, html.dark .text-amber-900, html.dark .text-yellow-900 { color: #fcd34d !important; }
+html.dark .text-purple-900 { color: #ddd6fe !important; }
+html.dark .text-green-900, html.dark .text-emerald-800 { color: #a7f3d0 !important; }
+html.dark .text-orange-900, html.dark .text-orange-700, html.dark .text-orange-600 { color: #fdba74 !important; }
+html.dark .text-red-900 { color: #fecaca !important; }
+html.dark .text-blue-900 { color: #bfdbfe !important; }
+html.dark .text-rose-800 { color: #fda4af !important; }
+html.dark [class*="border-sky-3"], html.dark [class*="border-indigo-3"], html.dark [class*="border-emerald-3"],
+html.dark [class*="border-rose-3"], html.dark [class*="border-purple-5"] { border-color: rgba(148, 163, 184, .35) !important; }
+
+/* Choix cochés (cartes radio / cases) */
+html.dark .peer:checked ~ .peer-checked\:bg-purple-50, html.dark .has-\[\:checked\]\:bg-purple-50:has(:checked) { background-color: rgba(139, 92, 246, .22) !important; }
+html.dark .peer:checked ~ .peer-checked\:bg-green-50, html.dark .has-\[\:checked\]\:bg-green-50:has(:checked) { background-color: rgba(16, 185, 129, .2) !important; }
+html.dark .peer:checked ~ .peer-checked\:bg-orange-50, html.dark .has-\[\:checked\]\:bg-orange-50:has(:checked) { background-color: rgba(249, 115, 22, .2) !important; }
+html.dark .has-\[\:checked\]\:bg-amber-50:has(:checked) { background-color: rgba(245, 158, 11, .2) !important; }
+html.dark .peer:checked ~ .peer-checked\:text-purple-800 { color: #ddd6fe !important; }
+
+/* Page « Vendre » : tuiles d'articles, tailles / couleurs, moyens de paiement */
+html.dark .tuile, html.dark .puce, html.dark .mode { background: var(--carte) !important; border-color: var(--bordure) !important; color: var(--texte); }
+html.dark .tuile img, html.dark .tuile .sans-photo { background: #1a2436 !important; }
+html.dark .puce.choisie { background: #7c3aed !important; border-color: #7c3aed !important; color: #fff !important; }
+html.dark .puce.vide { color: #64748b !important; }
+html.dark .mode.choisi { background: rgba(16, 185, 129, .18) !important; border-color: #16a34a !important; color: #a7f3d0 !important; }
+/* Boutons désactivés (panier vide…) et textes gris dans les encadrés foncés */
+html.dark .disabled\:bg-gray-200:disabled { background-color: #243046 !important; }
+html.dark .disabled\:text-gray-600:disabled, html.dark .disabled\:text-gray-600:disabled * { color: #9fb0c8 !important; }
+html.dark .bg-gray-900 .text-gray-300, html.dark .bg-gray-800 .text-gray-300,
+html.dark .bg-gray-900 .text-gray-400, html.dark .bg-gray-800 .text-gray-400 { color: #cbd5e1 !important; }
+html.dark .bg-gray-50\/95, html.dark .bg-gray-50\/90, html.dark .bg-gray-100\/95 { background-color: rgba(11, 18, 32, .95) !important; }

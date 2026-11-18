@@ -56,7 +56,7 @@
 
 <!-- Barre du panier (téléphone) -->
 <div id="barrePanier" class="md:hidden fixed inset-x-0 bottom-16 z-40 px-3 pb-2">
-    <button type="button" id="ouvrirCaisse" class="w-full flex items-center gap-3 bg-green-600 text-white rounded-2xl px-4 py-3.5 shadow-xl disabled:bg-gray-300">
+    <button type="button" id="ouvrirCaisse" class="w-full flex items-center gap-3 bg-green-600 text-white rounded-2xl px-4 py-3.5 shadow-xl disabled:bg-gray-200 disabled:text-gray-600">
         <span class="h-9 min-w-9 px-2 rounded-xl bg-white/20 flex items-center justify-center font-bold" id="nbArticles">0</span>
         <span class="flex-1 text-left font-bold text-lg" id="totalBarre">0 FCFA</span>
         <span class="font-semibold">Encaisser <i class="fas fa-chevron-up ml-1"></i></span>
@@ -74,7 +74,7 @@
         </div>
         <div id="vOptions" class="space-y-3"></div>
         <p id="vInfo" class="text-sm mt-3"></p>
-        <button type="button" id="vAjouter" class="mt-4 w-full bg-green-600 text-white rounded-2xl font-bold py-3.5 text-lg disabled:bg-gray-300">Ajouter</button>
+        <button type="button" id="vAjouter" class="mt-4 w-full bg-green-600 text-white rounded-2xl font-bold py-3.5 text-lg disabled:bg-gray-200 disabled:text-gray-600">Ajouter</button>
     </div>
 </div>
 
@@ -148,7 +148,7 @@
                 <input data-client-tel type="tel" maxlength="30" placeholder="Téléphone" class="border border-gray-300 rounded-lg px-2 py-2">
             </div>
         </details>
-        <button type="button" data-valider class="w-full bg-green-600 text-white rounded-2xl font-extrabold py-4 text-lg shadow-md disabled:bg-gray-300">
+        <button type="button" data-valider class="w-full bg-green-600 text-white rounded-2xl font-extrabold py-4 text-lg shadow-md disabled:bg-gray-200 disabled:text-gray-600">
             <i class="fas fa-check mr-1"></i> Valider la vente</button>
     </div>
 </template>

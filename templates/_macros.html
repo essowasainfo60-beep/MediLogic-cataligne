@@ -25,7 +25,7 @@
     {% if commande.statut not in ['livree', 'retournee', 'annulee'] %}
     <form method="POST" action="{{ url_for('boutique.changer_zone_commande', commande_id=commande.id) }}" class="mt-2">
         <input type="hidden" name="zone_id" value="{{ suggeree.id }}">
-        <button type="submit" class="bg-orange-500 text-white px-3 py-1.5 rounded-lg font-semibold hover:bg-orange-600">
+        <button type="submit" class="bg-orange-600 text-white px-3 py-1.5 rounded-lg font-semibold hover:bg-orange-700">
             Corriger : passer en zone {{ suggeree.nom }}
         </button>
     </form>
