@@ -1,0 +1,68 @@
+{% extends "base.html" %}
+
+{% block title %}{{ o.ref }} - Mixx & Flooz{% endblock %}
+
+{% block content %}
+<div class="max-w-lg mx-auto px-4 space-y-3 pb-24">
+    <a href="{{ url_for('boutique.momo_accueil') }}" class="no-print inline-flex items-center gap-1 text-sm font-semibold text-gray-700"><i class="fas fa-arrow-left"></i> Mixx & Flooz</a>
+
+    <div class="bg-white rounded-2xl border border-gray-200 p-5 space-y-3">
+        <div class="flex flex-col items-center text-center gap-1">
+            {% if o.annulee %}
+            <span class="h-14 w-14 rounded-full bg-red-100 text-red-700 flex items-center justify-center text-2xl"><i class="fas fa-ban"></i></span>
+            <p class="text-lg font-extrabold text-red-700">{{ types[o.type] }} {{ courts[o.operateur] }} annulé</p>
+            {% if o.annule_motif %}<p class="text-sm text-gray-600">Motif : {{ o.annule_motif }}</p>{% endif %}
+            {% else %}
+            <span class="h-14 w-14 rounded-full bg-green-100 text-green-700 flex items-center justify-center text-2xl"><i class="fas fa-check"></i></span>
+            <p class="text-lg font-extrabold text-gray-900">{{ types[o.type] }} {{ courts[o.operateur] }}{{ ' enregistré' if nouveau }}</p>
+            {% endif %}
+            <p class="text-sm text-gray-600">Réf. LivraPlus <b class="font-mono text-gray-900">{{ o.ref }}</b>{% if o.sms_ref %} · SMS <b class="font-mono text-gray-900">{{ o.sms_ref }}</b>{% endif %}</p>
+        </div>
+        <dl class="grid grid-cols-2 gap-y-1.5 text-sm border-t border-dashed border-gray-300 pt-3">
+            <dt class="text-gray-600">Montant</dt><dd class="text-right font-bold">{{ fcfa(o.montant) }}</dd>
+            {% if o.type in ['depot', 'retrait', 'transfert'] %}
+            <dt class="text-gray-600">Frais</dt><dd class="text-right font-bold">{{ fcfa(o.frais) }}{% if o.marchand %} <span class="font-normal text-gray-600">(code marchand)</span>{% elif o.frais_grille is not none and o.frais != o.frais_grille %} <span class="font-normal text-amber-700">(grille : {{ fcfa(o.frais_grille) }})</span>{% endif %}</dd>
+            <dt class="text-gray-600">{{ 'Destinataire' if o.type == 'transfert' else 'Client' }}</dt><dd class="text-right">{{ o.telephone or '—' }}</dd>
+            {% if o.client_telephone %}<dt class="text-gray-600">Payé par</dt><dd class="text-right">{{ o.client_telephone }}</dd>{% endif %}
+            {% endif %}
+            <dt class="text-gray-600">Date</dt><dd class="text-right">{{ o.date.strftime('%d/%m/%Y %H:%M') }}</dd>
+            <dt class="text-gray-600">Par</dt><dd class="text-right">{{ o.par or '—' }}</dd>
+            {% if o.note %}<dt class="text-gray-600">Note</dt><dd class="text-right">{{ o.note }}</dd>{% endif %}
+            {% if o.photo_mime %}<dt class="text-gray-600">Photo</dt><dd class="text-right"><a href="{{ url_for('boutique.momo_photo', op_id=o.id) }}" target="_blank" rel="noopener" class="font-semibold text-purple-700"><i class="fas fa-image"></i> Voir</a></dd>{% endif %}
+        </dl>
+        {% if not o.annulee %}
+        <div class="border-t border-dashed border-gray-300 pt-3 space-y-1.5 text-sm">
+            {% if o.delta_especes %}<div class="flex justify-between"><span class="text-gray-600">Espèces du kiosque</span><b class="{{ 'text-green-700' if o.delta_especes > 0 else 'text-red-700' }}">{{ '+' if o.delta_especes > 0 else '−' }} {{ fcfa(o.delta_especes|abs) }}</b></div>{% endif %}
+            {% if o.delta_solde %}<div class="flex justify-between"><span class="text-gray-600">Solde {{ courts[o.operateur] }}</span><b class="{{ 'text-green-700' if o.delta_solde > 0 else 'text-red-700' }}">{{ '+' if o.delta_solde > 0 else '−' }} {{ fcfa(o.delta_solde|abs) }}</b></div>{% endif %}
+            {% if o.frais %}<div class="flex justify-between"><span class="text-gray-600">Vous gagnez</span><b class="text-green-700">+ {{ fcfa(o.frais) }}</b></div>{% endif %}
+            <div class="flex justify-between bg-gray-50 rounded-lg px-2 py-1.5 mt-1"><span class="text-gray-600">Maintenant</span><span class="text-right">Solde {{ courts[o.operateur] }} <b>{{ fcfa(s[o.operateur]) }}</b> · Espèces <b>{{ fcfa(s.especes) }}</b></span></div>
+        </div>
+        {% endif %}
+    </div>
+
+    <div class="no-print space-y-2">
+        {% if lien_wa and not o.annulee %}
+        <a href="{{ lien_wa }}" target="_blank" rel="noopener" class="block text-center bg-green-600 text-white rounded-2xl py-3.5 font-bold"><i class="fab fa-whatsapp mr-1"></i> Envoyer le reçu au client</a>
+        {% endif %}
+        <div class="grid grid-cols-2 gap-2">
+            <a href="{{ url_for('boutique.momo_operation', operateur=o.operateur, type_=o.type if o.type != 'ajustement' else 'depot') }}" class="text-center bg-white border border-gray-300 rounded-2xl py-3 font-semibold text-gray-800">Nouvelle opération</a>
+            <button type="button" onclick="window.print()" class="bg-gray-800 text-white rounded-2xl py-3 font-semibold"><i class="fas fa-print mr-1"></i> Imprimer</button>
+        </div>
+        {% if annulable %}
+        <details class="bg-white border border-red-200 rounded-2xl">
+            <summary class="px-4 py-3 text-sm font-semibold text-red-700 cursor-pointer">{{ 'Annuler ce transfert' if o.type == 'transfert' else "Annuler (erreur de saisie)" }}</summary>
+            {% if peut_annuler %}
+            <form method="POST" action="{{ url_for('boutique.momo_annuler', op_id=o.id) }}" class="px-4 pb-4 space-y-2"
+                  onsubmit="return confirm('Annuler {{ o.ref }} ? Ses effets sur les soldes et les gains disparaissent.')">
+                {% if o.type == 'transfert' %}<p class="text-xs text-gray-600">À faire seulement si l’opérateur a bien annulé le transfert : l’argent revient sur votre solde, rendez {{ fcfa(o.montant + o.frais) }} au client.</p>{% endif %}
+                <input name="motif" type="text" maxlength="200" placeholder="Motif (ex. mauvais numéro)" class="w-full px-3 py-2 border border-gray-300 rounded-xl">
+                <button class="w-full bg-red-600 text-white rounded-xl py-2.5 font-semibold">Confirmer l’annulation</button>
+            </form>
+            {% else %}
+            <p class="px-4 pb-4 text-sm text-red-800">{{ raison }}</p>
+            {% endif %}
+        </details>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

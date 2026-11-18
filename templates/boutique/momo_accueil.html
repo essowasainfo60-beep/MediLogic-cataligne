@@ -1,0 +1,72 @@
+{% extends "base.html" %}
+
+{% block title %}Mixx & Flooz - {{ current_user.nom_boutique }}{% endblock %}
+
+{% block content %}
+<div class="max-w-3xl mx-auto px-4 space-y-4 pb-24">
+    <div class="flex items-end justify-between gap-2">
+        <div>
+            <h1 class="text-2xl font-extrabold text-gray-900"><i class="fas fa-mobile-screen-button text-yellow-500 mr-1"></i> Mixx & Flooz</h1>
+            <p class="text-sm text-gray-600">Dépôts, retraits et transferts du kiosque</p>
+        </div>
+        {% if peut('boutique.momo_reglages') %}
+        <a href="{{ url_for('boutique.momo_reglages') }}" class="text-sm font-semibold text-gray-700 bg-white border border-gray-200 rounded-xl px-3 py-2"><i class="fas fa-sliders mr-1"></i> Réglages</a>
+        {% endif %}
+    </div>
+
+    <!-- Soldes -->
+    <div class="grid grid-cols-2 gap-3">
+        {% for code, nom in operateurs.items() %}
+        <div class="bg-white rounded-2xl border border-gray-200 p-4">
+            <p class="text-xs text-gray-600">Solde {{ nom }}</p>
+            <p class="text-xl font-extrabold text-gray-900">{{ fcfa(s[code]) }}</p>
+            {% if s[code] < seuil %}<p class="text-[11px] font-bold text-red-700 mt-0.5"><i class="fas fa-triangle-exclamation"></i> Solde bas : rechargez</p>{% endif %}
+        </div>
+        {% endfor %}
+        <div class="bg-white rounded-2xl border border-gray-200 p-4">
+            <p class="text-xs text-gray-600">Espèces du kiosque</p>
+            <p class="text-xl font-extrabold text-gray-900">{{ fcfa(s.especes) }}</p>
+        </div>
+        <div class="bg-green-800 text-white rounded-2xl p-4">
+            <p class="text-xs text-green-100">Frais gagnés aujourd’hui</p>
+            <p class="text-xl font-extrabold">{{ fcfa(jour.frais) }}</p>
+            <p class="text-[11px] text-green-100">{{ jour.nb }} opération{{ 's' if jour.nb > 1 }}</p>
+        </div>
+    </div>
+
+    <!-- Choix du service -->
+    <p class="text-sm font-bold text-gray-700 pt-1">Choisissez le service</p>
+    <a href="{{ url_for('boutique.momo_operateur', operateur='mixx') }}" class="flex items-center gap-4 bg-white border-2 border-yellow-400 rounded-2xl p-4 hover:bg-yellow-50">
+        <span class="h-14 w-14 rounded-2xl bg-yellow-400 text-gray-900 flex items-center justify-center font-extrabold">Mixx</span>
+        <span class="flex-1"><span class="block text-lg font-extrabold text-gray-900">Mixx by Yas</span><span class="block text-sm text-gray-600">Dépôt · Retrait · Transfert</span></span>
+        <i class="fas fa-chevron-right text-gray-400"></i>
+    </a>
+    <a href="{{ url_for('boutique.momo_operateur', operateur='flooz') }}" class="flex items-center gap-4 bg-white border-2 border-blue-600 rounded-2xl p-4 hover:bg-blue-50">
+        <span class="h-14 w-14 rounded-2xl bg-blue-700 text-white flex items-center justify-center font-extrabold">Flooz</span>
+        <span class="flex-1"><span class="block text-lg font-extrabold text-gray-900">Moov Money (Flooz)</span><span class="block text-sm text-gray-600">Dépôt · Retrait · Transfert</span></span>
+        <i class="fas fa-chevron-right text-gray-400"></i>
+    </a>
+
+    <div class="grid grid-cols-2 gap-3">
+        <a href="{{ url_for('boutique.momo_caisses') }}" class="text-center bg-gray-900 text-white rounded-xl py-3 font-semibold"><i class="fas fa-chart-column mr-1"></i> Caisses, gains, stats</a>
+        <a href="{{ url_for('boutique.momo_point') }}" class="text-center bg-white border border-gray-300 text-gray-800 rounded-xl py-3 font-semibold"><i class="fas fa-scale-balanced mr-1"></i> Point de la journée</a>
+    </div>
+
+    <!-- Dernières opérations -->
+    <div class="bg-white rounded-2xl border border-gray-200 p-4">
+        <p class="font-bold text-gray-900 mb-2">Dernières opérations</p>
+        {% for o in dernieres %}
+        <a href="{{ url_for('boutique.momo_detail', op_id=o.id) }}" class="flex items-center gap-3 py-2 border-t border-gray-100 {{ 'opacity-50' if o.annulee }}">
+            <span class="text-[11px] font-extrabold rounded-lg px-2 py-1 {{ 'bg-yellow-400 text-gray-900' if o.operateur == 'mixx' else 'bg-blue-700 text-white' }}">{{ courts[o.operateur] }}</span>
+            <span class="flex-1 min-w-0">
+                <span class="block text-sm font-semibold text-gray-900">{{ types[o.type] }}{% if o.annulee %} <span class="text-red-700">(annulé)</span>{% endif %}</span>
+                <span class="block text-xs text-gray-600 truncate">{{ o.ref }}{% if o.sms_ref %} · SMS {{ o.sms_ref }}{% endif %} · {{ o.date.strftime('%d/%m %H:%M') }}</span>
+            </span>
+            <span class="text-sm font-bold text-gray-900 whitespace-nowrap">{{ fcfa(o.montant) }}</span>
+        </a>
+        {% else %}
+        <p class="text-sm text-gray-600">Aucune opération pour l’instant. Commencez par <b>recharger le compte</b> Mixx ou Flooz (choisissez le service ci-dessus).</p>
+        {% endfor %}
+    </div>
+</div>
+{% endblock %}

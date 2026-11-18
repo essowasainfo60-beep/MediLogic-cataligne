@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+
+{% block title %}{{ nom }} - {{ current_user.nom_boutique }}{% endblock %}
+
+{% block content %}
+<div class="max-w-3xl mx-auto px-4 space-y-3 pb-24">
+    <a href="{{ url_for('boutique.momo_accueil') }}" class="inline-flex items-center gap-1 text-sm font-semibold text-gray-700"><i class="fas fa-arrow-left"></i> Mixx & Flooz</a>
+    <div class="rounded-2xl p-5 {{ 'bg-yellow-400 text-gray-900' if op == 'mixx' else 'bg-blue-700 text-white' }}">
+        <p class="text-sm font-semibold">Solde {{ nom }}</p>
+        <p class="text-3xl font-extrabold">{{ fcfa(s[op]) }}</p>
+        <p class="text-sm mt-1">Espèces du kiosque : <b>{{ fcfa(s.especes) }}</b>{% if marchand %} · <i class="fas fa-store"></i> code marchand{% endif %}</p>
+    </div>
+    <p class="text-sm font-bold text-gray-700 pt-1">Quelle opération ?</p>
+    {% for type_, titre, aide, icone, fond, couleur in [
+        ('depot', 'Dépôt', 'Le client donne des espèces, vous envoyez sur son numéro', 'fa-arrow-down', 'bg-green-100', 'text-green-800'),
+        ('retrait', 'Retrait', 'Le client vous envoie, vous lui donnez des espèces', 'fa-arrow-up', 'bg-red-100', 'text-red-800'),
+        ('transfert', 'Transfert simple', 'Le client paie, vous envoyez à la personne de son choix', 'fa-right-left', 'bg-indigo-100', 'text-indigo-800')] %}
+    <a href="{{ url_for('boutique.momo_operation', operateur=op, type_=type_) }}" class="flex items-center gap-4 bg-white border border-gray-200 rounded-2xl p-4 hover:bg-gray-50">
+        <span class="h-12 w-12 rounded-xl {{ fond }} {{ couleur }} flex items-center justify-center text-lg"><i class="fas {{ icone }}"></i></span>
+        <span class="flex-1"><span class="block text-lg font-extrabold text-gray-900">{{ titre }}</span><span class="block text-sm text-gray-600">{{ aide }}</span></span>
+        <i class="fas fa-chevron-right text-gray-400"></i>
+    </a>
+    {% endfor %}
+    <a href="{{ url_for('boutique.momo_operation', operateur=op, type_='recharge') }}" class="flex items-center gap-4 bg-amber-50 border border-dashed border-amber-500 rounded-2xl p-4">
+        <span class="h-12 w-12 rounded-xl bg-amber-200 text-amber-900 flex items-center justify-center text-lg"><i class="fas fa-plus"></i></span>
+        <span class="flex-1"><span class="block text-base font-extrabold text-gray-900">Recharger le compte {{ court }}</span><span class="block text-sm text-amber-900">Ex. le grossiste vous charge 100 000 F</span></span>
+    </a>
+</div>
+{% endblock %}

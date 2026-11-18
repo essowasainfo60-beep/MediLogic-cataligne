@@ -3424,3 +3424,6 @@ def livraisons():
                            maintenant=maintenant, fcfa=msg.fcfa,
                            livrees_jour=base.filter(Commande.statut == 'livree', Commande.date_livraison >= debut_jour).count())
 
+
+# Espace Mixx & Flooz (routes dans momo_routes.py, ajoutées à ce blueprint)
+import momo_routes  # noqa: E402,F401

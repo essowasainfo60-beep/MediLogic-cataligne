@@ -1,0 +1,132 @@
+{% extends "base.html" %}
+
+{% block title %}{{ libelle }} {{ court }} - {{ current_user.nom_boutique }}{% endblock %}
+
+{% block content %}
+{% set client = type_ in ['depot', 'retrait', 'transfert'] %}
+<div class="max-w-xl mx-auto px-4 space-y-3 pb-24">
+    <a href="{{ url_for('boutique.momo_operateur', operateur=op) }}" class="inline-flex items-center gap-1 text-sm font-semibold text-gray-700"><i class="fas fa-arrow-left"></i> {{ nom }}</a>
+    <div class="flex items-center justify-between gap-2">
+        <h1 class="text-2xl font-extrabold text-gray-900">{{ libelle }} <span class="{{ 'text-yellow-600' if op == 'mixx' else 'text-blue-700' }}">{{ court }}</span></h1>
+        <span class="text-xs text-gray-600 text-right">Solde {{ court }} <b class="text-gray-900">{{ fcfa(s[op]) }}</b><br>Espèces <b class="text-gray-900">{{ fcfa(s.especes) }}</b></span>
+    </div>
+
+    <form id="formMomo" method="POST" enctype="multipart/form-data" class="space-y-3">
+        <div class="flex items-center justify-between bg-white border border-gray-200 rounded-xl px-4 py-2.5">
+            <span class="text-sm text-gray-600">Référence LivraPlus (automatique)</span>
+            <span class="font-mono font-extrabold text-gray-900">{{ ref_auto }}</span>
+        </div>
+
+        <label class="block text-sm font-semibold text-gray-700">Montant (FCFA)
+            <input id="montant" name="montant" type="number" inputmode="numeric" min="1" required value="{{ saisie.get('montant', '') }}" placeholder="Ex. 5000"
+                   class="mt-1 w-full text-3xl font-extrabold px-4 py-3 border-2 border-gray-300 rounded-2xl bg-white">
+        </label>
+        <div class="flex flex-wrap gap-2">
+            {% for v in ([50000, 100000, 200000] if type_ == 'recharge' else [1000, 2000, 5000, 10000, 20000, 50000]) %}
+            <button type="button" data-montant="{{ v }}" class="raccourci border border-gray-300 bg-white rounded-full px-3 py-1.5 text-sm font-semibold">{{ fcfa(v) }}</button>
+            {% endfor %}
+        </div>
+
+        {% if client %}
+        <label class="block text-sm font-semibold text-gray-700">{{ 'Numéro du destinataire' if type_ == 'transfert' else 'Numéro du client' }}
+            <input name="telephone" type="tel" inputmode="tel" required value="{{ saisie.get('telephone', '') }}" placeholder="90 00 00 00"
+                   class="mt-1 w-full text-lg px-4 py-3 border border-gray-300 rounded-2xl bg-white">
+        </label>
+        {% if type_ == 'transfert' %}
+        <label class="block text-sm font-semibold text-gray-700">Numéro de celui qui paie <span class="font-normal text-gray-500">(facultatif, pour lui envoyer le reçu)</span>
+            <input name="client_telephone" type="tel" inputmode="tel" value="{{ saisie.get('client_telephone', '') }}" placeholder="90 00 00 00"
+                   class="mt-1 w-full px-4 py-3 border border-gray-300 rounded-2xl bg-white">
+        </label>
+        {% endif %}
+
+        <!-- Frais -->
+        <div class="bg-white border border-gray-200 rounded-2xl p-4 space-y-3">
+            {% if marchand %}
+            <label class="flex items-center gap-3 bg-gray-50 rounded-xl px-3 py-2">
+                <input id="marchand" name="marchand" type="checkbox" value="1" class="h-5 w-5" {{ 'checked' if not saisie or saisie.get('marchand') }}>
+                <span class="text-sm"><b>Par code marchand</b> <span class="text-gray-600">: pas de frais</span></span>
+            </label>
+            {% endif %}
+            <div id="blocFrais" class="space-y-3">
+                <label class="flex items-center justify-between gap-3">
+                    <span><span class="block font-bold text-gray-900">Appliquer les frais</span>
+                        <span class="block text-xs text-gray-600">Grille {{ court }} : <b id="fraisGrille">0 F</b> pour ce montant</span></span>
+                    <input id="appliquer" name="appliquer" type="checkbox" value="1" class="h-6 w-6 accent-green-600" {{ 'checked' if not saisie or saisie.get('appliquer') }}>
+                </label>
+                <label id="ligneFrais" class="flex items-center justify-between gap-3 text-sm text-gray-700">Modifier les frais si besoin
+                    <input id="frais" name="frais" type="number" min="0" value="{{ saisie.get('frais', '') }}" class="w-28 text-right text-lg font-bold px-3 py-2 border border-gray-300 rounded-xl">
+                </label>
+            </div>
+        </div>
+
+        <!-- Ce qui se passe -->
+        <div class="bg-gray-900 text-white rounded-2xl p-4 space-y-2 text-sm">
+            <div class="flex justify-between"><span class="text-gray-300">{{ {'depot': 'Le client vous donne (espèces)', 'retrait': 'Le client vous envoie', 'transfert': 'Le client vous donne (espèces)'}[type_] }}</span><b id="ligne1">0 F</b></div>
+            <div class="flex justify-between"><span class="text-gray-300">{{ {'depot': 'Vous envoyez sur son numéro', 'retrait': 'Vous lui donnez (espèces)', 'transfert': 'Vous envoyez au destinataire'}[type_] }}</span><b id="ligne2">0 F</b></div>
+            <div class="flex justify-between border-t border-gray-700 pt-2 text-green-300"><span>Vous gagnez</span><b id="gain">0 F</b></div>
+        </div>
+        {% else %}
+        <label class="flex items-center gap-3 bg-white border border-gray-200 rounded-2xl p-4">
+            <input name="paye_caisse" type="checkbox" value="1" class="h-5 w-5" {{ 'checked' if saisie.get('paye_caisse') }}>
+            <span class="text-sm"><b>Payé avec les espèces du kiosque</b><span class="block text-gray-600">Sinon, la recharge n’enlève rien aux espèces.</span></span>
+        </label>
+        {% endif %}
+
+        <label class="block text-sm font-semibold text-gray-700">Référence du SMS {{ court }} <span class="text-red-700">(obligatoire)</span>
+            <input name="sms_ref" type="text" required autocomplete="off" value="{{ saisie.get('sms_ref', '') }}" placeholder="Ex. CI241118.1532.A12345"
+                   class="mt-1 w-full px-4 py-3 border-2 border-gray-300 rounded-2xl bg-white uppercase">
+        </label>
+        <label class="block text-sm font-semibold text-gray-700">Photo du {{ libelle|lower }} <span class="font-normal text-gray-500">(facultatif)</span>
+            <input name="photo" type="file" accept="image/*,application/pdf" class="mt-1 block w-full text-sm file:mr-3 file:rounded-lg file:border-0 file:bg-gray-100 file:px-3 file:py-2 file:font-semibold">
+        </label>
+        <label class="block text-sm font-semibold text-gray-700">Note <span class="font-normal text-gray-500">(facultatif)</span>
+            <input name="note" type="text" maxlength="200" value="{{ saisie.get('note', '') }}" class="mt-1 w-full px-4 py-2.5 border border-gray-300 rounded-xl bg-white">
+        </label>
+        <p id="alerte" class="hidden text-sm font-semibold text-red-800 bg-red-50 rounded-xl px-3 py-2"></p>
+        <button id="valider" type="submit" class="w-full bg-green-600 text-white rounded-2xl py-4 text-lg font-extrabold">Valider</button>
+    </form>
+</div>
+<script>
+(function () {
+    const GRILLE = {{ grille|tojson }}, TYPE = {{ type_|tojson }}, CLIENT = {{ client|tojson }};
+    const SOLDE = {{ s[op]|tojson }}, ESPECES = {{ s.especes|tojson }}, COURT = {{ court|tojson }};
+    const $ = (id) => document.getElementById(id);
+    const f = (n) => Math.round(n).toLocaleString('fr-FR').replace(/ | /g, ' ') + ' F';
+    let fraisTouche = !!$('frais') && $('frais').value !== '';
+    function fraisGrille(m) {
+        if (!m || m <= 0) return 0;
+        for (const [maxi, fr] of GRILLE) if (m <= maxi) return fr;
+        return GRILLE[GRILLE.length - 1][1];
+    }
+    function maj() {
+        const m = parseInt($('montant').value, 10) || 0;
+        let alerte = '';
+        if (CLIENT) {
+            const fg = fraisGrille(m);
+            $('fraisGrille').textContent = f(fg);
+            const marchand = $('marchand') && $('marchand').checked;
+            $('blocFrais').classList.toggle('hidden', !!marchand);
+            const appliquer = !marchand && $('appliquer').checked;
+            $('ligneFrais').classList.toggle('hidden', !appliquer);
+            if (!fraisTouche) $('frais').value = fg;
+            const frais = appliquer ? (parseInt($('frais').value, 10) || 0) : 0;
+            $('ligne1').textContent = f(m + frais);
+            $('ligne2').textContent = f(m);
+            $('gain').textContent = f(frais);
+            $('valider').textContent = 'Valider · ' + f(m + frais);
+            if ((TYPE === 'depot' || TYPE === 'transfert') && m > SOLDE) alerte = 'Solde ' + COURT + ' insuffisant (' + f(SOLDE) + '). Rechargez le compte d’abord.';
+            if (TYPE === 'retrait' && m > ESPECES) alerte = 'Pas assez d’espèces dans le kiosque (' + f(ESPECES) + ').';
+        } else {
+            $('valider').textContent = 'Enregistrer la recharge · ' + f(m);
+        }
+        $('alerte').textContent = alerte;
+        $('alerte').classList.toggle('hidden', !alerte);
+    }
+    document.querySelectorAll('.raccourci').forEach((b) => b.addEventListener('click', () => { $('montant').value = b.dataset.montant; fraisTouche = false; maj(); }));
+    $('montant').addEventListener('input', () => { fraisTouche = false; maj(); });
+    if ($('frais')) $('frais').addEventListener('input', () => { fraisTouche = true; maj(); });
+    ['appliquer', 'marchand'].forEach((id) => { if ($(id)) $(id).addEventListener('change', maj); });
+    maj();
+})();
+</script>
+{% endblock %}

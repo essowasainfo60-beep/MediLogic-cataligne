@@ -55,6 +55,11 @@ class Boutique(UserMixin, db.Model):
     # Abonnement mensuel (fixé par l'administrateur, voir abonnement.py)
     abonnement_prix = db.Column(db.Float, nullable=True)          # FCFA par mois ; vide ou 0 = gratuit
     abonnement_debut = db.Column(db.String(7), nullable=True)     # premier mois facturé, 'AAAA-MM'
+    # Espace Mixx by Yas / Moov Money (Flooz) : voir momo.py
+    momo_caisse = db.Column(db.String(10), nullable=True)          # 'separee' (défaut) ou 'boutique'
+    momo_seuil = db.Column(db.Integer, nullable=True)              # alerte « solde bas » (FCFA)
+    momo_grilles = db.Column(db.JSON, nullable=True)               # {'mixx': [[max, frais], …], 'flooz': […]}
+    momo_reglages = db.Column(db.JSON, nullable=True)              # {'marchand': {'mixx': bool…}, 'annulation_max': {'mixx': F…}}
     formule = db.Column(db.String(20), nullable=True)             # code d'une Formule (demarrage, pro, premium…)
     essai_fin = db.Column(db.Date, nullable=True)                 # formule Démarrage : dernier jour de l'essai gratuit
     derniere_activite = db.Column(db.DateTime, nullable=True)     # dernière utilisation de l'espace boutique
@@ -821,6 +826,7 @@ class MouvementCaisse(db.Model):
         'remboursement': ('Remboursement client', 'bg-orange-100 text-orange-800'),
         'retrait': ('Retrait', 'bg-gray-100 text-gray-800'),
         'correction': ('Correction', 'bg-gray-100 text-gray-800'),
+        'mobile_money': ('Mixx / Flooz', 'bg-yellow-100 text-yellow-800'),
     }
     CATEGORIES = ['Achat de marchandises', 'Loyer', 'Électricité / eau', 'Internet / téléphone', 'Transport',
                   'Salaires', 'Publicité', 'Emballage', 'Impôts / taxes', 'Divers']
@@ -984,6 +990,43 @@ class Formule(db.Model):
     ordre = db.Column(db.Integer, nullable=False, default=0)
     visible = db.Column(db.Boolean, nullable=False, default=True)     # proposée aux boutiques
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+
+class OperationMomo(db.Model):
+    """Opération Mixx by Yas / Moov Money (Flooz) au kiosque de la boutique (voir momo.py).
+    delta_solde / delta_especes : effet sur le solde électronique de l'opérateur et sur les espèces du kiosque."""
+    __tablename__ = 'operations_momo'
+    __table_args__ = (db.UniqueConstraint('boutique_id', 'operateur', 'numero', name='uq_momo_numero'),)
+
+    id = db.Column(db.Integer, primary_key=True)
+    boutique_id = db.Column(db.Integer, db.ForeignKey('boutiques.id'), nullable=False, index=True)
+    operateur = db.Column(db.String(10), nullable=False)            # 'mixx' | 'flooz'
+    type = db.Column(db.String(15), nullable=False)                 # depot | retrait | transfert | recharge | ajustement
+    numero = db.Column(db.Integer, nullable=False)                  # référence LivraPlus : MX-0001 / FL-0001
+    montant = db.Column(db.Float, nullable=False, default=0)
+    frais = db.Column(db.Float, nullable=False, default=0)          # gagné par la boutique
+    frais_grille = db.Column(db.Float, nullable=True)               # frais proposés par la grille (pour voir les modifications)
+    delta_solde = db.Column(db.Float, nullable=False, default=0)
+    delta_especes = db.Column(db.Float, nullable=False, default=0)
+    telephone = db.Column(db.String(30), nullable=True)             # client (ou destinataire d'un transfert)
+    client_telephone = db.Column(db.String(30), nullable=True)      # transfert : celui qui paie
+    sms_ref = db.Column(db.String(80), nullable=True)               # référence du SMS de l'opérateur
+    marchand = db.Column(db.Boolean, nullable=False, default=False) # payé par le code marchand de la boutique : sans frais
+    annule_motif = db.Column(db.String(200), nullable=True)
+    note = db.Column(db.String(200), nullable=True)
+    photo = db.deferred(db.Column(db.LargeBinary, nullable=True))
+    photo_mime = db.Column(db.String(30), nullable=True)
+    par = db.Column(db.String(120), nullable=True)
+    date = db.Column(db.DateTime, default=datetime.utcnow, index=True)
+    annulee = db.Column(db.Boolean, nullable=False, default=False)
+    annulee_par = db.Column(db.String(120), nullable=True)
+    mouvement_id = db.Column(db.Integer, nullable=True)             # caisse de la boutique (mode « avec la boutique »)
+
+    boutique = db.relationship('Boutique', backref=db.backref('operations_momo', cascade='all, delete-orphan', lazy='dynamic'))
+
+    @property
+    def ref(self):
+        return ('MX-' if self.operateur == 'mixx' else 'FL-') + f'{self.numero:04d}'
 
 
 class PaiementAbonnement(db.Model):

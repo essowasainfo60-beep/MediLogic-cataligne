@@ -1,0 +1,59 @@
+{% extends "base.html" %}
+
+{% block title %}Réglages Mixx & Flooz - {{ current_user.nom_boutique }}{% endblock %}
+
+{% block content %}
+<div class="max-w-3xl mx-auto px-4 space-y-4 pb-24">
+    <a href="{{ url_for('boutique.momo_accueil') }}" class="inline-flex items-center gap-1 text-sm font-semibold text-gray-700"><i class="fas fa-arrow-left"></i> Mixx & Flooz</a>
+    <h1 class="text-2xl font-extrabold text-gray-900">Réglages Mixx & Flooz</h1>
+
+    <form method="POST" class="space-y-4">
+        <!-- Caisse -->
+        <div class="bg-white border border-gray-200 rounded-2xl p-4 space-y-3">
+            <p class="font-bold text-gray-900">Espèces du kiosque</p>
+            <label class="flex items-start gap-3"><input type="radio" name="caisse" value="separee" class="mt-1 h-5 w-5" {{ 'checked' if separee }}>
+                <span><b>Caisse séparée</b> <span class="block text-sm text-gray-600">Les espèces Mixx / Flooz ont leur propre caisse et ne se mélangent pas avec les ventes d’articles.</span></span></label>
+            <label class="flex items-start gap-3"><input type="radio" name="caisse" value="boutique" class="mt-1 h-5 w-5" {{ 'checked' if not separee }}>
+                <span><b>Avec la caisse de la boutique</b> <span class="block text-sm text-gray-600">Chaque opération ajoute ou retire les espèces dans la caisse de la boutique (ligne « Mixx / Flooz »).</span></span></label>
+            <label class="block text-sm font-semibold text-gray-700">Alerte « solde bas » sous (FCFA)
+                <input name="seuil" type="number" min="0" step="1000" value="{{ seuil }}" class="mt-1 w-40 px-3 py-2 border border-gray-300 rounded-xl"></label>
+        </div>
+
+        <!-- Code marchand et annulation -->
+        <div class="bg-white border border-gray-200 rounded-2xl p-4 space-y-3">
+            <p class="font-bold text-gray-900">Code marchand et annulation des transferts</p>
+            {% for op, nom in operateurs.items() %}
+            <div class="border-t border-gray-100 pt-3 space-y-2">
+                <p class="text-sm font-bold text-gray-800">{{ nom }}</p>
+                <label class="flex items-center gap-3"><input type="checkbox" name="marchand_{{ op }}" value="1" class="h-5 w-5" {{ 'checked' if r.marchand[op] }}>
+                    <span class="text-sm">La boutique a un <b>code marchand</b> {{ nom }} <span class="text-gray-600">(payé par le code marchand = pas de frais)</span></span></label>
+                <label class="block text-sm text-gray-700">Annulation d’un transfert possible jusqu’à (FCFA)
+                    <input name="annulation_{{ op }}" type="number" min="0" step="500" value="{{ r.annulation_max[op] or '' }}" placeholder="montant fixé par l’opérateur"
+                           class="mt-1 w-52 px-3 py-2 border border-gray-300 rounded-xl">
+                    <span class="block text-xs text-gray-600">Au-dessus, LivraPlus refuse l’annulation. Vide = pas de limite. Montant à confirmer auprès de l’opérateur.</span></label>
+            </div>
+            {% endfor %}
+        </div>
+
+        <!-- Grilles -->
+        {% for op, nom in operateurs.items() %}
+        <div class="bg-white border border-gray-200 rounded-2xl p-4">
+            <p class="font-bold text-gray-900">Grille des frais {{ nom }}</p>
+            <p class="text-xs text-gray-600 mb-2">Appliquée aux dépôts, retraits et transferts. « Jusqu’à » = montant maximum de la tranche. Grille de départ : tarifs de retrait publiés par l’opérateur, à vérifier. Ligne vide = supprimée.</p>
+            <div class="grid grid-cols-2 gap-x-3 gap-y-1.5 text-sm">
+                <span class="text-gray-600 font-semibold">Jusqu’à (FCFA)</span><span class="text-gray-600 font-semibold">Frais (FCFA)</span>
+                {% for maxi, frais in grilles[op] %}
+                <input name="{{ op }}_max" type="number" min="1" value="{{ maxi }}" aria-label="Montant maximum de la tranche" class="px-3 py-1.5 border border-gray-300 rounded-lg">
+                <input name="{{ op }}_frais" type="number" min="0" value="{{ frais }}" aria-label="Frais de la tranche" class="px-3 py-1.5 border border-gray-300 rounded-lg">
+                {% endfor %}
+                {% for i in range(3) %}
+                <input name="{{ op }}_max" type="number" min="1" placeholder="nouvelle tranche" aria-label="Montant maximum d'une nouvelle tranche" class="px-3 py-1.5 border border-dashed border-gray-300 rounded-lg">
+                <input name="{{ op }}_frais" type="number" min="0" placeholder="frais" aria-label="Frais de la nouvelle tranche" class="px-3 py-1.5 border border-dashed border-gray-300 rounded-lg">
+                {% endfor %}
+            </div>
+        </div>
+        {% endfor %}
+        <button class="w-full bg-purple-600 text-white rounded-2xl py-3.5 font-bold">Enregistrer les réglages</button>
+    </form>
+</div>
+{% endblock %}

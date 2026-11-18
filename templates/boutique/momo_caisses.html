@@ -1,0 +1,98 @@
+{% extends "base.html" %}
+
+{% block title %}Caisses Mixx & Flooz - {{ current_user.nom_boutique }}{% endblock %}
+
+{% block content %}
+<div class="max-w-4xl mx-auto px-4 space-y-4 pb-24">
+    <div class="flex flex-wrap items-end justify-between gap-2">
+        <div>
+            <a href="{{ url_for('boutique.momo_accueil') }}" class="no-print inline-flex items-center gap-1 text-sm font-semibold text-gray-700"><i class="fas fa-arrow-left"></i> Mixx & Flooz</a>
+            <h1 class="text-2xl font-extrabold text-gray-900">Caisses, gains et statistiques</h1>
+        </div>
+        <div class="no-print flex gap-2">
+            <button type="button" onclick="window.print()" class="bg-gray-800 text-white px-3 py-2 rounded-xl text-sm font-semibold"><i class="fas fa-print mr-1"></i> Imprimer</button>
+            <a href="{{ url_for('boutique.momo_journal_csv') }}" class="bg-green-600 text-white px-3 py-2 rounded-xl text-sm font-semibold"><i class="fas fa-file-excel mr-1"></i> Excel</a>
+        </div>
+    </div>
+
+    <div class="no-print grid grid-cols-3 gap-1 bg-gray-200 rounded-xl p-1">
+        {% for code, txt in [('mixx', 'Mixx'), ('flooz', 'Flooz'), ('ensemble', 'Les deux')] %}
+        <a href="{{ url_for('boutique.momo_caisses', voir=code, periode=periode) }}" class="text-center rounded-lg py-2 text-sm font-bold {{ 'bg-white text-gray-900 shadow-sm' if onglet == code else 'text-gray-700' }}">{{ txt }}</a>
+        {% endfor %}
+    </div>
+    <div class="no-print flex gap-2">
+        {% for code, (j, txt) in periodes.items() %}
+        <a href="{{ url_for('boutique.momo_caisses', voir=onglet, periode=code) }}" class="flex-1 text-center rounded-full py-2 text-sm font-bold border {{ 'bg-gray-900 text-white border-gray-900' if periode == code else 'bg-white text-gray-700 border-gray-300' }}">{{ txt }}</a>
+        {% endfor %}
+    </div>
+    <p class="print-only hidden text-sm">{{ {'mixx': 'Mixx by Yas', 'flooz': 'Moov Money (Flooz)', 'ensemble': 'Mixx et Flooz'}[onglet] }} · {{ periodes[periode][1] }}</p>
+
+    <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        <div class="bg-green-800 text-white rounded-2xl p-4"><p class="text-xs text-green-100">Gagné ({{ periodes[periode][1]|lower }})</p><p class="text-2xl font-extrabold">{{ fcfa(st.frais) }}</p></div>
+        <div class="bg-white border border-gray-200 rounded-2xl p-4"><p class="text-xs text-gray-600">Opérations</p><p class="text-2xl font-extrabold">{{ st.nb }}</p><p class="text-xs text-gray-600">{{ fcfa(st.volume) }} traités</p></div>
+        {% if onglet == 'ensemble' %}
+        <div class="bg-white border border-gray-200 rounded-2xl p-4"><p class="text-xs text-gray-600">Soldes Mixx + Flooz</p><p class="text-xl font-extrabold">{{ fcfa(s.mixx + s.flooz) }}</p><p class="text-xs text-gray-600">Mixx {{ fcfa(s.mixx) }} · Flooz {{ fcfa(s.flooz) }}</p></div>
+        {% else %}
+        <div class="bg-white border border-gray-200 rounded-2xl p-4"><p class="text-xs text-gray-600">Solde {{ operateurs[onglet] }}</p><p class="text-xl font-extrabold">{{ fcfa(s[onglet]) }}</p></div>
+        {% endif %}
+        <div class="bg-white border border-gray-200 rounded-2xl p-4"><p class="text-xs text-gray-600">Espèces du kiosque</p><p class="text-xl font-extrabold">{{ fcfa(s.especes) }}</p>
+            <p class="text-xs text-gray-600">{{ 'caisse séparée' if separee else 'dans la caisse de la boutique' }}</p></div>
+    </div>
+
+    <!-- Graphique 7 jours -->
+    <div class="bg-white border border-gray-200 rounded-2xl p-4">
+        <p class="text-sm font-bold text-gray-900 mb-3">Frais gagnés, 7 derniers jours</p>
+        <div class="grid grid-cols-7 gap-2 items-end h-36" role="img" aria-label="Frais gagnés par jour sur les 7 derniers jours">
+            {% for j in st.jours7 %}
+            <div class="flex flex-col items-center justify-end gap-1 h-full">
+                <span class="text-[10px] font-bold text-gray-700">{{ fcfa(j.frais)|replace(' F', '') }}</span>
+                <div class="w-full rounded-t-md bg-green-600" style="height: {{ [4, (100 * j.frais / st.max7)|round|int]|max }}px"></div>
+                <span class="text-[10px] text-gray-600">{{ j.jour.strftime('%d/%m') }}</span>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+
+    <!-- Détail -->
+    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div class="bg-white border border-gray-200 rounded-2xl p-4">
+            <p class="text-sm font-bold text-gray-900 mb-2">Par opération</p>
+            {% for t, lib in types.items() if st.par_type[t].nb %}
+            <div class="flex justify-between text-sm py-1.5 border-t border-gray-100">
+                <span>{{ lib }} <span class="text-gray-600">({{ st.par_type[t].nb }})</span></span>
+                <span><b>{{ fcfa(st.par_type[t].montant) }}</b>{% if st.par_type[t].frais %} <span class="text-green-700">· +{{ fcfa(st.par_type[t].frais) }}</span>{% endif %}</span>
+            </div>
+            {% else %}<p class="text-sm text-gray-600">Aucune opération sur cette période.</p>{% endfor %}
+        </div>
+        <div class="bg-white border border-gray-200 rounded-2xl p-4">
+            <p class="text-sm font-bold text-gray-900 mb-2">Par vendeur</p>
+            {% for nom, v in st.par_vendeur %}
+            <div class="flex justify-between text-sm py-1.5 border-t border-gray-100"><span>{{ nom }} <span class="text-gray-600">({{ v.nb }})</span></span><b class="text-green-700">+{{ fcfa(v.frais) }}</b></div>
+            {% else %}<p class="text-sm text-gray-600">—</p>{% endfor %}
+        </div>
+    </div>
+
+    <!-- Journal -->
+    <div class="bg-white border border-gray-200 rounded-2xl overflow-x-auto">
+        <p class="px-4 py-3 font-bold text-gray-900 border-b border-gray-100">Journal des opérations</p>
+        <table class="w-full text-sm">
+            <thead class="bg-gray-50 text-gray-600 text-left"><tr><th class="px-3 py-2">Date</th><th class="px-3 py-2">Réf.</th><th class="px-3 py-2">Opération</th><th class="px-3 py-2 text-right">Montant</th><th class="px-3 py-2 text-right">Frais</th><th class="px-3 py-2">SMS</th><th class="px-3 py-2">Par</th></tr></thead>
+            <tbody class="divide-y divide-gray-100">
+            {% for o in journal %}
+            <tr class="{{ 'opacity-50 line-through' if o.annulee }}">
+                <td class="px-3 py-2 whitespace-nowrap">{{ o.date.strftime('%d/%m %H:%M') }}</td>
+                <td class="px-3 py-2 font-mono"><a class="text-purple-700" href="{{ url_for('boutique.momo_detail', op_id=o.id) }}">{{ o.ref }}</a></td>
+                <td class="px-3 py-2">{{ types[o.type] }} {{ courts[o.operateur] }}{% if o.marchand %} <span class="text-xs text-gray-600">(marchand)</span>{% endif %}</td>
+                <td class="px-3 py-2 text-right whitespace-nowrap">{{ fcfa(o.montant) }}</td>
+                <td class="px-3 py-2 text-right whitespace-nowrap">{{ fcfa(o.frais) if o.frais else '—' }}</td>
+                <td class="px-3 py-2 font-mono text-xs">{{ o.sms_ref or o.note or '' }}</td>
+                <td class="px-3 py-2 text-gray-600">{{ o.par or '' }}</td>
+            </tr>
+            {% else %}
+            <tr><td colspan="7" class="px-3 py-4 text-gray-600">Aucune opération.</td></tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}
