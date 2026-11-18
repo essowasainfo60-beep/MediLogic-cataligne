@@ -12,55 +12,87 @@ Règles :
 import os
 from datetime import date, datetime, timedelta
 
-from models import db, Article, MouvementCaisse, PaiementAbonnement
+from models import db, Article, Formule, MouvementCaisse, PaiementAbonnement
 
 CATEGORIE = 'Abonnement logiciel'
 JOUR_LIMITE = 8
 
-# ---- Formules d'abonnement ----
+# ---- Formules d'abonnement (table « formules », modifiables depuis l'espace de L'UNIK) ----
 # articles / videos : nombre maximum (None = illimité) ; module : vente au comptoir et outils
-# « Ma Boutique » (caisse, tickets, scanner, créances, approvisionnement…) ; essai_jours : essai gratuit.
-FORMULES = {
-    'demarrage': {'nom': 'Démarrage', 'prix': 0, 'articles': 100, 'videos': 3, 'module': False, 'essai_jours': 30,
-                  'couleur': 'bg-sky-100 text-sky-800 border-sky-300', 'icone': 'fa-seedling'},
-    'pro': {'nom': 'Pro', 'prix': 10000, 'articles': 100, 'videos': 15, 'module': True,
-            'couleur': 'bg-indigo-100 text-indigo-800 border-indigo-300', 'icone': 'fa-star'},
-    'premium': {'nom': 'Premium', 'prix': 25000, 'articles': None, 'videos': None, 'module': True,
-                'couleur': 'bg-amber-100 text-amber-800 border-amber-400', 'icone': 'fa-crown'},
+# « Ma Boutique » (caisse, tickets, scanner, créances, approvisionnement…) ; essai_jours : formule gratuite
+# d'essai (bloquée à la fin de l'essai).
+DEFAUTS = [
+    dict(code='demarrage', nom='Démarrage', prix=0, articles=100, videos=3, module=False, essai_jours=30, couleur='ciel', icone='fa-seedling', ordre=1),
+    dict(code='pro', nom='Pro', prix=10000, articles=100, videos=15, module=True, essai_jours=None, couleur='indigo', icone='fa-star', ordre=2),
+    dict(code='premium', nom='Premium', prix=25000, articles=None, videos=None, module=True, essai_jours=None, couleur='or', icone='fa-crown', ordre=3),
+]
+COULEURS = {   # nom → classes du badge
+    'ciel': 'bg-sky-100 text-sky-800 border-sky-300', 'indigo': 'bg-indigo-100 text-indigo-800 border-indigo-300',
+    'or': 'bg-amber-100 text-amber-800 border-amber-400', 'vert': 'bg-emerald-100 text-emerald-800 border-emerald-300',
+    'rose': 'bg-rose-100 text-rose-800 border-rose-300', 'violet': 'bg-purple-100 text-purple-800 border-purple-300',
+    'noir': 'bg-gray-900 text-white border-gray-900',
 }
+ICONES = {'fa-seedling': 'Pousse', 'fa-star': 'Étoile', 'fa-crown': 'Couronne', 'fa-gem': 'Diamant', 'fa-rocket': 'Fusée',
+          'fa-bolt': 'Éclair', 'fa-medal': 'Médaille', 'fa-fire': 'Flamme'}
 # Boutique qui gère les abonnements de toutes les boutiques (L'UNIK, la boutique phare) :
 # toujours Premium, jamais rien à payer, jamais suspendue.
 GESTIONNAIRE_ID = int(os.environ.get('LIVRAPLUS_GESTIONNAIRE_ID') or 4)
-# Le module « Ma Boutique » n'est ouvert qu'aux formules qui l'incluent (Pro, Premium).
+FORMULE_PHARE = 'premium'
+# Le module « Ma Boutique » n'est ouvert qu'aux formules qui l'incluent (Pro, Premium…).
 # Une boutique sans formule (anciennes boutiques, en attendant qu'on leur en donne une) garde tout.
 MODULE_BOUTIQUE_RESERVE = True
-PRIX_MODULE_BOUTIQUE = FORMULES['pro']['prix']
+
+
+def _vers_dict(f):
+    return {'id': f.id, 'code': f.code, 'nom': f.nom, 'prix': f.prix or 0, 'articles': f.articles, 'videos': f.videos,
+            'module': f.module, 'essai_jours': f.essai_jours if (f.essai_jours and not f.prix) else None,
+            'couleur': COULEURS.get(f.couleur, COULEURS['indigo']), 'nom_couleur': f.couleur, 'icone': f.icone,
+            'visible': f.visible, 'ordre': f.ordre}
+
+
+def formules(toutes=True):
+    """{code: infos} dans l'ordre ; crée les 3 formules de départ la première fois."""
+    lignes = Formule.query.order_by(Formule.ordre, Formule.prix).all()
+    if not lignes:
+        for d in DEFAUTS:
+            db.session.add(Formule(**d))
+        db.session.commit()
+        lignes = Formule.query.order_by(Formule.ordre, Formule.prix).all()
+    return {f.code: _vers_dict(f) for f in lignes if toutes or f.visible}
 
 
 def est_gestionnaire(boutique):
     return boutique is not None and boutique.id == GESTIONNAIRE_ID
 
 
-def formule(boutique):
-    """Code de la formule ('demarrage', 'pro', 'premium') ou None (pas encore de formule)."""
+def infos_formule(boutique):
+    """Infos de la formule de la boutique, ou None (pas encore de formule)."""
     if boutique is None:
         return None
+    toutes = formules()
     if est_gestionnaire(boutique):
-        return 'premium'
-    return boutique.formule if boutique.formule in FORMULES else None
+        return toutes.get(FORMULE_PHARE) or {'code': FORMULE_PHARE, 'nom': 'Premium', 'prix': 0, 'articles': None, 'videos': None,
+                                             'module': True, 'essai_jours': None, 'couleur': COULEURS['or'], 'icone': 'fa-crown'}
+    return toutes.get(boutique.formule) if boutique.formule else None
 
 
-def infos_formule(boutique):
-    f = formule(boutique)
-    return dict(FORMULES[f], code=f) if f else None
+def formule(boutique):
+    f = infos_formule(boutique)
+    return f['code'] if f else None
 
 
 def module_boutique(boutique):
     """La boutique a-t-elle accès à la vente au comptoir et aux outils « Ma Boutique » ?"""
     if not MODULE_BOUTIQUE_RESERVE or boutique is None:
         return True
-    f = formule(boutique)
-    return True if f is None else FORMULES[f]['module']
+    f = infos_formule(boutique)
+    return True if f is None else f['module']
+
+
+def formules_avec_module():
+    """Texte : « Pro (10 000 FCFA par mois), Premium… » pour expliquer où est la vente au comptoir."""
+    avec = [f for f in formules(toutes=False).values() if f['module']]
+    return ', '.join(f"{f['nom']} ({int(f['prix']):,} FCFA par mois)".replace(',', ' ') if f['prix'] else f['nom'] for f in avec) or 'supérieures'
 
 
 def utilisation(boutique):
@@ -70,42 +102,113 @@ def utilisation(boutique):
 
 
 def limite(boutique, quoi):
-    f = formule(boutique)
-    return FORMULES[f][quoi] if f else None
+    f = infos_formule(boutique)
+    return f[quoi] if f else None
 
 
 def peut_ajouter(boutique, quoi, combien=1):
     """(True, None) ou (False, message) : 'articles' ou 'videos'."""
-    maxi = limite(boutique, quoi)
+    f = infos_formule(boutique)
+    maxi = f[quoi] if f else None
     if maxi is None:
         return True, None
     deja = utilisation(boutique)[quoi]
     if deja + combien <= maxi:
         return True, None
-    nom = FORMULES[formule(boutique)]['nom']
     chose = 'articles en vente' if quoi == 'articles' else 'vidéos'
-    return False, (f"Votre formule {nom} permet {maxi} {chose} (vous en avez {deja}). "
+    return False, (f"Votre formule {f['nom']} permet {maxi} {chose} (vous en avez {deja}). "
                    f"Archivez-en un ou passez à une formule supérieure (page Abonnement).")
 
 
 def choisir_formule(boutique, code, prix=None, debut=None, essai_fin=None):
     """Donne une formule à une boutique (par la boutique gestionnaire). code '' = aucune formule (gratuit)."""
-    if code and code not in FORMULES:
+    f = formules().get(code) if code else None
+    if code and not f:
         raise ValueError('Formule inconnue')
     boutique.formule = code or None
-    if code == 'demarrage':
+    if f and f['essai_jours']:
         boutique.abonnement_prix = None
         boutique.abonnement_debut = None
-        boutique.essai_fin = essai_fin or boutique.essai_fin or (date.today() + timedelta(days=FORMULES['demarrage']['essai_jours']))
-    elif code:
-        boutique.abonnement_prix = prix if prix is not None else FORMULES[code]['prix']
-        boutique.abonnement_debut = debut or boutique.abonnement_debut or premier_mois_par_defaut()
+        boutique.essai_fin = essai_fin or boutique.essai_fin or (date.today() + timedelta(days=f['essai_jours']))
+    elif f:
+        boutique.abonnement_prix = (prix if prix is not None else f['prix']) or None
+        boutique.abonnement_debut = (debut or boutique.abonnement_debut or premier_mois_par_defaut()) if boutique.abonnement_prix else None
         boutique.essai_fin = None
     else:
         boutique.abonnement_prix = None
         boutique.abonnement_debut = None
         boutique.essai_fin = None
     db.session.commit()
+
+
+def nouveau_code(nom):
+    """Code court et unique tiré du nom (« Premium Pro Max » → premium-pro-max)."""
+    import re
+    import unicodedata
+    base = unicodedata.normalize('NFKD', nom).encode('ascii', 'ignore').decode().lower()
+    base = re.sub(r'[^a-z0-9]+', '-', base).strip('-')[:16] or 'formule'
+    code, n = base, 2
+    while Formule.query.filter_by(code=code).first():
+        code, n = f'{base}-{n}', n + 1
+    return code
+
+
+def enregistrer_formule(f, donnees, appliquer_aux_boutiques=False):
+    """Crée ou modifie une formule. donnees : nom, prix, articles, videos, module, essai_jours, couleur, icone, visible.
+    Renvoie (formule, nb de boutiques dont le prix a suivi, None) ou (None, 0, erreur)."""
+    from models import Boutique
+    nom = (donnees.get('nom') or '').strip()[:40]
+    if not nom:
+        return None, 0, 'Donnez un nom à la formule'
+    def entier(v, mini=1):
+        v = (str(v) if v is not None else '').strip().replace(' ', '')
+        if not v:
+            return None
+        n = int(float(v.replace(',', '.')))
+        if n < mini:
+            raise ValueError
+        return n
+    try:
+        prix = float((str(donnees.get('prix') or '0')).replace(' ', '').replace(',', '.'))
+        if prix < 0:
+            raise ValueError
+        articles, videos = entier(donnees.get('articles')), entier(donnees.get('videos'))
+        essai = entier(donnees.get('essai_jours'))
+        if essai is not None and essai > 365:
+            raise ValueError
+    except (TypeError, ValueError):
+        return None, 0, 'Prix, limites ou jours d\'essai invalides (des nombres positifs, vide = illimité)'
+    autre = Formule.query.filter(db.func.lower(Formule.nom) == nom.lower()).first()
+    if autre and autre is not f:
+        return None, 0, f'Une formule s\'appelle déjà « {nom} »'
+    nouvelle = f is None
+    if nouvelle:
+        f = Formule(code=nouveau_code(nom), ordre=(db.session.query(db.func.max(Formule.ordre)).scalar() or 0) + 1)
+        db.session.add(f)
+    ancien_prix = f.prix
+    f.nom, f.prix, f.articles, f.videos = nom, prix, articles, videos
+    f.module = bool(donnees.get('module'))
+    f.essai_jours = essai if not prix else None
+    f.couleur = donnees.get('couleur') if donnees.get('couleur') in COULEURS else (f.couleur or 'indigo')
+    f.icone = donnees.get('icone') if donnees.get('icone') in ICONES else (f.icone or 'fa-star')
+    f.visible = bool(donnees.get('visible', True))
+    suivies = 0
+    if not nouvelle and appliquer_aux_boutiques and ancien_prix != prix and prix:
+        # Boutiques sur cette formule qui payaient le prix normal (pas celles qui ont une remise)
+        for b in Boutique.query.filter_by(formule=f.code).all():
+            if b.abonnement_prix == ancien_prix and not est_gestionnaire(b):
+                b.abonnement_prix = prix
+                b.abonnement_debut = b.abonnement_debut or premier_mois_par_defaut()
+                suivies += 1
+    db.session.commit()
+    return f, suivies, None
+
+
+def nb_boutiques(code):
+    from models import Boutique
+    return Boutique.query.filter_by(formule=code).count()
+
+
 MOIS_FR = ['janvier', 'février', 'mars', 'avril', 'mai', 'juin', 'juillet', 'août',
            'septembre', 'octobre', 'novembre', 'décembre']
 
@@ -142,7 +245,8 @@ def etat(boutique, aujourdhui=None):
     aujourdhui = aujourdhui or date.today()
     if est_gestionnaire(boutique):
         return {'niveau': 'gratuit', 'exige': False, 'bloque': False, 'prix': 0, 'mois_a_payer': None}
-    if formule(boutique) == 'demarrage':
+    infos = infos_formule(boutique)
+    if infos and infos['essai_jours']:
         fin = boutique.essai_fin or aujourdhui
         reste = (fin - aujourdhui).days
         if reste < 0:

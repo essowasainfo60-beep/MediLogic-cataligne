@@ -66,7 +66,8 @@ ROLES_AUTORISES = {'vendeur': set(), 'caissier': CAISSE, 'gestionnaire': CAISSE 
 
 
 # Gestion des abonnements de toutes les boutiques : gérant de la boutique gestionnaire (L'UNIK) seulement
-GESTION_ABONNEMENTS = {'gestion_abonnements', 'gestion_formule', 'gestion_activer', 'gestion_encaisser', 'gestion_annuler_paiement'}
+GESTION_ABONNEMENTS = {'gestion_abonnements', 'gestion_formule', 'gestion_activer', 'gestion_encaisser', 'gestion_annuler_paiement',
+                       'gestion_formules_creer', 'gestion_formules_modifier', 'gestion_formules_supprimer'}
 
 
 def peut(endpoint):
@@ -209,7 +210,7 @@ def verifier_abonnement_et_activite():
     nom_page = request.endpoint.split('.')[-1]
     if nom_page in MODULE_BOUTIQUE and not abonnement.module_boutique(boutique):
         message = (f"La vente au comptoir (caisse, tickets, scanner, créances, approvisionnement…) est incluse dans "
-                   f"les formules Pro ({abonnement.PRIX_MODULE_BOUTIQUE:,} FCFA par mois) et Premium.".replace(',', ' '))
+                   f"les formules {abonnement.formules_avec_module()}.")
         if request.accept_mimetypes.best == 'application/json' or request.is_json:
             return jsonify(success=False, message=message), 402
         flash(message, 'warning')
@@ -2726,7 +2727,7 @@ def abonnement_page():
     gestionnaire = db.session.get(Boutique, abonnement.GESTIONNAIRE_ID)
     return render_template('boutique/abonnement.html', boutique=boutique, situation=abonnement.etat(boutique),
                            modes=abonnement.MODES, paiements=boutique.paiements_abonnement, fcfa=msg.fcfa,
-                           aujourdhui=datetime.utcnow().strftime('%Y-%m-%d'), formules=abonnement.FORMULES,
+                           aujourdhui=datetime.utcnow().strftime('%Y-%m-%d'), formules=abonnement.formules(toutes=False),
                            formule=abonnement.infos_formule(boutique), utilise=abonnement.utilisation(boutique),
                            gestionnaire=gestionnaire if gestionnaire and gestionnaire.id != boutique.id else None,
                            est_gestionnaire=abonnement.est_gestionnaire(boutique))
@@ -2746,6 +2747,7 @@ def _boutique_geree(boutique_id):
 def gestion_abonnements():
     """Toutes les boutiques : formule, situation, activation, paiements."""
     fiches = []
+    toutes_formules = abonnement.formules()
     for b in Boutique.query.filter(Boutique.id != abonnement.GESTIONNAIRE_ID).order_by(Boutique.active, Boutique.date_inscription.desc()).all():
         activites = [d for d in [b.derniere_activite] + [v.derniere_activite for v in b.vendeurs] if d]
         fiches.append({'b': b, 'etat': abonnement.etat(b), 'formule': abonnement.infos_formule(b),
@@ -2757,7 +2759,7 @@ def gestion_abonnements():
     resume = {
         'total': len(fiches), 'actives': sum(1 for f in fiches if f['b'].active),
         'attente_activation': sum(1 for f in fiches if not f['b'].active),
-        'par_formule': {c: sum(1 for f in fiches if f['formule'] and f['formule']['code'] == c) for c in abonnement.FORMULES},
+        'par_formule': {c: sum(1 for f in fiches if f['formule'] and f['formule']['code'] == c) for c in toutes_formules},
         'a_jour': sum(1 for f in payantes if f['etat']['niveau'] == 'ok'),
         'en_retard': sum(1 for f in fiches if f['etat']['bloque'] or f['etat']['niveau'] in ('jaune', 'orange', 'rouge')),
         'attendu': sum(f['etat']['prix'] for f in payantes),
@@ -2768,10 +2770,11 @@ def gestion_abonnements():
         fiches = [f for f in fiches if not f['b'].active]
     elif filtre == 'retard':
         fiches = [f for f in fiches if f['etat']['bloque'] or f['etat']['niveau'] in ('jaune', 'orange', 'rouge')]
-    elif filtre in abonnement.FORMULES:
+    elif filtre in toutes_formules:
         fiches = [f for f in fiches if f['formule'] and f['formule']['code'] == filtre]
     return render_template('boutique/gestion_abonnements.html', fiches=fiches, resume=resume, paiements=paiements,
-                           formules=abonnement.FORMULES, fcfa=msg.fcfa, modes=PaiementAbonnement.MODES, filtre=filtre,
+                           formules=toutes_formules, fcfa=msg.fcfa, modes=PaiementAbonnement.MODES, filtre=filtre,
+                           couleurs=abonnement.COULEURS, icones=abonnement.ICONES,
                            mois_libelle=abonnement.libelle_mois(mois), premier_mois=abonnement.premier_mois_par_defaut(),
                            aujourdhui=datetime.utcnow().date())
 
@@ -2782,11 +2785,12 @@ def gestion_formule(boutique_id):
     """Programmer l'abonnement : formule, prix (remise possible), premier mois facturé, fin de l'essai."""
     b = _boutique_geree(boutique_id)
     code = request.form.get('formule') or ''
-    if code and code not in abonnement.FORMULES:
+    toutes_formules = abonnement.formules()
+    if code and code not in toutes_formules:
         flash('Formule inconnue', 'danger')
         return redirect(url_for('boutique.gestion_abonnements'))
     prix = None
-    if code and code != 'demarrage' and (request.form.get('prix') or '').strip():
+    if code and not toutes_formules[code]['essai_jours'] and (request.form.get('prix') or '').strip():
         prix = lire_prix(request.form.get('prix'))
         if prix is None or prix < 0:
             flash('Prix invalide', 'danger')
@@ -2799,11 +2803,13 @@ def gestion_formule(boutique_id):
     abonnement.choisir_formule(b, code, prix=prix, debut=debut, essai_fin=essai_fin.date() if essai_fin else None)
     if not code:
         flash(f"{b.nom_boutique} : aucune formule (rien à payer, aucune limite)", 'success')
-    elif code == 'demarrage':
-        flash(f"{b.nom_boutique} : formule Démarrage, essai gratuit jusqu'au {b.essai_fin.strftime('%d/%m/%Y')}", 'success')
-    else:
-        flash(f"{b.nom_boutique} : formule {abonnement.FORMULES[code]['nom']}, {msg.fcfa(b.abonnement_prix or 0)} par mois "
+    elif b.essai_fin:
+        flash(f"{b.nom_boutique} : formule {toutes_formules[code]['nom']}, essai gratuit jusqu'au {b.essai_fin.strftime('%d/%m/%Y')}", 'success')
+    elif b.abonnement_prix:
+        flash(f"{b.nom_boutique} : formule {toutes_formules[code]['nom']}, {msg.fcfa(b.abonnement_prix or 0)} par mois "
               f"à partir de {abonnement.libelle_mois(b.abonnement_debut)}", 'success')
+    else:
+        flash(f"{b.nom_boutique} : formule {toutes_formules[code]['nom']} (gratuite)", 'success')
     return redirect(url_for('boutique.gestion_abonnements', _anchor=f'b{b.id}'))
 
 
@@ -2813,8 +2819,9 @@ def gestion_activer(boutique_id):
     """Activer (nouvelle inscription) ou désactiver une boutique."""
     b = _boutique_geree(boutique_id)
     b.active = request.form.get('active') == '1'
-    if b.active and not b.formule and request.form.get('essai'):
-        abonnement.choisir_formule(b, 'demarrage')
+    essai = next((c for c, f in abonnement.formules(toutes=False).items() if f['essai_jours']), None)
+    if b.active and not b.formule and request.form.get('essai') and essai:
+        abonnement.choisir_formule(b, essai)
     db.session.commit()
     flash(f"{b.nom_boutique} " + ('activée' + (f" (essai Démarrage jusqu'au {b.essai_fin.strftime('%d/%m/%Y')})" if b.essai_fin else '')
                                   if b.active else 'désactivée : elle ne peut plus se connecter'), 'success' if b.active else 'warning')
@@ -2835,6 +2842,52 @@ def gestion_encaisser(boutique_id):
     else:
         flash(f'{b.nom_boutique} : {paiement.mois_libelle} payé ({msg.fcfa(paiement.montant)})', 'success')
     return redirect(url_for('boutique.gestion_abonnements', _anchor=f'b{b.id}'))
+
+
+@boutique_bp.route('/abonnements/formules', methods=['POST'])
+@login_required
+def gestion_formules_creer():
+    """Nouvelle formule (ex. « Premium Pro Max » à 50 000 FCFA)."""
+    f, _, erreur = abonnement.enregistrer_formule(None, _donnees_formule())
+    flash(erreur or f"Formule « {f.nom} » créée ({msg.fcfa(f.prix) + ' par mois' if f.prix else 'gratuite'})",
+          'danger' if erreur else 'success')
+    return redirect(url_for('boutique.gestion_abonnements', formules=1, _anchor='formules'))
+
+
+@boutique_bp.route('/abonnements/formules/<int:formule_id>', methods=['POST'])
+@login_required
+def gestion_formules_modifier(formule_id):
+    """Modifier le prix, le nom, les limites… d'une formule."""
+    from models import Formule
+    f = db.session.get(Formule, formule_id) or abort(404)
+    f, suivies, erreur = abonnement.enregistrer_formule(f, _donnees_formule(), bool(request.form.get('appliquer')))
+    if erreur:
+        flash(erreur, 'danger')
+    else:
+        flash(f"Formule « {f.nom} » enregistrée" + (f" : nouveau prix appliqué à {suivies} boutique(s)" if suivies else ''), 'success')
+    return redirect(url_for('boutique.gestion_abonnements', formules=1, _anchor='formules'))
+
+
+@boutique_bp.route('/abonnements/formules/<int:formule_id>/supprimer', methods=['POST'])
+@login_required
+def gestion_formules_supprimer(formule_id):
+    """Supprimer une formule que plus aucune boutique n'utilise (sinon : la masquer)."""
+    from models import Formule
+    f = db.session.get(Formule, formule_id) or abort(404)
+    if f.code == abonnement.FORMULE_PHARE or abonnement.nb_boutiques(f.code):
+        flash(f"« {f.nom} » est utilisée par des boutiques : changez d'abord leur formule, ou décochez « Proposée aux boutiques ».", 'warning')
+    else:
+        db.session.delete(f)
+        db.session.commit()
+        flash(f"Formule « {f.nom} » supprimée", 'success')
+    return redirect(url_for('boutique.gestion_abonnements', formules=1, _anchor='formules'))
+
+
+def _donnees_formule():
+    fo = request.form
+    return {'nom': fo.get('nom'), 'prix': fo.get('prix'), 'articles': fo.get('articles'), 'videos': fo.get('videos'),
+            'module': fo.get('module'), 'essai_jours': fo.get('essai_jours'), 'couleur': fo.get('couleur'),
+            'icone': fo.get('icone'), 'visible': fo.get('visible')}
 
 
 @boutique_bp.route('/abonnements/paiement/<int:paiement_id>/annuler', methods=['POST'])

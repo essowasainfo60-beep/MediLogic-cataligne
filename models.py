@@ -55,7 +55,7 @@ class Boutique(UserMixin, db.Model):
     # Abonnement mensuel (fixé par l'administrateur, voir abonnement.py)
     abonnement_prix = db.Column(db.Float, nullable=True)          # FCFA par mois ; vide ou 0 = gratuit
     abonnement_debut = db.Column(db.String(7), nullable=True)     # premier mois facturé, 'AAAA-MM'
-    formule = db.Column(db.String(20), nullable=True)             # 'demarrage' | 'pro' | 'premium' (voir abonnement.FORMULES)
+    formule = db.Column(db.String(20), nullable=True)             # code d'une Formule (demarrage, pro, premium…)
     essai_fin = db.Column(db.Date, nullable=True)                 # formule Démarrage : dernier jour de l'essai gratuit
     derniere_activite = db.Column(db.DateTime, nullable=True)     # dernière utilisation de l'espace boutique
     # Code secret du lien envoyé aux clients (/c/<code>) : impossible à deviner,
@@ -965,6 +965,25 @@ class Parametre(db.Model):
 
     cle = db.Column(db.String(50), primary_key=True)
     valeur = db.Column(db.Text, nullable=False)
+
+
+class Formule(db.Model):
+    """Formule d'abonnement LivraPlus (modifiable par la boutique gestionnaire : prix, limites…)."""
+    __tablename__ = 'formules'
+
+    id = db.Column(db.Integer, primary_key=True)
+    code = db.Column(db.String(20), unique=True, nullable=False)      # repris dans Boutique.formule
+    nom = db.Column(db.String(40), nullable=False)
+    prix = db.Column(db.Float, nullable=False, default=0)             # FCFA par mois (0 = gratuit)
+    articles = db.Column(db.Integer, nullable=True)                   # maximum d'articles en vente (vide = illimité)
+    videos = db.Column(db.Integer, nullable=True)                     # maximum de vidéos (vide = illimité)
+    module = db.Column(db.Boolean, nullable=False, default=True)      # vente au comptoir et outils « Ma Boutique »
+    essai_jours = db.Column(db.Integer, nullable=True)                # gratuite + jours > 0 : essai, puis blocage
+    couleur = db.Column(db.String(30), nullable=False, default='indigo')
+    icone = db.Column(db.String(30), nullable=False, default='fa-star')
+    ordre = db.Column(db.Integer, nullable=False, default=0)
+    visible = db.Column(db.Boolean, nullable=False, default=True)     # proposée aux boutiques
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
 
 class PaiementAbonnement(db.Model):

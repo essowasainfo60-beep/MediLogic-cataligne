@@ -15,7 +15,33 @@
 </span>
 {% endmacro %}
 
+{% macro champs_formule(f, couleurs, icones) %}
+<div class="grid grid-cols-2 sm:grid-cols-3 gap-2">
+    <label class="col-span-2 sm:col-span-1 text-gray-500">Nom
+        <input type="text" name="nom" required maxlength="40" value="{{ f.nom if f else '' }}" placeholder="ex. Premium Pro Max" class="block mt-1 w-full border border-gray-300 rounded-lg px-2 py-1.5"></label>
+    <label class="text-gray-500">Prix / mois (FCFA)
+        <input type="number" name="prix" min="0" step="500" value="{{ f.prix|int if f else '' }}" placeholder="0 = gratuit" class="block mt-1 w-full border border-gray-300 rounded-lg px-2 py-1.5"></label>
+    <label class="text-gray-500">Jours d'essai <span class="text-[11px]">(si gratuite)</span>
+        <input type="number" name="essai_jours" min="1" max="365" value="{{ f.essai_jours if f and f.essai_jours else '' }}" placeholder="vide = pas d'essai" class="block mt-1 w-full border border-gray-300 rounded-lg px-2 py-1.5"></label>
+    <label class="text-gray-500">Articles max
+        <input type="number" name="articles" min="1" value="{{ f.articles if f and f.articles else '' }}" placeholder="vide = illimité" class="block mt-1 w-full border border-gray-300 rounded-lg px-2 py-1.5"></label>
+    <label class="text-gray-500">Vidéos max
+        <input type="number" name="videos" min="1" value="{{ f.videos if f and f.videos else '' }}" placeholder="vide = illimité" class="block mt-1 w-full border border-gray-300 rounded-lg px-2 py-1.5"></label>
+    <label class="text-gray-500">Couleur
+        <select name="couleur" class="block mt-1 w-full border border-gray-300 rounded-lg px-2 py-1.5">
+            {% for c in couleurs %}<option value="{{ c }}" {{ 'selected' if f and f.nom_couleur == c }}>{{ c|capitalize }}</option>{% endfor %}
+        </select></label>
+    <label class="text-gray-500">Icône
+        <select name="icone" class="block mt-1 w-full border border-gray-300 rounded-lg px-2 py-1.5">
+            {% for code, lib in icones.items() %}<option value="{{ code }}" {{ 'selected' if f and f.icone == code }}>{{ lib }}</option>{% endfor %}
+        </select></label>
+</div>
+<label class="flex items-center gap-2"><input type="checkbox" name="module" value="1" {{ 'checked' if not f or f.module }} class="h-4 w-4"> Vente au comptoir incluse (caisse, tickets, codes-barres, créances, approvisionnement)</label>
+<label class="flex items-center gap-2"><input type="checkbox" name="visible" value="1" {{ 'checked' if not f or f.visible }} class="h-4 w-4"> Proposée aux boutiques</label>
+{% endmacro %}
+
 {% block content %}
+{% set essai = (formules.values()|selectattr('essai_jours')|selectattr('visible')|list|first) %}
 <div class="max-w-6xl mx-auto px-4 space-y-5 pb-24">
     <div>
         <h1 class="text-2xl md:text-3xl font-extrabold text-gray-900"><i class="fas fa-crown text-amber-500 mr-2"></i> Abonnements des boutiques</h1>
@@ -43,6 +69,45 @@
         <span class="text-gray-500 -ml-1 self-center">{{ resume.par_formule[code] }}</span>
         {% endfor %}
     </div>
+
+    <!-- Formules et prix -->
+    <details id="formules" class="bg-white rounded-2xl shadow-md" {{ 'open' if request.args.get('formules') }}>
+        <summary class="px-4 py-3 font-bold text-gray-900 cursor-pointer"><i class="fas fa-tags text-purple-500 mr-1"></i> Formules et prix <span class="text-sm font-normal text-gray-500">— modifier un prix, créer une formule</span></summary>
+        <div class="p-4 pt-0 space-y-3">
+            {% for code, f in formules.items() %}
+            <details class="rounded-xl border border-gray-200">
+                <summary class="px-3 py-2 cursor-pointer flex flex-wrap items-center gap-2 text-sm">
+                    {% include '_badge_formule.html' %}
+                    <b>{{ fcfa(f.prix) ~ ' / mois' if f.prix else ('Essai gratuit ' ~ f.essai_jours ~ ' j' if f.essai_jours else 'Gratuite') }}</b>
+                    <span class="text-gray-500">· {{ f.articles ~ ' articles' if f.articles else 'articles illimités' }} · {{ f.videos ~ ' vidéos' if f.videos else 'vidéos illimitées' }}{{ ' · comptoir' if f.module }}</span>
+                    <span class="text-gray-400">· {{ resume.par_formule[code] }} boutique(s){% if not f.visible %} · masquée{% endif %}</span>
+                </summary>
+                <form method="POST" action="{{ url_for('boutique.gestion_formules_modifier', formule_id=f.id) }}" class="p-3 pt-1 space-y-3 text-sm">
+                    {{ champs_formule(f, couleurs, icones) }}
+                    {% if resume.par_formule[code] %}
+                    <label class="flex items-start gap-2 bg-yellow-50 rounded-lg p-2"><input type="checkbox" name="appliquer" value="1" class="h-4 w-4 mt-0.5">
+                        <span>Si je change le prix : l'appliquer aussi aux {{ resume.par_formule[code] }} boutique(s) déjà sur cette formule
+                            <span class="block text-xs text-gray-500">(sauf celles qui ont une remise). Sinon, le nouveau prix ne vaut que pour les prochaines boutiques.</span></span></label>
+                    {% endif %}
+                    <div class="flex flex-wrap gap-2">
+                        <button class="bg-purple-600 text-white px-4 py-2 rounded-lg font-semibold">Enregistrer</button>
+                        {% if code != 'premium' and not resume.par_formule[code] %}
+                        <button formaction="{{ url_for('boutique.gestion_formules_supprimer', formule_id=f.id) }}" formnovalidate
+                                onclick="return confirm('Supprimer la formule « {{ f.nom|e }} » ?')" class="text-red-600 px-3 py-2 font-semibold">Supprimer</button>
+                        {% endif %}
+                    </div>
+                </form>
+            </details>
+            {% endfor %}
+            <details class="rounded-xl border-2 border-dashed border-purple-300">
+                <summary class="px-3 py-2 cursor-pointer font-semibold text-purple-700 text-sm"><i class="fas fa-plus mr-1"></i> Créer une nouvelle formule</summary>
+                <form method="POST" action="{{ url_for('boutique.gestion_formules_creer') }}" class="p-3 pt-1 space-y-3 text-sm">
+                    {{ champs_formule(None, couleurs, icones) }}
+                    <button class="bg-purple-600 text-white px-4 py-2 rounded-lg font-semibold">Créer la formule</button>
+                </form>
+            </details>
+        </div>
+    </details>
 
     {{ recherche('#listeBoutiques', 'Rechercher une boutique : nom, gérant, téléphone, email…', 'Aucune boutique', '') }}
 
@@ -79,10 +144,10 @@
             <!-- Activer / désactiver -->
             <div class="flex flex-wrap gap-2">
                 {% if not b.active %}
-                {% if not b.formule %}
+                {% if not b.formule and essai %}
                 <form method="POST" action="{{ url_for('boutique.gestion_activer', boutique_id=b.id) }}">
                     <input type="hidden" name="active" value="1"><input type="hidden" name="essai" value="1">
-                    <button class="bg-green-600 text-white px-3 py-2 rounded-lg text-sm font-semibold"><i class="fas fa-play mr-1"></i> Activer avec l'essai Démarrage ({{ formules.demarrage.essai_jours }} j)</button>
+                    <button class="bg-green-600 text-white px-3 py-2 rounded-lg text-sm font-semibold"><i class="fas fa-play mr-1"></i> Activer avec l'essai {{ essai.nom }} ({{ essai.essai_jours }} j)</button>
                 </form>
                 {% endif %}
                 <form method="POST" action="{{ url_for('boutique.gestion_activer', boutique_id=b.id) }}">
@@ -103,11 +168,11 @@
                 <summary class="px-3 py-2 text-sm font-semibold text-purple-700 cursor-pointer"><i class="fas fa-sliders mr-1"></i> Programmer l'abonnement</summary>
                 <form method="POST" action="{{ url_for('boutique.gestion_formule', boutique_id=b.id) }}" class="formule-form p-3 pt-1 space-y-3 text-sm">
                     <div class="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                        {% for code, f in formules.items() %}
+                        {% for code, f in formules.items() if f.visible or b.formule == code %}
                         <label class="border-2 rounded-xl p-2 cursor-pointer has-[:checked]:border-purple-600 has-[:checked]:bg-purple-50">
-                            <input type="radio" name="formule" value="{{ code }}" data-prix="{{ f.prix }}" class="sr-only" {{ 'checked' if b.formule == code }}>
+                            <input type="radio" name="formule" value="{{ code }}" data-prix="{{ f.prix|int }}" data-essai="{{ f.essai_jours or '' }}" class="sr-only" {{ 'checked' if b.formule == code }}>
                             <span class="block font-bold">{{ f.nom }}</span>
-                            <span class="block text-xs text-gray-500">{{ fcfa(f.prix) ~ '/mois' if f.prix else 'Essai ' ~ f.essai_jours ~ ' j' }}</span>
+                            <span class="block text-xs text-gray-500">{{ fcfa(f.prix) ~ '/mois' if f.prix else ('Essai ' ~ f.essai_jours ~ ' j' if f.essai_jours else 'Gratuite') }}</span>
                         </label>
                         {% endfor %}
                         <label class="border-2 rounded-xl p-2 cursor-pointer has-[:checked]:border-purple-600 has-[:checked]:bg-purple-50">
@@ -125,7 +190,7 @@
                     <div class="champs-essai flex flex-wrap items-end gap-2">
                         <label class="text-gray-500">Fin de l'essai gratuit
                             <input type="date" name="essai_fin" value="{{ b.essai_fin.isoformat() if b.essai_fin else '' }}" min="{{ aujourdhui.isoformat() }}" class="block mt-1 border border-gray-300 rounded-lg px-2 py-1.5"></label>
-                        <span class="text-xs text-gray-500 pb-2">vide = {{ formules.demarrage.essai_jours }} jours à partir d'aujourd'hui</span>
+                        <span class="text-xs text-gray-500 pb-2">vide = durée d'essai de la formule, à partir d'aujourd'hui</span>
                     </div>
                     <button class="bg-purple-600 text-white px-4 py-2 rounded-lg font-semibold">Enregistrer</button>
                 </form>
@@ -189,8 +254,9 @@ document.querySelectorAll('.formule-form').forEach(function (f) {
     function maj() {
         var choix = f.querySelector('input[name="formule"]:checked');
         var v = choix ? choix.value : '';
-        f.querySelector('.champs-payant').style.display = (v === 'pro' || v === 'premium') ? '' : 'none';
-        f.querySelector('.champs-essai').style.display = v === 'demarrage' ? '' : 'none';
+        var essai = choix && choix.dataset.essai, payant = choix && v && !essai && choix.dataset.prix !== '0';
+        f.querySelector('.champs-payant').style.display = payant ? '' : 'none';
+        f.querySelector('.champs-essai').style.display = essai ? '' : 'none';
         var prix = f.querySelector('input[name="prix"]');
         if (choix && choix.dataset.prix && !prix.dataset.touche) prix.placeholder = choix.dataset.prix + ' (prix normal)';
     }
