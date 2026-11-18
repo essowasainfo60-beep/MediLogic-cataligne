@@ -3,73 +3,74 @@
 {% block title %}Ajouter un article{% endblock %}
 
 {% block content %}
-<div class="max-w-2xl mx-auto px-4 py-8">
-    <div class="bg-white rounded-xl shadow-lg p-6">
-        <div class="text-center mb-6">
-            <i class="fas fa-plus-circle text-primary text-4xl"></i>
-            <h1 class="text-2xl font-bold text-gray-800 mt-2">Ajouter un article</h1>
-            <p class="text-gray-600">Remplissez les informations de votre produit</p>
-        </div>
+<div class="max-w-2xl mx-auto px-4 py-6">
+    <div class="mb-5">
+        <a href="{{ url_for('boutique.articles') }}" class="text-sm text-gray-500"><i class="fas fa-arrow-left mr-1"></i> Mes articles</a>
+        <h1 class="text-2xl font-extrabold text-gray-900 mt-1">Ajouter un article</h1>
+        <p class="text-sm text-gray-500">4 étapes simples. Seuls le <b>nom</b> et le <b>prix</b> sont obligatoires.</p>
+    </div>
 
-        <form method="POST" enctype="multipart/form-data" id="articleForm">
-            <div class="space-y-4">
+    <form method="POST" enctype="multipart/form-data" id="articleForm" class="space-y-4">
+        <!-- 1. L'article -->
+        <section class="bg-white rounded-2xl shadow-sm border border-gray-100 p-4 sm:p-5">
+            {% with n=1, titre="L'article", aide="Ce que le client verra en premier." %}{% include 'boutique/_etape.html' %}{% endwith %}
+            <div class="space-y-3">
                 <div>
-                    <label class="block text-gray-700 text-sm font-bold mb-2">Nom de l'article *</label>
-                    <input type="text" name="nom" required 
-                           class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary transition"
-                           placeholder="Ex: Thermomètre médical">
+                    <label class="block text-gray-700 text-sm font-bold mb-1">Nom *</label>
+                    <input type="text" name="nom" required class="w-full px-3 py-2.5 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-500 transition" placeholder="Ex : Robe pagne wax, Basket Nike Air…">
                 </div>
-
                 <div>
-                    <label class="block text-gray-700 text-sm font-bold mb-2">Description</label>
-                    <textarea name="description" rows="4" 
-                              class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary transition"
-                              placeholder="Description détaillée de l'article..."></textarea>
+                    <label class="block text-gray-700 text-sm font-bold mb-1">Prix (FCFA) *</label>
+                    <input type="number" step="0.01" name="prix" required inputmode="decimal" class="w-full px-3 py-2.5 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-500 transition text-lg font-semibold" placeholder="Ex : 15000">
                 </div>
-
                 <div>
-                    <label class="block text-gray-700 text-sm font-bold mb-2">Prix (FCFA) *</label>
-                    <input type="number" step="0.01" name="prix" required 
-                           class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary transition"
-                           placeholder="0">
+                    <label class="block text-gray-700 text-sm font-bold mb-1">Description <span class="font-normal text-gray-400">(facultatif)</span></label>
+                    <textarea name="description" rows="3" class="w-full px-3 py-2.5 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-500 transition" placeholder="Matière, détails, conseils d'entretien…"></textarea>
                 </div>
-
-                <div id="champStockGlobal">
-                    <label class="block text-gray-700 text-sm font-bold mb-2">Quantité en stock</label>
-                    <input type="number" name="stock" min="0"
-                           class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary transition"
-                           placeholder="Laisser vide pour ne pas suivre le stock">
-                </div>
-
-                {% include 'boutique/_variantes.html' %}
-
-                <div>
-                    <label class="block text-gray-700 text-sm font-bold mb-2">Photos (plusieurs possible)</label>
-                    <input type="file" name="photos" multiple accept="image/*" id="photosInput"
-                           class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary transition">
-                    <p class="text-xs text-gray-500 mt-1">PNG, JPG, JPEG, GIF, WEBP (max 16MB par image)</p>
-                    
-                    <!-- Aperçu des images -->
-                    <div id="previewContainer" class="grid grid-cols-3 gap-2 mt-3"></div>
-                </div>
-
-                {% include 'boutique/_video.html' %}
             </div>
+        </section>
 
-            <label class="mt-5 flex items-start gap-3 rounded-xl border-2 border-green-200 bg-green-50 p-3 cursor-pointer">
+        <!-- 2. Photos et vidéo -->
+        <section class="bg-white rounded-2xl shadow-sm border border-gray-100 p-4 sm:p-5">
+            {% with n=2, titre="Photos et vidéo", aide="De belles photos font vendre. La vidéo est facultative." %}{% include 'boutique/_etape.html' %}{% endwith %}
+            {% with nom_champ='photos' %}{% include 'boutique/_photos_style.html' %}{% endwith %}
+            <details class="mt-4 group" id="detailsVideo">
+                <summary class="cursor-pointer list-none flex items-center gap-2 text-sm font-semibold text-purple-700">
+                    <i class="fas fa-video"></i> Ajouter une courte vidéo (facultatif) <i class="fas fa-chevron-down text-xs group-open:rotate-180 transition"></i></summary>
+                <div class="mt-3">{% include 'boutique/_video.html' %}</div>
+            </details>
+        </section>
+
+        <!-- 3. Tailles, couleurs et stock -->
+        <section class="bg-white rounded-2xl shadow-sm border border-gray-100 p-4 sm:p-5">
+            {% with n=3, titre="Tailles, couleurs et stock", aide="L'article existe en plusieurs tailles, pointures ou couleurs ? Choisissez ci-dessous." %}{% include 'boutique/_etape.html' %}{% endwith %}
+            {% include 'boutique/_variantes.html' %}
+            <div id="champStockGlobal" class="mt-4">
+                <label class="block text-gray-700 text-sm font-bold mb-1">Quantité en stock <span class="font-normal text-gray-400">(facultatif)</span></label>
+                <input type="number" name="stock" min="0" inputmode="numeric" class="w-full px-3 py-2.5 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-500 transition" placeholder="Ex : 10 — vide = je ne compte pas le stock">
+            </div>
+        </section>
+
+        <!-- 4. Publier -->
+        <section class="bg-white rounded-2xl shadow-sm border border-gray-100 p-4 sm:p-5">
+            {% with n=4, titre="Publier", aide="L'article apparaît tout de suite dans votre catalogue." %}{% include 'boutique/_etape.html' %}{% endwith %}
+            <label class="flex items-start gap-3 rounded-xl border-2 border-green-200 bg-green-50 p-3 cursor-pointer">
                 <input type="checkbox" name="annoncer" value="1" class="mt-1 h-5 w-5" checked>
                 <span class="text-sm"><b>📣 Prévenir mes clients de cette nouveauté</b>
                     <span class="block text-xs text-gray-600">{% if nb_abonnes %}{{ nb_abonnes }} client{{ 's' if nb_abonnes > 1 }} abonné{{ 's' if nb_abonnes > 1 }} recevr{{ 'ont' if nb_abonnes > 1 else 'a' }} une notification sur son téléphone{% else %}Aucun client abonné pour l'instant : ils pourront s'abonner depuis votre catalogue{% endif %}.
                         Au plus 1 notification par jour : les nouveautés du même jour partent ensemble.</span></span>
             </label>
+        </section>
 
+        <!-- Bouton toujours visible en bas -->
+        <div class="sticky bottom-20 md:bottom-4 z-30">
             <button type="submit" id="submitBtn"
-                    class="w-full mt-6 bg-primary text-white py-3 rounded-lg hover:bg-blue-700 transition font-semibold">
-                <span id="btnText"><i class="fas fa-save mr-2"></i> Ajouter l'article</span>
-                <span id="btnSpinner" class="hidden"><i class="fas fa-spinner fa-spin mr-2"></i> Upload en cours...</span>
+                    class="w-full bg-purple-600 text-white py-3.5 rounded-2xl hover:bg-purple-700 transition font-bold text-lg shadow-lg">
+                <span id="btnText"><i class="fas fa-check mr-2"></i> Enregistrer l'article</span>
+                <span id="btnSpinner" class="hidden"><i class="fas fa-spinner fa-spin mr-2"></i> Enregistrement…</span>
             </button>
-        </form>
-    </div>
+        </div>
+    </form>
 </div>
 
 <script>
@@ -86,7 +87,7 @@ document.getElementById('photosInput').addEventListener('change', function(e) {
             const div = document.createElement('div');
             div.className = 'relative';
             div.innerHTML = `
-                <img src="${event.target.result}" class="w-full h-24 object-cover rounded-lg">
+                <img src="${event.target.result}" class="w-full h-24 object-cover rounded-lg">${container.children.length === 0 ? '<span class="absolute bottom-1 left-1 bg-purple-600 text-white text-[10px] px-1.5 rounded">Principale</span>' : ''}
                 <div class="absolute top-1 right-1 bg-red-500 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs cursor-pointer" onclick="this.parentElement.remove()">×</div>
             `;
             container.appendChild(div);

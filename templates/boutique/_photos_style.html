@@ -1,0 +1,8 @@
+{# Zone « toucher pour ajouter des photos » + aperçu (variables : nom_champ) #}
+<label for="photosInput" class="flex flex-col items-center justify-center gap-1 border-2 border-dashed border-purple-300 rounded-2xl py-6 px-3 text-center cursor-pointer hover:bg-purple-50">
+    <i class="fas fa-camera text-3xl text-purple-500"></i>
+    <span class="font-semibold text-purple-800">Touchez pour ajouter des photos</span>
+    <span class="text-xs text-gray-500">Plusieurs à la fois · la 1re sera la photo principale du catalogue</span>
+</label>
+<input type="file" name="{{ nom_champ }}" multiple accept="image/*" id="photosInput" class="sr-only">
+<div id="previewContainer" class="grid grid-cols-3 gap-2 mt-3"></div>
