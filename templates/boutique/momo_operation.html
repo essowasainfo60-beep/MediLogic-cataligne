@@ -11,6 +11,14 @@
         <span class="text-xs text-gray-600 text-right">Solde {{ court }} <b class="text-gray-900">{{ fcfa(s[op]) }}</b><br>Espèces <b class="text-gray-900">{{ fcfa(s.especes) }}</b></span>
     </div>
 
+    <!-- L'opération se fait sur le téléphone : ouvrir le menu Mixx / Flooz -->
+    <a href="tel:{{ '*145%23' if op == 'mixx' else '*155%23' }}" class="flex items-center gap-3 rounded-2xl px-4 py-3 font-bold {{ 'bg-yellow-400 text-gray-900' if op == 'mixx' else 'bg-blue-700 text-white' }}">
+        <i class="fas fa-phone"></i>
+        <span class="flex-1">Ouvrir {{ court }} sur le téléphone <span class="font-normal">({{ '*145#' if op == 'mixx' else '*155#' }})</span></span>
+        <i class="fas fa-arrow-up-right-from-square text-sm"></i>
+    </a>
+    <p class="text-xs text-gray-600 -mt-1">Faites l’opération sur le téléphone, puis revenez ici noter la référence du SMS reçu.</p>
+
     <form id="formMomo" method="POST" enctype="multipart/form-data" class="space-y-3">
         <div class="flex items-center justify-between bg-white border border-gray-200 rounded-xl px-4 py-2.5">
             <span class="text-sm text-gray-600">Référence LivraPlus (automatique)</span>
@@ -51,7 +59,7 @@
                 <label class="flex items-center justify-between gap-3">
                     <span><span class="block font-bold text-gray-900">Appliquer les frais</span>
                         <span class="block text-xs text-gray-600">Grille {{ court }} : <b id="fraisGrille">0 F</b> pour ce montant</span></span>
-                    <input id="appliquer" name="appliquer" type="checkbox" value="1" class="h-6 w-6 accent-green-600" {{ 'checked' if not saisie or saisie.get('appliquer') }}>
+                    <input id="appliquer" name="appliquer" type="checkbox" value="1" class="h-6 w-6 accent-green-600" {{ 'checked' if saisie.get('appliquer') }}>
                 </label>
                 <label id="ligneFrais" class="flex items-center justify-between gap-3 text-sm text-gray-700">Modifier les frais si besoin
                     <input id="frais" name="frais" type="number" min="0" value="{{ saisie.get('frais', '') }}" class="w-28 text-right text-lg font-bold px-3 py-2 border border-gray-300 rounded-xl">

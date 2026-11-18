@@ -12,9 +12,9 @@
     </div>
     <p class="text-sm font-bold text-gray-700 pt-1">Quelle opération ?</p>
     {% for type_, titre, aide, icone, fond, couleur in [
-        ('depot', 'Dépôt', 'Le client donne des espèces, vous envoyez sur son numéro', 'fa-arrow-down', 'bg-green-100', 'text-green-800'),
+        ('depot', 'Dépôt', 'Le client donne des espèces, vous les mettez sur SON propre compte', 'fa-arrow-down', 'bg-green-100', 'text-green-800'),
         ('retrait', 'Retrait', 'Le client vous envoie, vous lui donnez des espèces', 'fa-arrow-up', 'bg-red-100', 'text-red-800'),
-        ('transfert', 'Transfert simple', 'Le client paie, vous envoyez à la personne de son choix', 'fa-right-left', 'bg-indigo-100', 'text-indigo-800')] %}
+        ('transfert', 'Transfert simple', 'Le client paie, vous envoyez à UNE AUTRE personne (ex. sa famille à Kara)', 'fa-right-left', 'bg-indigo-100', 'text-indigo-800')] %}
     <a href="{{ url_for('boutique.momo_operation', operateur=op, type_=type_) }}" class="flex items-center gap-4 bg-white border border-gray-200 rounded-2xl p-4 hover:bg-gray-50">
         <span class="h-12 w-12 rounded-xl {{ fond }} {{ couleur }} flex items-center justify-center text-lg"><i class="fas {{ icone }}"></i></span>
         <span class="flex-1"><span class="block text-lg font-extrabold text-gray-900">{{ titre }}</span><span class="block text-sm text-gray-600">{{ aide }}</span></span>
