@@ -18,6 +18,7 @@ import demandes
 import videos
 import comptoir
 import creances
+import demandes_gerant
 import suivi_gps
 import stats_avancees
 import promos
@@ -41,7 +42,7 @@ GERANT_SEUL = {
     'regenerer_lien', 'modifier_whatsapp', 'biometrie_inscription_options', 'biometrie_inscription_verifier',
     'biometrie_retirer',
 }
-CAISSE = {'annuler_vente', 'valider_paiement_creance', 'refuser_paiement_creance', 'page_caisse', 'caisse_versement', 'caisse_paiement_livreur', 'caisse_mouvement', 'caisse_supprimer',
+CAISSE = {'traiter_demande_gerant', 'annuler_vente', 'valider_paiement_creance', 'refuser_paiement_creance', 'page_caisse', 'caisse_versement', 'caisse_paiement_livreur', 'caisse_mouvement', 'caisse_supprimer',
           'payer_frais_commande', 'versement_commande', 'changer_mode_frais',
           'abonnement_payer'}
 GESTION = {
@@ -981,6 +982,77 @@ def etiquettes_codes():
     flash(f'{crees} code{"s" if crees > 1 else ""}-barres créé{"s" if crees > 1 else ""}. Imprimez maintenant les étiquettes.' if crees
           else 'Les articles choisis ont déjà leur code-barres.', 'success' if crees else 'info')
     return redirect(url_for('boutique.etiquettes', choix=','.join(request.form.getlist('ids'))))
+
+
+# ==================== DEMANDES AU GÉRANT ====================
+
+@boutique_bp.route('/validations')
+@login_required
+def validations():
+    """Gérant / caissier : tout ce qui attend son accord. Vendeur : ses demandes et le formulaire de charge."""
+    from models import DemandeGerant
+    b = boutique_connectee()
+    valideur = peut('boutique.traiter_demande_gerant')
+    q = DemandeGerant.query.filter_by(boutique_id=b.id)
+    if not valideur:
+        q = q.filter_by(demandeur=qui() or b.nom_boutique)
+    return render_template('boutique/validations.html', valideur=valideur,
+                           attente=[d for d in q.filter_by(statut='en_attente').order_by(DemandeGerant.date).all()],
+                           historique=q.filter(DemandeGerant.statut != 'en_attente').order_by(DemandeGerant.date.desc()).limit(50).all(),
+                           paiements=creances.en_attente(b.id) if valideur else [], modes=comptoir.MODES_PAIEMENT,
+                           categories=MouvementCaisse.CATEGORIES, types=demandes_gerant.TYPES, resume=demandes_gerant.resume)
+
+
+def _notifier_demande(d):
+    notifications.envoyer_boutique(d.boutique_id, f'🙋 Demande de {d.demandeur}', demandes_gerant.resume(d),
+                                   url_for('boutique.validations', _external=True), tag=f'demande-gerant-{d.id}')
+
+
+@boutique_bp.route('/validations/charge', methods=['POST'])
+@login_required
+def demander_charge():
+    b = boutique_connectee()
+    d, erreur = demandes_gerant.demander_charge(b.id, request.form.get('montant'), request.form.get('categorie'),
+                                                request.form.get('motif'), qui() or b.nom_boutique)
+    if erreur:
+        flash(erreur, 'danger')
+    else:
+        _notifier_demande(d)
+        flash(f'Demande envoyée au gérant : {msg.fcfa(d.montant)} ({d.categorie}). Ne prenez l\'argent qu\'après sa validation.', 'info')
+    return redirect(url_for('boutique.validations'))
+
+
+@boutique_bp.route('/ventes/<int:commande_id>/demander-annulation', methods=['POST'])
+@login_required
+def demander_annulation(commande_id):
+    b = boutique_connectee()
+    commande = Commande.query.filter_by(id=commande_id, boutique_id=b.id).first_or_404()
+    d, erreur = demandes_gerant.demander_annulation(commande, request.form.get('motif'), qui() or b.nom_boutique)
+    if erreur:
+        flash(erreur, 'danger')
+    else:
+        _notifier_demande(d)
+        flash(f'Demande d\'annulation de la vente n°{commande.numero} envoyée au gérant.', 'info')
+    return redirect(request.form.get('retour') or url_for('boutique.ventes_jour'))
+
+
+@boutique_bp.route('/validations/<int:demande_id>/<action>', methods=['POST'])
+@login_required
+def traiter_demande_gerant(demande_id, action):
+    from models import DemandeGerant
+    d = db.session.get(DemandeGerant, demande_id)
+    if not d or d.boutique_id != boutique_connectee().id or action not in ('valider', 'refuser'):
+        abort(404)
+    par = qui() or boutique_connectee().nom_boutique
+    erreur = demandes_gerant.valider(d, par) if action == 'valider' else demandes_gerant.refuser(d, par, request.form.get('motif'))
+    if erreur:
+        flash(erreur, 'danger')
+    elif action == 'valider':
+        flash('Demande validée : ' + ('la somme est sortie de la caisse.' if d.type == 'charge'
+                                      else 'la vente est annulée, le stock remis et l\'argent sorti de la caisse.'), 'success')
+    else:
+        flash('Demande refusée.', 'warning')
+    return redirect(url_for('boutique.validations'))
 
 
 @boutique_bp.route('/code-barres/nouveau', methods=['POST'])
@@ -2176,7 +2248,8 @@ def injecter_compteurs():
         return {'nouvelles_commandes': Commande.query.filter_by(boutique_id=current_user.id, statut='nouvelle').count(),
                 'messages_non_lus': discussions.non_lus_boutique(current_user.id),
                 'demandes_a_traiter': demandes.nombre_a_traiter(current_user.id),
-                'paiements_a_valider': len(creances.en_attente(current_user.id)) if peut('boutique.valider_paiement_creance') else 0}
+                'paiements_a_valider': (len(creances.en_attente(current_user.id)) + len(demandes_gerant.en_attente(current_user.id)))
+                                       if peut('boutique.valider_paiement_creance') else 0}
     return {'nouvelles_commandes': 0, 'messages_non_lus': 0, 'demandes_a_traiter': 0, 'paiements_a_valider': 0}
 
 @boutique_bp.route('/mot_de_passe', methods=['GET', 'POST'])

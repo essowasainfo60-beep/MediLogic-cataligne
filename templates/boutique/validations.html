@@ -1,0 +1,89 @@
+{% extends "base.html" %}
+
+{% block title %}Demandes au gérant - {{ current_user.nom_boutique }}{% endblock %}
+
+{% macro f(v) %}{{ "{:,.0f}".format(v or 0).replace(',', ' ') }}{% endmacro %}
+
+{% block content %}
+<div class="max-w-3xl mx-auto px-4 space-y-4 pb-24">
+    <div>
+        <h1 class="text-2xl font-extrabold text-gray-900"><i class="fas fa-clipboard-check text-purple-600 mr-1"></i> {{ 'Demandes à valider' if valideur else 'Mes demandes au gérant' }}</h1>
+        <p class="text-sm text-gray-500">{{ "Ce que vos vendeurs vous demandent : rien ne sort de la caisse sans votre accord." if valideur
+            else "Besoin d'argent de la caisse ? Faites la demande : le gérant valide avant que vous preniez l'argent." }}</p>
+    </div>
+
+    {% if not valideur %}
+    <!-- Le vendeur demande une sortie de caisse -->
+    <form method="POST" action="{{ url_for('boutique.demander_charge') }}" class="bg-white rounded-2xl shadow-sm p-4 space-y-3">
+        <p class="font-bold text-gray-900"><i class="fas fa-money-bill-transfer text-orange-500 mr-1"></i> Demander une sortie de caisse</p>
+        <div class="grid grid-cols-2 gap-2">
+            <input type="number" name="montant" min="1" required inputmode="numeric" placeholder="Montant (FCFA)" class="border-2 border-gray-200 rounded-xl px-3 py-2.5 font-bold">
+            <select name="categorie" class="border border-gray-300 rounded-xl px-2 py-2.5">
+                {% for c in categories %}<option value="{{ c }}" {{ 'selected' if c == 'Transport' }}>{{ c }}</option>{% endfor %}
+            </select>
+        </div>
+        <input type="text" name="motif" required maxlength="200" placeholder="Pour quoi ? (ex : taxi-moto pour la livraison de Mme Ama)" class="w-full border border-gray-300 rounded-xl px-3 py-2.5">
+        <button type="submit" class="w-full bg-orange-500 text-white rounded-xl py-3 font-bold"><i class="fas fa-paper-plane mr-1"></i> Envoyer la demande au gérant</button>
+        <p class="text-xs text-gray-500">Pour annuler une vente : « Mes ventes du jour » → « Demander l'annulation ».</p>
+    </form>
+    {% endif %}
+
+    <!-- En attente -->
+    <div>
+        <p class="text-sm font-bold text-gray-700 mb-2">En attente {% if attente or paiements %}<span class="bg-yellow-400 text-white rounded-full px-2 text-xs">{{ attente|length + paiements|length }}</span>{% endif %}</p>
+        <div class="space-y-2">
+            {% for d in attente %}
+            <div class="bg-white rounded-2xl shadow-sm p-4 border-2 border-yellow-300">
+                <div class="flex justify-between gap-2">
+                    <div class="min-w-0">
+                        <p class="text-xs font-bold uppercase {{ 'text-orange-600' if d.type == 'charge' else 'text-red-600' }}">{{ types[d.type] }}</p>
+                        <p class="font-semibold text-gray-900">{{ resume(d) }}</p>
+                        <p class="text-xs text-gray-500">{{ d.demandeur }} · {{ d.date.strftime('%d/%m à %H:%M') }}</p>
+                        {% if d.type == 'annulation_vente' and d.commande %}
+                        <p class="text-xs text-gray-600 mt-1">{% for l in d.commande.articles_json %}{{ l.quantite }}× {{ l.nom }}{{ ', ' if not loop.last }}{% endfor %}</p>{% endif %}
+                    </div>
+                    <p class="text-lg font-extrabold whitespace-nowrap">{{ f(d.montant) }} F</p>
+                </div>
+                {% if valideur %}
+                <div class="flex gap-2 mt-3">
+                    <form method="POST" action="{{ url_for('boutique.traiter_demande_gerant', demande_id=d.id, action='valider') }}">
+                        <button type="submit" class="bg-green-600 text-white px-4 py-2 rounded-xl font-semibold"><i class="fas fa-check mr-1"></i> Valider</button>
+                    </form>
+                    <form method="POST" action="{{ url_for('boutique.traiter_demande_gerant', demande_id=d.id, action='refuser') }}"
+                          onsubmit="const m = prompt('Refuser cette demande ? Motif (le vendeur le verra) :', ''); if (m === null) return false; this.motif.value = m; return true;">
+                        <input type="hidden" name="motif">
+                        <button type="submit" class="bg-red-50 text-red-700 px-4 py-2 rounded-xl font-semibold">Refuser</button>
+                    </form>
+                </div>
+                {% else %}<p class="text-sm text-yellow-700 mt-2">⏳ En attente du gérant</p>{% endif %}
+            </div>
+            {% endfor %}
+            {% for p in paiements %}
+            <a href="{{ url_for('boutique.page_creances', vue='valider') }}" class="block bg-white rounded-2xl shadow-sm p-4 border-2 border-yellow-300">
+                <p class="text-xs font-bold uppercase text-green-700">Paiement de créance</p>
+                <p class="font-semibold text-gray-900">{{ f(p.montant) }} F de {{ p.commande.client_nom }} ({{ modes[p.mode][0] if p.mode in modes else p.mode }})</p>
+                <p class="text-xs text-gray-500">Reçu par {{ p.par }} · {{ p.date.strftime('%d/%m à %H:%M') }} · <span class="text-purple-700 underline">Valider dans Créances ›</span></p>
+            </a>
+            {% endfor %}
+            {% if not attente and not paiements %}<p class="text-center text-gray-500 py-6 bg-white rounded-2xl">Aucune demande en attente.</p>{% endif %}
+        </div>
+    </div>
+
+    {% if historique %}
+    <div>
+        <p class="text-sm font-bold text-gray-700 mb-2">Déjà traitées</p>
+        <div class="bg-white rounded-2xl shadow-sm divide-y divide-gray-100">
+            {% for d in historique %}
+            <div class="px-4 py-2.5 flex justify-between gap-2 text-sm">
+                <div class="min-w-0">
+                    <p class="truncate"><span class="{{ 'text-green-700' if d.statut == 'validee' else 'text-red-600' }} font-semibold">{{ '✓ Validée' if d.statut == 'validee' else '✗ Refusée' }}</span> · {{ resume(d) }}</p>
+                    <p class="text-xs text-gray-500">{{ d.demandeur }} · {{ d.date.strftime('%d/%m') }} · par {{ d.traite_par }}{% if d.motif_refus %} : « {{ d.motif_refus }} »{% endif %}</p>
+                </div>
+                <p class="font-bold whitespace-nowrap">{{ f(d.montant) }} F</p>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

@@ -74,6 +74,13 @@
             <div class="flex flex-wrap gap-2 mt-2 text-sm">
                 <a href="{{ url_for('boutique.ticket_vente', commande_id=v.id, retour=request.full_path) }}" class="px-3 py-1.5 rounded-lg bg-gray-100"><i class="fas fa-receipt mr-1"></i>Ticket</a>
                 <a href="{{ url_for('boutique.commande_details', commande_id=v.id) }}" class="px-3 py-1.5 rounded-lg bg-gray-100">Détails / retour</a>
+                {% if not tout_voir and v.statut == 'livree' %}
+                <form method="POST" action="{{ url_for('boutique.demander_annulation', commande_id=v.id) }}"
+                      onsubmit="const m = prompt('Demander au gérant d\'annuler la vente n°{{ v.numero }} ?\n\nPourquoi ? (obligatoire)', ''); if (!m) return false; this.motif.value = m; return true;">
+                    <input type="hidden" name="motif"><input type="hidden" name="retour" value="{{ request.full_path }}">
+                    <button type="submit" class="px-3 py-1.5 rounded-lg bg-orange-50 text-orange-700"><i class="fas fa-rotate-left mr-1"></i>Demander l'annulation</button>
+                </form>
+                {% endif %}
                 {% if tout_voir and v.statut == 'livree' %}
                 <form method="POST" action="{{ url_for('boutique.annuler_vente', commande_id=v.id) }}"
                       onsubmit="const m = prompt('Annuler la vente n°{{ v.numero }} ({{ v.total|int }} FCFA) ?\nLe stock revient et l\'argent sort de la caisse.\n\nMotif (facultatif) :', ''); if (m === null) return false; this.motif.value = m; return true;">

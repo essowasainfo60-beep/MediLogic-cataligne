@@ -609,6 +609,27 @@ class PaiementCreance(db.Model):
                                                                order_by='PaiementCreance.date'))
 
 
+class DemandeGerant(db.Model):
+    """Demande d'un vendeur au gérant : charge (sortie de caisse) ou annulation de vente."""
+    __tablename__ = 'demandes_gerant'
+
+    id = db.Column(db.Integer, primary_key=True)
+    boutique_id = db.Column(db.Integer, db.ForeignKey('boutiques.id'), nullable=False, index=True)
+    type = db.Column(db.String(20), nullable=False)                 # charge | annulation_vente
+    commande_id = db.Column(db.Integer, db.ForeignKey('commandes.id', ondelete='CASCADE'), nullable=True)
+    montant = db.Column(db.Float, nullable=False, default=0)
+    categorie = db.Column(db.String(50), nullable=True)
+    motif = db.Column(db.String(200), nullable=True)
+    demandeur = db.Column(db.String(120), nullable=True)
+    statut = db.Column(db.String(12), nullable=False, default='en_attente', index=True)  # en_attente | validee | refusee
+    traite_par = db.Column(db.String(120), nullable=True)
+    motif_refus = db.Column(db.String(200), nullable=True)
+    date = db.Column(db.DateTime, default=datetime.utcnow, index=True)
+    date_traitement = db.Column(db.DateTime, nullable=True)
+
+    commande = db.relationship('Commande')
+
+
 class CleBiometrique(db.Model):
     """Appareil autorisé à se connecter par Face ID / empreinte / Windows Hello
     (WebAuthn). On ne stocke que la clé publique : la biométrie reste sur l'appareil."""
