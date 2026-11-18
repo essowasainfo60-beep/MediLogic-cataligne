@@ -6,7 +6,7 @@
 {% macro badge(etat) %}
 {% set n = etat.niveau %}
 {% set style = {'gratuit': 'bg-gray-100 text-gray-700', 'ok': 'bg-green-100 text-green-800', 'jaune': 'bg-yellow-100 text-yellow-800',
-                'orange': 'bg-orange-100 text-orange-800', 'rouge': 'bg-red-100 text-red-800', 'bloque': 'bg-red-600 text-white'}[n] %}
+                'orange': 'bg-purple-100 text-purple-800', 'rouge': 'bg-red-100 text-red-800', 'bloque': 'bg-red-600 text-white'}[n] %}
 <span class="px-2.5 py-1 rounded-full text-xs font-semibold {{ style }}">
     {% if etat.essai %}Essai Démarrage jusqu'au {{ etat.essai_fin.strftime('%d/%m/%Y') }}{% elif etat.essai_fini %}🔒 Essai terminé{% elif n == 'gratuit' %}Sans abonnement{% elif n == 'ok' %}✓ À jour{% elif n == 'bloque' %}🔒 Suspendue — {{ etat.libelle_mois_a_payer }} impayé{% else %}{{ etat.libelle_mois_a_payer|capitalize }} à payer ({{ etat.jours_restants + 1 }} j){% endif %}
 </span>
@@ -19,14 +19,16 @@
         <p class="text-sm text-gray-500">Boutiques, activité et abonnements · {{ mois_libelle }}</p>
         <a href="{{ url_for('admin.import_maboutik') }}" class="inline-flex items-center gap-2 mt-2 text-sm bg-purple-50 text-purple-800 border border-purple-200 rounded-xl px-3 py-2 font-semibold">
             <i class="fas fa-file-import"></i> Importer une boutique depuis Ma Boutik</a>
+        <a href="{{ url_for('boutique.gestion_abonnements') }}" class="inline-flex items-center gap-2 mt-2 ml-1 text-sm bg-amber-50 text-amber-800 border border-amber-300 rounded-xl px-3 py-2 font-semibold">
+            <i class="fas fa-crown"></i> Abonnements, formules, comptes et reçus (comme L'UNIK)</a>
     </div>
 
     <div class="grid grid-cols-2 lg:grid-cols-5 gap-3">
         {% for lib, val, detail in [
             ('Boutiques', resume.total, resume.actives ~ ' active(s)'),
             ('Abonnements à jour', resume.a_jour, 'ce mois-ci'),
-            ('À payer avant le 8', resume.en_attente, 'en attente'),
-            ('Suspendues', resume.bloquees, 'impayés après le 8'),
+            ('À payer (au plus tard le 7)', resume.en_attente, 'en attente'),
+            ('Suspendues', resume.bloquees, 'impayés après le 7'),
             ('Encaissé ' ~ mois_libelle, fcfa(resume.encaisse_mois), 'sur ' ~ fcfa(resume.attendu) ~ ' attendus'),
         ] %}
         <div class="bg-white rounded-2xl shadow-md p-4">
@@ -43,7 +45,7 @@
         {% for f in fiches %}
         {% set b = f.b %}
         <div data-item="{{ b.nom_boutique }} {{ b.email }} {{ b.proprietaire_prenom }} {{ b.proprietaire_nom }} {{ b.whatsapp or '' }}"
-             class="bg-white rounded-2xl shadow-md p-5 space-y-4 border-l-4 {{ {'gratuit': 'border-gray-300', 'ok': 'border-green-500', 'jaune': 'border-yellow-400', 'orange': 'border-orange-500', 'rouge': 'border-red-500', 'bloque': 'border-red-700'}[f.etat.niveau] }}">
+             class="bg-white rounded-2xl shadow-md p-5 space-y-4 border-l-4 {{ {'gratuit': 'border-gray-300', 'ok': 'border-green-500', 'jaune': 'border-yellow-400', 'orange': 'border-purple-500', 'rouge': 'border-red-500', 'bloque': 'border-red-700'}[f.etat.niveau] }}">
             <div class="flex items-start gap-3">
                 {% if b.logo_url %}<img src="{{ b.logo_url }}" alt="" class="h-12 w-12 rounded-xl object-contain border flex-shrink-0">
                 {% else %}<span class="h-12 w-12 rounded-xl bg-[#0b1d35] text-teal-300 flex items-center justify-center font-bold flex-shrink-0">{{ b.nom_boutique[:1]|upper }}</span>{% endif %}

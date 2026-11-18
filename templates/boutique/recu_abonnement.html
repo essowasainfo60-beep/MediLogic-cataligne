@@ -1,0 +1,66 @@
+{% extends "base.html" %}
+
+{% block title %}Reçu {{ p.numero_recu }} - Abonnement LivraPlus{% endblock %}
+
+{% block content %}
+<div class="max-w-lg mx-auto px-4 space-y-4 pb-24">
+    {% if nouveau and lien_wa %}
+    <div class="no-print bg-green-50 border-2 border-green-300 rounded-2xl p-4 text-sm text-green-900">
+        <p class="font-bold"><i class="fas fa-circle-check mr-1"></i> Paiement enregistré.</p>
+        <p class="mt-1">{% if pour_gestionnaire %}Envoyez maintenant le reçu à <b>{{ destinataire.nom_boutique }}</b> sur WhatsApp.
+            {% else %}Envoyez maintenant votre reçu à <b>{{ destinataire.nom_boutique }}</b> sur WhatsApp pour qu'il soit vérifié.{% endif %}</p>
+    </div>
+    {% endif %}
+
+    <!-- Le reçu -->
+    <div id="recu" class="bg-white rounded-2xl shadow-md p-6 space-y-4">
+        <div class="flex items-start justify-between gap-3 border-b border-dashed border-gray-300 pb-4">
+            <div>
+                <p class="text-xs uppercase tracking-wide text-gray-500">Reçu d'abonnement</p>
+                <p class="text-xl font-extrabold text-gray-900">Livra<span class="text-teal-600">Plus</span></p>
+                {% if emetteur %}<p class="text-xs text-gray-500">Géré par {{ emetteur.nom_boutique }}{% if emetteur.whatsapp %} · {{ emetteur.whatsapp }}{% endif %}</p>{% endif %}
+            </div>
+            <div class="text-right">
+                <p class="font-mono font-bold text-gray-900 whitespace-nowrap text-sm">{{ p.numero_recu }}</p>
+                <p class="text-xs text-gray-500">{{ p.created_at.strftime('%d/%m/%Y %H:%M') if p.created_at }}</p>
+            </div>
+        </div>
+        <dl class="grid grid-cols-2 gap-y-2 text-sm">
+            <dt class="text-gray-500">Boutique</dt><dd class="font-semibold text-right">{{ p.boutique.nom_boutique }}</dd>
+            <dt class="text-gray-500">Gérant</dt><dd class="text-right">{{ p.boutique.proprietaire_prenom }} {{ p.boutique.proprietaire_nom }}</dd>
+            <dt class="text-gray-500">Mois payé</dt><dd class="font-semibold text-right">{{ p.mois_libelle|capitalize }}</dd>
+            <dt class="text-gray-500">Moyen</dt><dd class="text-right">{{ p.mode_libelle }}</dd>
+            {% if p.reference %}<dt class="text-gray-500">Référence</dt><dd class="font-mono text-right">{{ p.reference }}</dd>{% endif %}
+            <dt class="text-gray-500">Date du dépôt</dt><dd class="text-right">{{ p.date_paiement.strftime('%d/%m/%Y') }}</dd>
+            <dt class="text-gray-500">Enregistré par</dt><dd class="text-right text-gray-600">{{ p.par or '—' }}</dd>
+        </dl>
+        <div class="flex items-center justify-between border-t border-dashed border-gray-300 pt-4">
+            <span class="text-gray-500">Montant</span>
+            <span class="text-2xl font-extrabold text-gray-900">{{ fcfa(p.montant) }}</span>
+        </div>
+        <p class="text-center text-sm font-semibold rounded-xl py-2
+                  {{ 'bg-red-100 text-red-700' if p.statut != 'valide' else ('bg-green-100 text-green-800' if p.verifie else 'bg-yellow-100 text-yellow-800') }}">
+            {% if p.statut != 'valide' %}<i class="fas fa-ban mr-1"></i> Paiement annulé
+            {% elif p.verifie %}<i class="fas fa-circle-check mr-1"></i> Paiement vérifié{% if p.verifie_le %} le {{ p.verifie_le.strftime('%d/%m/%Y') }}{% endif %}
+            {% else %}<i class="fas fa-hourglass-half mr-1"></i> En attente de vérification{% endif %}
+        </p>
+    </div>
+
+    <!-- Actions -->
+    <div class="no-print grid grid-cols-1 sm:grid-cols-2 gap-2">
+        {% if lien_wa %}
+        <a href="{{ lien_wa }}" target="_blank" rel="noopener" class="sm:col-span-2 text-center bg-green-600 text-white px-4 py-3 rounded-xl font-semibold">
+            <i class="fab fa-whatsapp mr-1"></i> Envoyer le reçu à {{ destinataire.nom_boutique }} sur WhatsApp</a>
+        {% elif destinataire %}
+        <p class="sm:col-span-2 text-sm text-gray-500">{{ destinataire.nom_boutique }} n'a pas de numéro WhatsApp enregistré.</p>
+        {% endif %}
+        {% if gestion and pour_gestionnaire and p.statut == 'valide' and not p.verifie %}
+        <form method="POST" action="{{ url_for('boutique.gestion_verifier_paiement', paiement_id=p.id) }}" class="sm:col-span-2">
+            <button class="w-full bg-purple-600 text-white px-4 py-3 rounded-xl font-semibold"><i class="fas fa-check-double mr-1"></i> J'ai bien reçu l'argent : confirmer</button>
+        </form>
+        {% endif %}
+        <button type="button" onclick="window.print()" class="bg-gray-800 text-white px-4 py-3 rounded-xl font-semibold"><i class="fas fa-print mr-1"></i> Imprimer</button>
+        <a href="{{ url_for('boutique.gestion_abonnements') if pour_gestionnaire else url_for('boutique.abonnement_page') }}" class="text-center bg-white border border-gray-300 px-4 py-3 rounded-xl font-semibold text-gray-700">Retour</a>
+    </div>
+</div>
+{% endblock %}

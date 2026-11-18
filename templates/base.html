@@ -402,7 +402,7 @@
         </div>
         {% elif espace_boutique and etat_abonnement and etat_abonnement.niveau in ['jaune', 'orange', 'rouge', 'bloque'] and request.endpoint != 'boutique.abonnement_page' %}
         {% set ab = etat_abonnement %}
-        {% set styles = {'jaune': 'bg-yellow-50 border-yellow-300 text-yellow-900', 'orange': 'bg-orange-50 border-orange-400 text-orange-900',
+        {% set styles = {'jaune': 'bg-yellow-50 border-yellow-300 text-yellow-900', 'orange': 'bg-purple-50 border-purple-500 text-purple-900',
                          'rouge': 'bg-red-50 border-red-500 text-red-800', 'bloque': 'bg-red-600 border-red-700 text-white'} %}
         <div class="bandeau-abonnement mb-3 px-4 py-3 rounded-xl border-2 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-sm {{ styles[ab.niveau] }}">
             <span>
@@ -413,7 +413,7 @@
                 {% else %}
                 <strong>Abonnement LivraPlus de {{ ab.libelle_mois_a_payer }} : {{ '{:,.0f}'.format(ab.prix).replace(',', ' ') }} FCFA</strong>
                 {% if ab.jours_restants == 0 %}— dernier jour aujourd'hui ! L'espace sera suspendu demain.
-                {% else %}— à payer avant le 8 (encore {{ ab.jours_restants + 1 }} jour{{ 's' if ab.jours_restants > 0 }}).{% endif %}
+                {% else %}— à payer au plus tard le 7 (encore {{ ab.jours_restants + 1 }} jour{{ 's' if ab.jours_restants > 0 }}).{% endif %}
                 {% endif %}
             </span>
             <a href="{{ url_for('boutique.abonnement_page') }}" class="text-center whitespace-nowrap font-semibold px-4 py-2 rounded-lg {{ 'bg-white text-red-700' if ab.niveau == 'bloque' else 'bg-gray-900 text-white' }}">

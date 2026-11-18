@@ -3,8 +3,9 @@
 Règles :
 - l'administrateur fixe le prix mensuel de chaque boutique et le premier mois facturé ;
   sans prix (ou 0), la boutique n'a rien à payer ;
-- chaque mois se paie entre le 1er et le 8 : jaune du 1er au 3, orange du 4 au 6,
-  rouge le 7 et le 8 ; après le 8, l'espace boutique est coupé (tableau de bord seulement)
+- chaque mois se paie entre le 1er et le 7 : bande jaune du 1er au 3, violette (niveau « orange »)
+  le 4 et le 5, rouge le 6 et le 7 ; à partir du 8, l'espace boutique est coupé (tableau de bord
+  et page Abonnement seulement, pour payer : tout se rouvre dès le paiement enregistré)
   jusqu'au paiement. Le catalogue des clients et l'espace des livreurs continuent de marcher ;
 - le paiement s'enregistre comme une charge « Abonnement logiciel » (montant imposé),
   avec le moyen de paiement, la date et la référence du dépôt (sauf espèces).
@@ -15,7 +16,7 @@ from datetime import date, datetime, timedelta
 from models import db, Article, Formule, MouvementCaisse, PaiementAbonnement
 
 CATEGORIE = 'Abonnement logiciel'
-JOUR_LIMITE = 8
+JOUR_LIMITE = 7
 
 # ---- Formules d'abonnement (table « formules », modifiables depuis l'espace de L'UNIK) ----
 # articles / videos : nombre maximum (None = illimité) ; module : vente au comptoir et outils
@@ -222,6 +223,43 @@ def certifie(boutique):
     return not etat(boutique)['bloque']
 
 
+def texte_recu(p, pour_gestionnaire=False):
+    """Message WhatsApp du reçu d'abonnement."""
+    from messages_whatsapp import fcfa
+    etat_p = 'ANNULÉ' if p.statut != 'valide' else ('Paiement vérifié ✅' if p.verifie else 'En attente de vérification')
+    lignes = [f"🧾 *Reçu d'abonnement LivraPlus n° {p.numero_recu}*",
+              f"Boutique : {p.boutique.nom_boutique}",
+              f"Mois payé : {p.mois_libelle}",
+              f"Montant : {fcfa(p.montant)}",
+              f"Moyen : {p.mode_libelle}" + (f" · réf. {p.reference}" if p.reference else ''),
+              f"Date du dépôt : {p.date_paiement.strftime('%d/%m/%Y')}",
+              f"Statut : {etat_p}"]
+    lignes.append('Merci pour votre confiance 🙏' if pour_gestionnaire else 'Merci de confirmer la réception 🙏')
+    return '\n'.join(lignes)
+
+
+def comptes(aujourdhui=None):
+    """Argent des abonnements (à part de la caisse des boutiques) : par mois, par boutique, total de l'année."""
+    aujourdhui = aujourdhui or date.today()
+    valides = (PaiementAbonnement.query.filter(PaiementAbonnement.statut == 'valide',
+                                               PaiementAbonnement.boutique_id != GESTIONNAIRE_ID).all())
+    par_mois, par_boutique = {}, {}
+    for p in valides:
+        cle = cle_mois(p.date_paiement)
+        m = par_mois.setdefault(cle, {'montant': 0, 'nb': 0, 'a_verifier': 0})
+        m['montant'] += p.montant; m['nb'] += 1; m['a_verifier'] += 0 if p.verifie else 1
+        par_boutique[p.boutique.nom_boutique] = par_boutique.get(p.boutique.nom_boutique, 0) + p.montant
+    mois12, cle = [], cle_mois(aujourdhui)
+    for _ in range(12):
+        mois12.append({'cle': cle, 'libelle': libelle_mois(cle), **par_mois.get(cle, {'montant': 0, 'nb': 0, 'a_verifier': 0})})
+        a, m = map(int, cle.split('-'))
+        cle = f'{a - (m == 1):04d}-{(m - 2) % 12 + 1:02d}'
+    annee = str(aujourdhui.year)
+    return {'mois': mois12, 'annee': sum(v['montant'] for k, v in par_mois.items() if k.startswith(annee)),
+            'total': sum(p.montant for p in valides), 'a_verifier': sum(1 for p in valides if not p.verifie),
+            'par_boutique': sorted(par_boutique.items(), key=lambda x: -x[1])}
+
+
 def nb_boutiques(code):
     from models import Boutique
     return Boutique.query.filter_by(formule=code).count()
@@ -291,7 +329,7 @@ def etat(boutique, aujourdhui=None):
     res['jours_restants'] = max(JOUR_LIMITE - jour, 0)
     if jour > JOUR_LIMITE:
         res.update(niveau='bloque', bloque=True)
-    elif jour >= 7:
+    elif jour >= 6:
         res.update(niveau='rouge', bloque=False)
     elif jour >= 4:
         res.update(niveau='orange', bloque=False)
@@ -303,7 +341,7 @@ def etat(boutique, aujourdhui=None):
 MODES = PaiementAbonnement.MODES
 
 
-def enregistrer(boutique, mode, reference, date_paiement, par=None):
+def enregistrer(boutique, mode, reference, date_paiement, par=None, verifie=False):
     """Enregistre le paiement du mois dû. Renvoie (paiement, erreur)."""
     situation = etat(boutique)
     if not situation['exige']:
@@ -336,7 +374,8 @@ def enregistrer(boutique, mode, reference, date_paiement, par=None):
     db.session.add(mouvement)
     db.session.flush()
     paiement = PaiementAbonnement(boutique_id=boutique.id, mois=mois, montant=situation['prix'], mode=mode,
-                                  reference=reference, date_paiement=date_paiement, par=par, mouvement_id=mouvement.id)
+                                  reference=reference, date_paiement=date_paiement, par=par, mouvement_id=mouvement.id,
+                                  verifie=verifie, verifie_le=datetime.utcnow() if verifie else None)
     db.session.add(paiement)
     db.session.commit()
     return paiement, None

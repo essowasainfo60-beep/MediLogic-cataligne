@@ -6,7 +6,7 @@
 {% macro situation(etat) %}
 {% set n = etat.niveau %}
 {% set style = {'gratuit': 'bg-gray-100 text-gray-700', 'ok': 'bg-green-100 text-green-800', 'jaune': 'bg-yellow-100 text-yellow-800',
-                'orange': 'bg-orange-100 text-orange-800', 'rouge': 'bg-red-100 text-red-800', 'bloque': 'bg-red-600 text-white'}[n] %}
+                'orange': 'bg-purple-100 text-purple-800', 'rouge': 'bg-red-100 text-red-800', 'bloque': 'bg-red-600 text-white'}[n] %}
 <span class="px-2.5 py-1 rounded-full text-xs font-semibold {{ style }}">
     {% if etat.essai %}Essai jusqu'au {{ etat.essai_fin.strftime('%d/%m/%Y') }}
     {% elif etat.essai_fini %}🔒 Essai terminé le {{ etat.essai_fin.strftime('%d/%m/%Y') }}
@@ -46,6 +46,7 @@
     <div>
         <h1 class="text-2xl md:text-3xl font-extrabold text-gray-900"><i class="fas fa-crown text-amber-500 mr-2"></i> Abonnements des boutiques</h1>
         <p class="text-sm text-gray-500">Activer une boutique, lui donner une formule, programmer et encaisser son abonnement · {{ mois_libelle }}</p>
+        {% if session.get('is_admin') %}<a href="{{ url_for('admin.admin_dashboard') }}" class="inline-flex items-center gap-1 mt-1 text-sm text-purple-700 font-semibold"><i class="fas fa-gauge"></i> Administration LivraPlus</a>{% endif %}
     </div>
 
     <!-- Résumé -->
@@ -69,6 +70,41 @@
         <span class="text-gray-500 -ml-1 self-center">{{ resume.par_formule[code] }}</span>
         {% endfor %}
     </div>
+
+    <!-- Comptes : l'argent des abonnements, à part de la caisse de la boutique -->
+    <details id="comptes" class="bg-white rounded-2xl shadow-md">
+        <summary class="px-4 py-3 font-bold text-gray-900 cursor-pointer"><i class="fas fa-sack-dollar text-green-600 mr-1"></i> Comptes des abonnements
+            <span class="text-sm font-normal text-gray-500">— {{ fcfa(comptes.annee) }} cette année</span>
+            {% if comptes.a_verifier %}<span class="ml-1 text-xs font-semibold bg-yellow-100 text-yellow-800 rounded-full px-2 py-0.5">{{ comptes.a_verifier }} à vérifier</span>{% endif %}</summary>
+        <div class="p-4 pt-0 space-y-4">
+            <p class="text-xs text-gray-500"><i class="fas fa-circle-info mr-1"></i> Cet argent est compté à part : il ne va pas dans la caisse de la boutique.</p>
+            <div class="grid grid-cols-2 gap-3">
+                <div class="bg-green-50 rounded-xl p-3"><p class="text-xs text-gray-500">Cette année</p><p class="text-xl font-bold text-green-800">{{ fcfa(comptes.annee) }}</p></div>
+                <div class="bg-gray-50 rounded-xl p-3"><p class="text-xs text-gray-500">Depuis le début</p><p class="text-xl font-bold">{{ fcfa(comptes.total) }}</p></div>
+            </div>
+            <div class="overflow-x-auto">
+                <table class="w-full text-sm">
+                    <thead class="text-left text-gray-500"><tr><th class="py-1">Mois (date du dépôt)</th><th class="py-1 text-right">Paiements</th><th class="py-1 text-right">Montant</th></tr></thead>
+                    <tbody class="divide-y divide-gray-100">
+                        {% for m in comptes.mois %}
+                        <tr class="{{ 'text-gray-400' if not m.nb }}"><td class="py-1.5">{{ m.libelle|capitalize }}</td>
+                            <td class="py-1.5 text-right">{{ m.nb }}{% if m.a_verifier %} <span class="text-yellow-700 text-xs">({{ m.a_verifier }} à vérifier)</span>{% endif %}</td>
+                            <td class="py-1.5 text-right font-semibold whitespace-nowrap">{{ fcfa(m.montant) }}</td></tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% if comptes.par_boutique %}
+            <div>
+                <p class="text-sm font-semibold text-gray-700 mb-1">Par boutique (depuis le début)</p>
+                {% for nom, montant in comptes.par_boutique %}
+                <div class="flex justify-between text-sm py-1 border-b border-gray-50"><span>{{ nom }}</span><span class="font-semibold">{{ fcfa(montant) }}</span></div>
+                {% endfor %}
+            </div>
+            {% endif %}
+            <button type="button" onclick="document.getElementById('comptes').open = true; window.print()" class="no-print bg-gray-800 text-white px-4 py-2 rounded-lg text-sm font-semibold"><i class="fas fa-print mr-1"></i> Imprimer</button>
+        </div>
+    </details>
 
     <!-- Formules et prix -->
     <details id="formules" class="bg-white rounded-2xl shadow-md" {{ 'open' if request.args.get('formules') }}>
@@ -219,8 +255,9 @@
     </div>
 
     {% if paiements %}
-    <div class="bg-white rounded-2xl shadow-md overflow-x-auto">
-        <h2 class="px-4 py-3 border-b border-gray-100 font-bold text-gray-900">Derniers paiements d'abonnement</h2>
+    <div id="paiements" class="bg-white rounded-2xl shadow-md overflow-x-auto">
+        <h2 class="px-4 py-3 border-b border-gray-100 font-bold text-gray-900">Derniers paiements d'abonnement
+            {% if resume.a_verifier %}<span class="ml-1 text-xs font-semibold bg-yellow-100 text-yellow-800 rounded-full px-2 py-0.5">{{ resume.a_verifier }} à vérifier</span>{% endif %}</h2>
         <table class="w-full text-sm">
             <thead class="bg-gray-50 text-gray-600 text-left">
                 <tr><th class="px-4 py-2">Boutique</th><th class="px-3 py-2">Mois</th><th class="px-3 py-2">Moyen</th><th class="px-3 py-2">Réf.</th><th class="px-3 py-2 text-right">Montant</th><th class="px-3 py-2"></th></tr>
@@ -228,12 +265,19 @@
             <tbody class="divide-y divide-gray-100">
                 {% for p in paiements %}
                 <tr class="{{ 'opacity-50 line-through' if p.statut != 'valide' }}">
-                    <td class="px-4 py-2 font-medium">{{ p.boutique.nom_boutique }}</td>
+                    <td class="px-4 py-2 font-medium">{{ p.boutique.nom_boutique }}
+                        {% if p.statut == 'valide' and not p.verifie %}<span class="block no-underline text-[11px] font-semibold text-yellow-700"><i class="fas fa-hourglass-half"></i> déclaré par la boutique : à vérifier</span>{% endif %}</td>
                     <td class="px-3 py-2">{{ p.mois_libelle|capitalize }}</td>
                     <td class="px-3 py-2">{{ p.mode_libelle }}<span class="block text-xs text-gray-400">{{ p.date_paiement.strftime('%d/%m/%Y') }}</span></td>
                     <td class="px-3 py-2 font-mono">{{ p.reference or '—' }}</td>
                     <td class="px-3 py-2 text-right whitespace-nowrap">{{ fcfa(p.montant) }}</td>
-                    <td class="px-3 py-2 text-right">
+                    <td class="px-3 py-2 text-right whitespace-nowrap space-y-1">
+                        <a href="{{ url_for('boutique.recu_abonnement', paiement_id=p.id) }}" class="block text-purple-700 text-xs font-semibold"><i class="fas fa-receipt"></i> Reçu</a>
+                        {% if p.statut == 'valide' and not p.verifie %}
+                        <form method="POST" action="{{ url_for('boutique.gestion_verifier_paiement', paiement_id=p.id) }}">
+                            <button class="text-green-700 text-xs font-semibold"><i class="fas fa-check-double"></i> Confirmer</button>
+                        </form>
+                        {% endif %}
                         {% if p.statut == 'valide' %}
                         <form method="POST" action="{{ url_for('boutique.gestion_annuler_paiement', paiement_id=p.id) }}"
                               data-question="Annuler ce paiement ({{ p.boutique.nom_boutique }}, {{ p.mois_libelle }}) ? Le mois redeviendra à payer." onsubmit="return confirm(this.dataset.question)">

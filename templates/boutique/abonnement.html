@@ -6,7 +6,7 @@
 <div class="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 space-y-6">
     <div>
         <h1 class="text-2xl md:text-3xl font-extrabold text-gray-900"><i class="fas fa-file-signature text-purple-500 mr-2"></i> Abonnement LivraPlus</h1>
-        <p class="text-sm text-gray-500">Paiement mensuel, entre le 1<sup>er</sup> et le 8 de chaque mois.</p>
+        <p class="text-sm text-gray-500">Paiement mensuel, entre le 1<sup>er</sup> et le 7 de chaque mois. Sinon, l'espace est coupé le 8 (votre catalogue reste en ligne pour vos clients).</p>
     </div>
 
     <!-- Ma formule -->
@@ -82,14 +82,14 @@
                 <div class="mt-4 text-sm">
                     {% if situation.niveau == 'ok' %}
                     <p class="text-green-700 font-semibold"><i class="fas fa-circle-check mr-1"></i> Ce mois-ci est payé. Merci !</p>
-                    <p class="text-gray-500 mt-1">Prochain paiement : {{ situation.libelle_mois_a_payer }}, entre le 1<sup>er</sup> et le 8.</p>
+                    <p class="text-gray-500 mt-1">Prochain paiement : {{ situation.libelle_mois_a_payer }}, entre le 1<sup>er</sup> et le 7.</p>
                     {% elif situation.niveau == 'bloque' %}
                     <p class="text-red-700 font-semibold"><i class="fas fa-lock mr-1"></i> Espace suspendu : {{ situation.libelle_mois_a_payer }} n'est pas payé.</p>
                     <p class="text-gray-500 mt-1">Tout revient dès que le paiement est enregistré.</p>
                     {% else %}
-                    <p class="font-semibold {{ {'jaune': 'text-yellow-700', 'orange': 'text-orange-600', 'rouge': 'text-red-600'}[situation.niveau] }}">
+                    <p class="font-semibold {{ {'jaune': 'text-yellow-700', 'orange': 'text-purple-700', 'rouge': 'text-red-600'}[situation.niveau] }}">
                         <i class="fas fa-clock mr-1"></i> {{ situation.libelle_mois_a_payer|capitalize }} à payer :
-                        {% if situation.jours_restants == 0 %}dernier jour aujourd'hui !{% else %}encore {{ situation.jours_restants + 1 }} jour(s), jusqu'au 8 inclus.{% endif %}</p>
+                        {% if situation.jours_restants == 0 %}dernier jour aujourd'hui !{% else %}encore {{ situation.jours_restants + 1 }} jour(s), jusqu'au 7 inclus.{% endif %}</p>
                     {% endif %}
                 </div>
             </div>
@@ -117,7 +117,7 @@
         <h2 class="px-5 py-4 border-b border-gray-100 font-bold text-gray-900">Paiements enregistrés</h2>
         <table class="w-full text-sm">
             <thead class="bg-gray-50 text-gray-600 text-left">
-                <tr><th class="px-5 py-2">Mois</th><th class="px-3 py-2">Dépôt du</th><th class="px-3 py-2">Moyen</th><th class="px-3 py-2">Référence</th><th class="px-3 py-2 text-right">Montant</th><th class="px-5 py-2">Par</th></tr>
+                <tr><th class="px-5 py-2">Mois</th><th class="px-3 py-2">Dépôt du</th><th class="px-3 py-2">Moyen</th><th class="px-3 py-2">Référence</th><th class="px-3 py-2 text-right">Montant</th><th class="px-5 py-2">Par</th><th class="px-3 py-2"></th></tr>
             </thead>
             <tbody class="divide-y divide-gray-100">
                 {% for p in paiements %}
@@ -127,7 +127,8 @@
                     <td class="px-3 py-2">{{ p.mode_libelle }}</td>
                     <td class="px-3 py-2 font-mono">{{ p.reference or '—' }}</td>
                     <td class="px-3 py-2 text-right whitespace-nowrap">{{ fcfa(p.montant) }}</td>
-                    <td class="px-5 py-2 text-gray-500">{{ p.par or '' }}</td>
+                    <td class="px-5 py-2 text-gray-500">{{ p.par or '' }}{% if p.statut == 'valide' %}<span class="block text-[11px] {{ 'text-green-700' if p.verifie else 'text-yellow-700' }}">{{ 'vérifié' if p.verifie else 'en attente de vérification' }}</span>{% endif %}</td>
+                    <td class="px-3 py-2"><a href="{{ url_for('boutique.recu_abonnement', paiement_id=p.id) }}" class="text-purple-700 font-semibold whitespace-nowrap"><i class="fas fa-receipt"></i> Reçu</a></td>
                 </tr>
                 {% endfor %}
             </tbody>

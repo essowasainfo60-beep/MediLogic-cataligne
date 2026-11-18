@@ -1002,6 +1002,9 @@ class PaiementAbonnement(db.Model):
     par = db.Column(db.String(120), nullable=True)
     statut = db.Column(db.String(10), nullable=False, default='valide')   # 'valide' ou 'annule' (par l'admin)
     mouvement_id = db.Column(db.Integer, nullable=True)            # charge correspondante dans la caisse
+    # Déclaré par la boutique : à vérifier par la boutique gestionnaire (encaissé par elle : déjà vérifié)
+    verifie = db.Column(db.Boolean, nullable=False, default=False)
+    verifie_le = db.Column(db.DateTime, nullable=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
     boutique = db.relationship('Boutique', backref=db.backref('paiements_abonnement', cascade='all, delete-orphan',
@@ -1010,6 +1013,10 @@ class PaiementAbonnement(db.Model):
     @property
     def mode_libelle(self):
         return self.MODES.get(self.mode, self.mode)
+
+    @property
+    def numero_recu(self):
+        return f"AB-{(self.created_at or datetime.utcnow()).year}-{self.id:05d}"
 
     @property
     def mois_libelle(self):

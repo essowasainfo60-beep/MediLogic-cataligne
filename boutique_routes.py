@@ -67,13 +67,53 @@ ROLES_AUTORISES = {'vendeur': set(), 'caissier': CAISSE, 'gestionnaire': CAISSE 
 
 # Gestion des abonnements de toutes les boutiques : gérant de la boutique gestionnaire (L'UNIK) seulement
 GESTION_ABONNEMENTS = {'gestion_abonnements', 'gestion_formule', 'gestion_activer', 'gestion_encaisser', 'gestion_annuler_paiement',
-                       'gestion_formules_creer', 'gestion_formules_modifier', 'gestion_formules_supprimer'}
+                       'gestion_formules_creer', 'gestion_formules_modifier', 'gestion_formules_supprimer', 'gestion_verifier_paiement'}
+
+
+ADMIN_INACTIVITE = 15 * 60
+
+
+def admin_connecte():
+    """L'administrateur LivraPlus (le concepteur) est connecté : il a la main sur la gestion des abonnements."""
+    return bool(session.get('is_admin')) and time.time() - (session.get('admin_vu_a') or 0) <= ADMIN_INACTIVITE
+
+
+def gestion_requise(f):
+    """Pages de gestion des abonnements : gérant de la boutique gestionnaire (L'UNIK) ou administrateur LivraPlus."""
+    from functools import wraps
+
+    @wraps(f)
+    def verifie(*args, **kwargs):
+        if admin_connecte():
+            session['admin_vu_a'] = time.time()
+            return f(*args, **kwargs)
+        if not current_user.is_authenticated:
+            return redirect(url_for('boutique.connexion', next=request.path))
+        if not peut(request.endpoint):
+            flash("Cette page est réservée à la gestion des abonnements.", 'warning')
+            return redirect(url_for('boutique.dashboard'))
+        return f(*args, **kwargs)
+    return verifie
+
+
+def login_ou_admin(f):
+    """Connecté (boutique ou équipe) ou administrateur LivraPlus."""
+    from functools import wraps
+
+    @wraps(f)
+    def verifie(*args, **kwargs):
+        if admin_connecte() or current_user.is_authenticated:
+            return f(*args, **kwargs)
+        return redirect(url_for('boutique.connexion', next=request.path))
+    return verifie
 
 
 def peut(endpoint):
     """L'utilisateur connecté peut-il ouvrir cette page ? (utilisé aussi pour masquer les liens)"""
     nom = endpoint.split('.')[-1]
     if nom in GESTION_ABONNEMENTS:
+        if admin_connecte():
+            return True
         return (current_user.is_authenticated and not getattr(current_user, 'est_vendeur', False)
                 and abonnement.est_gestionnaire(boutique_connectee()))
     if nom in MODULE_BOUTIQUE and current_user.is_authenticated and not abonnement.module_boutique(boutique_connectee()):
@@ -91,8 +131,8 @@ def qui():
     return getattr(current_user, 'nom_utilisateur', None)
 
 
-# Abonnement non payé après le 8 : seules ces pages restent ouvertes
-OUVERT_SI_BLOQUE = {'dashboard', 'logout', 'abonnement_page', 'abonnement_payer', 'changer_mot_de_passe', 'api_nouvelles',
+# Abonnement non payé après le 7 : seules ces pages restent ouvertes
+OUVERT_SI_BLOQUE = {'dashboard', 'logout', 'abonnement_page', 'abonnement_payer', 'recu_abonnement', 'changer_mot_de_passe', 'api_nouvelles',
                     'alertes_abonner', 'alertes_tester'}
 
 
@@ -2743,7 +2783,7 @@ def _boutique_geree(boutique_id):
 
 
 @boutique_bp.route('/abonnements')
-@login_required
+@gestion_requise
 def gestion_abonnements():
     """Toutes les boutiques : formule, situation, activation, paiements."""
     fiches = []
@@ -2772,7 +2812,9 @@ def gestion_abonnements():
         fiches = [f for f in fiches if f['etat']['bloque'] or f['etat']['niveau'] in ('jaune', 'orange', 'rouge')]
     elif filtre in toutes_formules:
         fiches = [f for f in fiches if f['formule'] and f['formule']['code'] == filtre]
+    resume['a_verifier'] = sum(1 for p in paiements if p.statut == 'valide' and not p.verifie)
     return render_template('boutique/gestion_abonnements.html', fiches=fiches, resume=resume, paiements=paiements,
+                           comptes=abonnement.comptes(),
                            formules=toutes_formules, fcfa=msg.fcfa, modes=PaiementAbonnement.MODES, filtre=filtre,
                            couleurs=abonnement.COULEURS, icones=abonnement.ICONES,
                            mois_libelle=abonnement.libelle_mois(mois), premier_mois=abonnement.premier_mois_par_defaut(),
@@ -2780,7 +2822,7 @@ def gestion_abonnements():
 
 
 @boutique_bp.route('/abonnements/<int:boutique_id>/formule', methods=['POST'])
-@login_required
+@gestion_requise
 def gestion_formule(boutique_id):
     """Programmer l'abonnement : formule, prix (remise possible), premier mois facturé, fin de l'essai."""
     b = _boutique_geree(boutique_id)
@@ -2814,7 +2856,7 @@ def gestion_formule(boutique_id):
 
 
 @boutique_bp.route('/abonnements/<int:boutique_id>/activer', methods=['POST'])
-@login_required
+@gestion_requise
 def gestion_activer(boutique_id):
     """Activer (nouvelle inscription) ou désactiver une boutique."""
     b = _boutique_geree(boutique_id)
@@ -2829,23 +2871,42 @@ def gestion_activer(boutique_id):
 
 
 @boutique_bp.route('/abonnements/<int:boutique_id>/encaisser', methods=['POST'])
-@login_required
+@gestion_requise
 def gestion_encaisser(boutique_id):
     """Enregistrer un paiement reçu pour le mois dû de cette boutique."""
     b = _boutique_geree(boutique_id)
     date_depot = _lire_date(request.form.get('date_paiement'))
     paiement, erreur = abonnement.enregistrer(b, request.form.get('mode') or 'especes', request.form.get('reference'),
                                               date_depot.date() if date_depot else datetime.utcnow().date(),
-                                              par=f"{boutique_connectee().nom_boutique} (gestion des abonnements)")
+                                              par=_gestionnaire_nom() + " (gestion des abonnements)", verifie=True)
     if erreur:
         flash(f'{b.nom_boutique} : {erreur}', 'danger')
-    else:
-        flash(f'{b.nom_boutique} : {paiement.mois_libelle} payé ({msg.fcfa(paiement.montant)})', 'success')
-    return redirect(url_for('boutique.gestion_abonnements', _anchor=f'b{b.id}'))
+        return redirect(url_for('boutique.gestion_abonnements', _anchor=f'b{b.id}'))
+    flash(f'{b.nom_boutique} : {paiement.mois_libelle} payé ({msg.fcfa(paiement.montant)}). Envoyez-lui le reçu.', 'success')
+    return redirect(url_for('boutique.recu_abonnement', paiement_id=paiement.id, nouveau=1))
+
+
+def _gestionnaire_nom():
+    if current_user.is_authenticated and abonnement.est_gestionnaire(boutique_connectee()):
+        return boutique_connectee().nom_boutique
+    return 'Administrateur LivraPlus'
+
+
+@boutique_bp.route('/abonnements/paiement/<int:paiement_id>/verifier', methods=['POST'])
+@gestion_requise
+def gestion_verifier_paiement(paiement_id):
+    """Paiement déclaré par une boutique : l'argent est bien reçu."""
+    p = db.session.get(PaiementAbonnement, paiement_id)
+    if not p or abonnement.est_gestionnaire(p.boutique) or p.statut != 'valide':
+        abort(404)
+    p.verifie, p.verifie_le = True, datetime.utcnow()
+    db.session.commit()
+    flash(f'Paiement de {p.boutique.nom_boutique} ({p.mois_libelle}) confirmé. Vous pouvez lui renvoyer le reçu.', 'success')
+    return redirect(url_for('boutique.recu_abonnement', paiement_id=p.id))
 
 
 @boutique_bp.route('/abonnements/formules', methods=['POST'])
-@login_required
+@gestion_requise
 def gestion_formules_creer():
     """Nouvelle formule (ex. « Premium Pro Max » à 50 000 FCFA)."""
     f, _, erreur = abonnement.enregistrer_formule(None, _donnees_formule())
@@ -2855,7 +2916,7 @@ def gestion_formules_creer():
 
 
 @boutique_bp.route('/abonnements/formules/<int:formule_id>', methods=['POST'])
-@login_required
+@gestion_requise
 def gestion_formules_modifier(formule_id):
     """Modifier le prix, le nom, les limites… d'une formule."""
     from models import Formule
@@ -2869,7 +2930,7 @@ def gestion_formules_modifier(formule_id):
 
 
 @boutique_bp.route('/abonnements/formules/<int:formule_id>/supprimer', methods=['POST'])
-@login_required
+@gestion_requise
 def gestion_formules_supprimer(formule_id):
     """Supprimer une formule que plus aucune boutique n'utilise (sinon : la masquer)."""
     from models import Formule
@@ -2891,7 +2952,7 @@ def _donnees_formule():
 
 
 @boutique_bp.route('/abonnements/paiement/<int:paiement_id>/annuler', methods=['POST'])
-@login_required
+@gestion_requise
 def gestion_annuler_paiement(paiement_id):
     """Référence fausse ou dépôt non reçu : le mois redevient dû."""
     p = db.session.get(PaiementAbonnement, paiement_id)
@@ -2914,9 +2975,41 @@ def abonnement_payer():
         flash(erreur, 'danger')
     else:
         flash(f"Merci ! Abonnement de {paiement.mois_libelle} enregistré ({msg.fcfa(paiement.montant)}, "
-              f"{paiement.mode_libelle}). Il apparaît dans les charges de la caisse.", 'success')
+              f"{paiement.mode_libelle}). Votre espace est actif. Envoyez maintenant le reçu sur WhatsApp.", 'success')
+        if not abonnement.est_gestionnaire(boutique):
+            try:   # la boutique gestionnaire est prévenue sur son téléphone : paiement à vérifier
+                notifications.envoyer_boutique(abonnement.GESTIONNAIRE_ID, '💰 Abonnement payé',
+                                               f"{boutique.nom_boutique} : {paiement.mois_libelle}, {msg.fcfa(paiement.montant)} "
+                                               f"({paiement.mode_libelle}). À vérifier.",
+                                               url_for('boutique.recu_abonnement', paiement_id=paiement.id), tag=f'abo-{paiement.id}')
+            except Exception:
+                pass
+        return redirect(url_for('boutique.recu_abonnement', paiement_id=paiement.id, nouveau=1))
     return redirect(url_for('boutique.page_caisse') if request.form.get('retour') == 'caisse'
                     else url_for('boutique.abonnement_page'))
+
+
+@boutique_bp.route('/abonnement/recu/<int:paiement_id>')
+@login_ou_admin
+def recu_abonnement(paiement_id):
+    """Reçu d'un paiement d'abonnement : pour la boutique qui a payé, et pour la boutique gestionnaire."""
+    p = db.session.get(PaiementAbonnement, paiement_id) or abort(404)
+    moi = boutique_connectee() if current_user.is_authenticated else None
+    gestion = peut('boutique.gestion_abonnements')
+    a_moi = moi is not None and p.boutique_id == moi.id
+    if not a_moi and not gestion:
+        abort(404)
+    pour_gestionnaire = gestion and not a_moi
+    if pour_gestionnaire:
+        destinataire = p.boutique                                   # on renvoie le reçu à la boutique cliente
+    else:
+        destinataire = db.session.get(Boutique, abonnement.GESTIONNAIRE_ID)   # la boutique envoie son reçu à L'UNIK
+    lien_recu = url_for('boutique.recu_abonnement', paiement_id=p.id, _external=True)
+    texte = abonnement.texte_recu(p, pour_gestionnaire) + f"\nReçu : {lien_recu}"
+    lien_wa = msg.lien_whatsapp(destinataire.whatsapp, texte) if destinataire and destinataire.whatsapp else None
+    return render_template('boutique/recu_abonnement.html', p=p, fcfa=msg.fcfa, lien_wa=lien_wa, destinataire=destinataire,
+                           pour_gestionnaire=pour_gestionnaire, gestion=gestion, nouveau=request.args.get('nouveau'),
+                           emetteur=db.session.get(Boutique, abonnement.GESTIONNAIRE_ID))
 
 # ==================== ALERTES : NOUVELLES COMMANDES ====================
 

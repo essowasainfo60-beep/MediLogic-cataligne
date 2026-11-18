@@ -218,6 +218,10 @@ def mettre_a_jour_schema():
             conn.execute(text("ALTER TABLE discussions ADD COLUMN livreur_id INTEGER REFERENCES livreurs(id) ON DELETE CASCADE"))
         if inspecteur.has_table('discussions') and 'equipe' not in {c['name'] for c in inspecteur.get_columns('discussions')}:
             conn.execute(text("ALTER TABLE discussions ADD COLUMN equipe VARCHAR(30)"))
+        if inspecteur.has_table('paiements_abonnement') and 'verifie' not in {c['name'] for c in inspecteur.get_columns('paiements_abonnement')}:
+            # paiements déjà enregistrés (par l'administrateur) : considérés comme vérifiés
+            conn.execute(text("ALTER TABLE paiements_abonnement ADD COLUMN verifie BOOLEAN NOT NULL DEFAULT TRUE"))
+            conn.execute(text("ALTER TABLE paiements_abonnement ADD COLUMN verifie_le TIMESTAMP"))
         if 'derniere_activite' not in {c['name'] for c in inspecteur.get_columns('vendeurs')}:
             conn.execute(text("ALTER TABLE vendeurs ADD COLUMN derniere_activite TIMESTAMP"))
         if 'par' not in {c['name'] for c in inspecteur.get_columns('mouvements_caisse')}:
