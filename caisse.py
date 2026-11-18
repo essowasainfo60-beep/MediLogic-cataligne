@@ -41,8 +41,9 @@ def commande_livree(commande):
         commande.reglee = True       # remise en main propre : encaissé tout de suite
         commande.frais_payes = True
         commande.date_reglement = datetime.utcnow()
-        ajouter(commande.boutique_id, 'vente_directe', commande.total,
-                f'Commande n°{commande.numero} remise en boutique ({commande.client_nom})', commande_id=commande.id)
+        libelle = (f'Vente au comptoir n°{commande.numero}' + (f' ({commande.client_nom})' if commande.client_nom != 'Client comptoir' else '')
+                   if commande.source == 'comptoir' else f'Commande n°{commande.numero} remise en boutique ({commande.client_nom})')
+        ajouter(commande.boutique_id, 'vente_directe', commande.total, libelle, commande_id=commande.id)
 
 
 def commande_plus_livree(commande):

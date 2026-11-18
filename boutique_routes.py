@@ -16,6 +16,7 @@ import notifications
 import nouveautes
 import demandes
 import videos
+import comptoir
 import suivi_gps
 import stats_avancees
 import promos
@@ -39,7 +40,7 @@ GERANT_SEUL = {
     'regenerer_lien', 'modifier_whatsapp', 'biometrie_inscription_options', 'biometrie_inscription_verifier',
     'biometrie_retirer',
 }
-CAISSE = {'page_caisse', 'caisse_versement', 'caisse_paiement_livreur', 'caisse_mouvement', 'caisse_supprimer',
+CAISSE = {'annuler_vente', 'page_caisse', 'caisse_versement', 'caisse_paiement_livreur', 'caisse_mouvement', 'caisse_supprimer',
           'payer_frais_commande', 'versement_commande', 'changer_mode_frais',
           'abonnement_payer'}
 GESTION = {
@@ -47,7 +48,7 @@ GESTION = {
     'photo_principale', 'archiver_article', 'restaurer_article', 'articles_archives', 'livreurs', 'basculer_livreur', 'modifier_livreur',
     'ajouter_zone', 'modifier_zone', 'zones_modele', 'envoyer_espace_livreur', 'nouveau_lien_livreur',
     'statistiques', 'historique', 'message_statut', 'historique_csv', 'retour_commande', 'codes_promo', 'modifier_code_promo', 'regler_fidelite',
-    'annoncer_article', 'annoncer_nouveautes', 'envoyer_video',
+    'annoncer_article', 'annoncer_nouveautes', 'envoyer_video', 'code_barre_nouveau',
 }
 ROLES_AUTORISES = {'vendeur': set(), 'caissier': CAISSE, 'gestionnaire': CAISSE | GESTION}
 
@@ -96,7 +97,12 @@ def ouvrir_session():
 def page_apres_connexion():
     """Après une déconnexion pour inactivité : on revient sur la page où l'on était."""
     page = session.pop('apres_connexion', None)
-    return page if page and page.startswith('/boutique/') and not page.startswith('/boutique/log') else url_for('boutique.dashboard')
+    if page and page.startswith('/boutique/') and not page.startswith('/boutique/log'):
+        return page
+    # Le vendeur arrive directement sur la caisse (comme dans Ma Boutik) ; le gérant sur son tableau de bord
+    if getattr(current_user, 'est_vendeur', False) and getattr(current_user, 'role', None) == 'vendeur':
+        return url_for('boutique.vendre')
+    return url_for('boutique.dashboard')
 
 
 @boutique_bp.before_request
@@ -264,6 +270,17 @@ def enregistrer_variantes(article, form, type_mouvement, note):
         e = tableau.setdefault(cle, {})
         prix = lire_prix(form.get('vp::' + cle)) if prix_differents and (form.get('vp::' + cle) or '').strip() else None
         e['prix'] = prix if prix is not None and prix != article.prix else None
+    erreur_code = None
+    if 'codes_variantes_present' in form:
+        vus = set()
+        for cle in existantes:
+            code = comptoir.propre(form.get('vc::' + cle))
+            if code and (code in vus or code == article.code_barre or comptoir.deja_pris(article.boutique_id, code, article.id, cle)):
+                erreur_code = f'Code-barres {code} déjà utilisé : non enregistré pour {article.libelle_cle(cle)}.'
+                code = (tableau.get(cle) or {}).get('cb') if (tableau.get(cle) or {}).get('cb') != code else None
+            if code:
+                vus.add(code)
+            tableau[cle]['cb'] = code
     article.variantes = tableau
     if article.options and form.get('suivre_variantes'):
         stocks = {}
@@ -275,7 +292,21 @@ def enregistrer_variantes(article, form, type_mouvement, note):
         article.stock_par_variante = False   # retour à un stock global (le total est gardé)
     # On oublie les variantes qui n'existent plus
     article.variantes = {c: v for c, v in (article.variantes or {}).items() if c in existantes} or None
-    return None
+    return erreur_code
+
+
+def _lire_caisse_article(article, form):
+    """Code-barres (unique dans la boutique) et prix d'achat saisis sur la fiche article."""
+    if 'prix_achat' in form:
+        article.prix_achat = lire_prix(form.get('prix_achat')) if (form.get('prix_achat') or '').strip() else None
+    if 'code_barre' in form:
+        code = comptoir.propre(form.get('code_barre'))
+        if (form.get('code_barre') or '').strip() and not code:
+            flash('Code-barres invalide : non enregistré.', 'warning')
+        elif code and comptoir.deja_pris(article.boutique_id, code, article.id):
+            flash(f'Le code-barres {code} est déjà celui de « {comptoir.deja_pris(article.boutique_id, code, article.id)} » : non enregistré.', 'warning')
+        else:
+            article.code_barre = code
 
 
 def enregistrer_photos_choix(article, form):
@@ -717,6 +748,107 @@ def classer_demande(demande_id):
     return redirect(url_for('boutique.demandes_clients', vue=request.form.get('vue') or 'attente'))
 
 
+# ==================== VENTE AU COMPTOIR ====================
+
+@boutique_bp.route('/vendre')
+@login_required
+def vendre():
+    """Caisse : on scanne (douchette ou caméra) ou on cherche, on encaisse, le stock baisse."""
+    b = boutique_connectee()
+    return render_template('boutique/vendre.html', catalogue=comptoir.catalogue_caisse(b.id), modes=comptoir.MODES_PAIEMENT,
+                           vendeur=qui() or b.nom_boutique)
+
+
+@boutique_bp.route('/vendre', methods=['POST'])
+@login_required
+def vendre_valider():
+    d = request.get_json(silent=True) or {}
+    b = boutique_connectee()
+    commande, erreur = comptoir.vendre(b, d.get('lignes') or [], d.get('remise'), d.get('mode'), d.get('recu'),
+                                       d.get('client_nom'), d.get('client_tel'), qui() or b.nom_boutique)
+    if erreur:
+        return jsonify(success=False, message=erreur), 400
+    monnaie = (commande.montant_recu - commande.total) if commande.montant_recu is not None else None
+    return jsonify(success=True, id=commande.id, numero=commande.numero, total=commande.total,
+                   monnaie=monnaie, ticket=url_for('boutique.ticket_vente', commande_id=commande.id),
+                   catalogue=comptoir.catalogue_caisse(b.id))
+
+
+@boutique_bp.route('/vente/<int:commande_id>/ticket')
+@login_required
+def ticket_vente(commande_id):
+    commande = Commande.query.filter_by(id=commande_id, boutique_id=boutique_connectee().id).first_or_404()
+    lignes = [f"🧾 *{commande.boutique.nom_boutique}*", f"Ticket n°{commande.numero} · {commande.date_commande.strftime('%d/%m/%Y %H:%M')}", '']
+    for l in commande.articles_json:
+        lignes.append(f"{l['quantite']} × {l['nom']} : {msg.fcfa(l['prix'] * l['quantite'])}")
+    if commande.remise:
+        lignes.append(f"Remise : -{msg.fcfa(commande.remise)}")
+    lignes += [f"*Total : {msg.fcfa(commande.total)}*", '', 'Merci pour votre achat ! 🙏']
+    texte = '\n'.join(lignes)
+    lien_wa = (msg.lien_whatsapp(commande.client_telephone, texte) if commande.client_telephone
+               else 'https://wa.me/?text=' + quote(texte))
+    return render_template('boutique/ticket.html', commande=commande, modes=comptoir.MODES_PAIEMENT, lien_wa=lien_wa,
+                           retour=request.args.get('retour') or url_for('boutique.vendre'))
+
+
+@boutique_bp.route('/ventes')
+@login_required
+def ventes_jour():
+    """Caisse du jour (comme « Caisse journalière » de Ma Boutik) : le vendeur voit ses ventes,
+    le gérant / caissier voit tout le monde et peut annuler."""
+    b = boutique_connectee()
+    try:
+        jour = datetime.strptime(request.args.get('jour') or '', '%Y-%m-%d').date()
+    except ValueError:
+        jour = datetime.utcnow().date()
+    debut = datetime.combine(jour, datetime.min.time())
+    tout_voir = peut('boutique.annuler_vente')
+    moi = qui() or b.nom_boutique
+    q = Commande.query.filter(Commande.boutique_id == b.id, Commande.source == 'comptoir',
+                              Commande.date_commande >= debut, Commande.date_commande < debut + timedelta(days=1))
+    vendeur = request.args.get('vendeur') if tout_voir else moi
+    if vendeur:
+        q = q.filter(Commande.saisie_par == vendeur)
+    ventes = q.order_by(Commande.date_commande.desc()).all()
+    valides = [v for v in ventes if v.statut == 'livree']
+    par_mode = {}
+    for v in valides:
+        par_mode[v.mode_paiement or 'especes'] = par_mode.get(v.mode_paiement or 'especes', 0) + v.total
+    benefices = [comptoir.benefice(v) for v in valides]
+    vendeurs = sorted({v for (v,) in db.session.query(Commande.saisie_par).filter(
+        Commande.boutique_id == b.id, Commande.source == 'comptoir', Commande.saisie_par.isnot(None)).distinct()}) if tout_voir else []
+    return render_template('boutique/ventes_jour.html', ventes=ventes, jour=jour, total=sum(v.total for v in valides),
+                           nb=len(valides), articles=sum(l['quantite'] for v in valides for l in v.articles_json),
+                           par_mode=par_mode, modes=comptoir.MODES_PAIEMENT, tout_voir=tout_voir, vendeur=vendeur,
+                           vendeurs=vendeurs, benefice=sum(x for x in benefices if x is not None) if tout_voir and any(x is not None for x in benefices) else None,
+                           benefice_partiel=any(x is None for x in benefices), hier=jour - timedelta(days=1),
+                           demain=jour + timedelta(days=1) if jour < datetime.utcnow().date() else None)
+
+
+@boutique_bp.route('/ventes/<int:commande_id>/annuler', methods=['POST'])
+@login_required
+def annuler_vente(commande_id):
+    """Annule une vente au comptoir : le stock revient, l'argent sort de la caisse."""
+    commande = Commande.query.filter_by(id=commande_id, boutique_id=boutique_connectee().id, source='comptoir').first_or_404()
+    refus = stock.refus_transition(commande, 'annulee')
+    if refus:
+        flash(refus, 'danger')
+    elif commande.statut != 'annulee':
+        stock.changer_statut(commande, 'annulee')
+        motif = (request.form.get('motif') or '').strip()[:150]
+        commande.instructions = ((commande.instructions or '') + f"\nAnnulée par {qui() or 'la boutique'}" + (f' : {motif}' if motif else '')).strip()
+        db.session.commit()
+        flash(f'Vente n°{commande.numero} annulée : le stock est remis et {msg.fcfa(commande.total)} sont sortis de la caisse.', 'success')
+    return redirect(request.form.get('retour') or url_for('boutique.ventes_jour'))
+
+
+@boutique_bp.route('/code-barres/nouveau', methods=['POST'])
+@login_required
+def code_barre_nouveau():
+    """Code interne pour un article sans code d'usine (à imprimer en étiquette)."""
+    return jsonify(code=comptoir.code_interne(boutique_connectee().id))
+
+
 @boutique_bp.route('/articles_archives')
 @login_required
 def articles_archives():
@@ -744,6 +876,7 @@ def ajouter_article():
             options=lire_options_article(request.form),
         )
         enregistrer_avec_numero(article, 'numero', Article.prochain_numero)
+        _lire_caisse_article(article, request.form)
         if request.form.get('video_id'):
             videos.rattacher(article, request.form.get('video_id'))
         if article.options:
@@ -823,6 +956,7 @@ def modifier_article(article_id):
         article.nom = nom
         article.description = (request.form.get('description') or '').strip()
         article.prix = prix
+        _lire_caisse_article(article, request.form)
         article.options = lire_options_article(request.form)
         erreur = enregistrer_variantes(article, request.form, 'inventaire', "Modification de l'article")
         if erreur:
@@ -1544,6 +1678,10 @@ def changer_statut_commande(commande_id):
               "Rien n'a été modifié, vérifiez ci-dessous.", 'warning')
         return redirect(url_for('boutique.commande_details', commande_id=commande.id))
     refus = stock.refus_transition(commande, statut) if statut in Commande.STATUTS and statut != 'retournee' else None
+    if commande.source == 'comptoir' and statut != commande.statut and not peut('boutique.annuler_vente'):
+        refus = "Une vente au comptoir ne peut être annulée que par le gérant ou le caissier (Ventes du jour)."
+    elif commande.source == 'comptoir' and statut not in ('annulee', commande.statut):
+        refus = "Une vente au comptoir est déjà payée et remise : elle peut seulement être annulée, ou faire l'objet d'un retour."
     if refus:
         flash(refus, 'danger')
         return redirect(url_for('boutique.commande_details', commande_id=commande.id))

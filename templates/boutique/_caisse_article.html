@@ -1,0 +1,29 @@
+{# Prix d'achat + code-barres de l'article (variable « article » facultative) #}
+{% set art_c = article if article is defined else none %}
+<div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+    <div>
+        <label class="block text-gray-700 text-sm font-bold mb-1">Prix d'achat <span class="font-normal text-gray-400">(facultatif)</span></label>
+        <input type="number" step="0.01" min="0" name="prix_achat" inputmode="decimal"
+               value="{{ (art_c.prix_achat|int if art_c.prix_achat == art_c.prix_achat|int else art_c.prix_achat) if art_c and art_c.prix_achat is not none else '' }}"
+               class="w-full px-3 py-2.5 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-500" placeholder="Pour calculer votre bénéfice">
+    </div>
+    <div>
+        <label class="block text-gray-700 text-sm font-bold mb-1">Code-barres <span class="font-normal text-gray-400">(pour la caisse)</span></label>
+        <div class="flex gap-1.5">
+            <input type="text" name="code_barre" id="champCodeBarre" maxlength="40" autocomplete="off" value="{{ art_c.code_barre if art_c and art_c.code_barre else '' }}"
+                   class="flex-1 min-w-0 px-3 py-2.5 border border-gray-300 rounded-xl font-mono focus:outline-none focus:ring-2 focus:ring-purple-500" placeholder="Scannez ou tapez">
+            <button type="button" onclick="Scanner.ouvrir(function (c) { document.getElementById('champCodeBarre').value = c; })"
+                    class="px-3 rounded-xl bg-gray-900 text-white" title="Scanner avec la caméra" aria-label="Scanner avec la caméra"><i class="fas fa-camera"></i></button>
+        </div>
+        <button type="button" id="creerCode" class="mt-1 text-xs text-purple-700 font-semibold underline">Pas de code-barres ? En créer un</button>
+    </div>
+</div>
+<script src="{{ url_for('static', filename='scanner.js') }}" defer></script>
+<script>
+document.getElementById('creerCode').addEventListener('click', async function () {
+    const champ = document.getElementById('champCodeBarre');
+    if (champ.value.trim() && !confirm('Remplacer le code actuel par un nouveau code ?')) return;
+    const r = await fetch({{ url_for('boutique.code_barre_nouveau')|tojson }}, { method: 'POST', headers: { 'Accept': 'application/json' } });
+    champ.value = (await r.json()).code;
+});
+</script>

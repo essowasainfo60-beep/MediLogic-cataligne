@@ -63,6 +63,12 @@
             <span><b>Certaines variantes ont un prix différent</b><br>
                 <span class="text-xs text-gray-500">Laissez vide pour garder le prix de l'article.</span></span>
         </label>
+        <label class="flex items-start gap-2 text-sm">
+            <input type="hidden" name="codes_variantes_present" value="1">
+            <input type="checkbox" id="codesVariantes" class="mt-1" {{ 'checked' if art and art.variantes and (art.variantes.values()|selectattr('cb')|list) }}>
+            <span><b>Un code-barres pour chaque variante</b><br>
+                <span class="text-xs text-gray-500">Ex. chaque pointure a son étiquette : à la caisse, le scan ajoute directement la bonne variante.</span></span>
+        </label>
             </div>
         </details>
     </div>
@@ -78,6 +84,7 @@
     const tableau = document.getElementById('tableauVariantes');
     const suivre = document.getElementById('suivreVariantes');
     const prixCase = document.getElementById('prixVariantes');
+    const codesCase = document.getElementById('codesVariantes');
     const stockGlobal = document.getElementById('champStockGlobal');
     const echapper = (t) => String(t).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
     // Valeurs déjà saisies (gardées quand on modifie les choix)
@@ -85,6 +92,7 @@
     Object.entries(EXISTANTES).forEach(([cle, v]) => {
         memo['vs::' + cle] = v.stock != null ? String(v.stock) : '';
         memo['vp::' + cle] = v.prix != null ? String(Math.round(v.prix)) : '';
+        memo['vc::' + cle] = v.cb || '';
     });
 
     const propre = (t) => t.replace(/\|/g, '/').replace(/=/g, '-').replace(/\s+/g, ' ').trim().slice(0, 30);
@@ -113,10 +121,13 @@
     function saisie(cle, nomStock) {
         const s = memo['vs::' + cle] ?? '';
         const p = memo['vp::' + cle] ?? '';
+        const c = memo['vc::' + cle] ?? '';
         return `<input type="number" min="0" inputmode="numeric" name="vs::${echapper(cle)}" value="${echapper(s)}" placeholder="0"
                        class="champ-stock w-16 border border-gray-300 rounded-lg px-2 py-1 text-center ${suivre.checked ? '' : 'hidden'}" aria-label="${echapper(nomStock)} : quantité">
                 <input type="number" min="0" step="any" name="vp::${echapper(cle)}" value="${echapper(p)}" placeholder="prix"
-                       class="champ-prix w-24 border border-gray-300 rounded-lg px-2 py-1 text-right ${prixCase.checked ? '' : 'hidden'}" aria-label="${echapper(nomStock)} : prix">`;
+                       class="champ-prix w-24 border border-gray-300 rounded-lg px-2 py-1 text-right ${prixCase.checked ? '' : 'hidden'}" aria-label="${echapper(nomStock)} : prix">
+                <input type="text" name="vc::${echapper(cle)}" value="${echapper(c)}" placeholder="code-barres" autocomplete="off"
+                       class="champ-code w-28 border border-gray-300 rounded-lg px-2 py-1 font-mono text-xs ${codesCase.checked ? '' : 'hidden'}" aria-label="${echapper(nomStock)} : code-barres">`;
     }
 
     function dessiner() {
@@ -136,7 +147,8 @@
         // Toutes les combinaisons des autres choix (ex. les couleurs)
         let combos = [{}];
         autres.forEach((c) => { combos = combos.flatMap((x) => c.vals.map((v) => ({ ...x, [c.nom]: v }))); });
-        const entete = (suivre.checked ? '<span class="w-16 text-center">Quantité</span>' : '') + (prixCase.checked ? '<span class="w-24 text-right">Prix</span>' : '');
+        const entete = (suivre.checked ? '<span class="w-16 text-center">Quantité</span>' : '') + (prixCase.checked ? '<span class="w-24 text-right">Prix</span>' : '')
+            + (codesCase.checked ? '<span class="w-28">Code-barres</span>' : '');
         tableau.innerHTML = premier.vals.map((v) => {
             const lignes = combos.map((x) => {
                 const tout = { [premier.nom]: v, ...x };
@@ -242,6 +254,7 @@
 
     suivre.addEventListener('change', dessiner);
     prixCase.addEventListener('change', dessiner);
+    codesCase.addEventListener('change', dessiner);
     dessiner();
 })();
 </script>

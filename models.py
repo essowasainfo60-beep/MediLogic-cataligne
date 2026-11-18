@@ -203,6 +203,10 @@ class Article(db.Model):
     annonce = db.Column(db.String(12), nullable=True)
     # Courte vidéo de présentation (/video/<id>), stockée dans la base comme les photos
     video_url = db.Column(db.String(50), nullable=True)
+    # Vente au comptoir : code-barres (EAN, Code 128… ; les variantes peuvent avoir le leur : variantes[clé]['cb'])
+    code_barre = db.Column(db.String(40), nullable=True, index=True)
+    # Prix d'achat (pour le bénéfice) ; facultatif
+    prix_achat = db.Column(db.Float, nullable=True)
     # Photo à montrer quand le client choisit une valeur : {"Couleur": {"Noir": "<url de la photo>"}}
     photos_choix = db.Column(db.JSON, nullable=True)
 
@@ -400,6 +404,9 @@ class Commande(db.Model):
     # Livraison mise de côté quand le client « passe à la boutique » : {adresse, zone_id, lat, lng}
     # (remise telle quelle s'il est finalement livré)
     livraison_avant_retrait = db.Column(db.JSON, nullable=True)
+    # Vente au comptoir : moyen de paiement et somme reçue (pour la monnaie rendue sur le ticket)
+    mode_paiement = db.Column(db.String(20), nullable=True)
+    montant_recu = db.Column(db.Float, nullable=True)
 
     boutique = db.relationship('Boutique', backref=db.backref('commandes', cascade='all, delete-orphan'))
     livreur = db.relationship('Livreur', backref='commandes')
@@ -426,6 +433,7 @@ class Commande(db.Model):
         'whatsapp': 'WhatsApp',
         'telephone': 'Appel téléphonique',
         'boutique': 'En boutique',
+        'comptoir': 'Vente au comptoir',
         'autre': 'Autre',
     }
 

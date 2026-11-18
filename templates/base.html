@@ -79,11 +79,12 @@
     {% set vitrine = current_user if espace_boutique else (boutique if boutique is defined and boutique else none) %}
     {% set liens_principaux = [
         ('boutique.dashboard', 'fa-house', 'Accueil'),
+        ('boutique.vendre', 'fa-cash-register', 'Vendre'),
         ('boutique.commandes', 'fa-receipt', 'Commandes'),
         ('boutique.livraisons', 'fa-motorcycle', 'Livraisons'),
         ('boutique.discussions_liste', 'fa-comments', 'Messages')] %}
     {% set groupes_plus = [
-        ('Vente', [('boutique.articles', 'fa-boxes-stacked', 'Articles'), ('boutique.inventaire', 'fa-warehouse', 'Stock'),
+        ('Vente', [('boutique.ventes_jour', 'fa-cash-register', 'Ventes du jour (comptoir)'), ('boutique.articles', 'fa-boxes-stacked', 'Articles'), ('boutique.inventaire', 'fa-warehouse', 'Stock'),
                    ('boutique.codes_promo', 'fa-ticket', 'Codes promo'), ('boutique.clients', 'fa-address-book', 'Clients'),
                    ('boutique.demandes_clients', 'fa-bell', "Demandes d'articles")]),
         ('Argent', [('boutique.page_caisse', 'fa-cash-register', 'Caisse'), ('boutique.statistiques', 'fa-chart-line', 'Statistiques'),
@@ -251,7 +252,7 @@
     {% if espace_boutique %}
     <!-- Barre d'onglets en bas (téléphone), comme une application -->
     <nav id="ongletsBas" class="md:hidden fixed bottom-0 inset-x-0 z-50 bg-white/95 backdrop-blur border-t border-gray-200 pb-[env(safe-area-inset-bottom)]">
-        <div class="grid grid-cols-5 h-16 text-[11px]">
+        <div class="grid grid-flow-col auto-cols-fr h-16 text-[10.5px]">
             {% for endpoint, icone, libelle in liens_principaux if peut(endpoint) %}
             {% set actif = request.endpoint == endpoint or (endpoint == 'boutique.commandes' and request.endpoint == 'boutique.commande_details')
                            or (endpoint == 'boutique.discussions_liste' and request.endpoint == 'boutique.discussion') %}

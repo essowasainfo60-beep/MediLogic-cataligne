@@ -154,7 +154,9 @@ def mettre_a_jour_schema():
                                 ('livre_par', 'VARCHAR(20)'),
                                 ('proposee_at', 'TIMESTAMP'),
                                 ('livraison_avant_retrait', 'JSON'),
-                                ('mode_frais', 'VARCHAR(20)')]:
+                                ('mode_frais', 'VARCHAR(20)'),
+                                ('mode_paiement', 'VARCHAR(20)'),
+                                ('montant_recu', 'FLOAT')]:
             if nom not in colonnes_commandes:
                 conn.execute(text(f"ALTER TABLE commandes ADD COLUMN {nom} {definition}"))
         if 'frais' not in {c['name'] for c in inspecteur.get_columns('zones')}:
@@ -173,6 +175,11 @@ def mettre_a_jour_schema():
             conn.execute(text("ALTER TABLE articles ADD COLUMN annonce VARCHAR(12)"))
         if 'video_url' not in colonnes_articles:
             conn.execute(text("ALTER TABLE articles ADD COLUMN video_url VARCHAR(50)"))
+        if 'code_barre' not in colonnes_articles:
+            conn.execute(text("ALTER TABLE articles ADD COLUMN code_barre VARCHAR(40)"))
+            conn.execute(text("CREATE INDEX IF NOT EXISTS ix_articles_code_barre ON articles (code_barre)"))
+        if 'prix_achat' not in colonnes_articles:
+            conn.execute(text("ALTER TABLE articles ADD COLUMN prix_achat FLOAT"))
         if 'stock_par_variante' not in colonnes_articles:
             conn.execute(text("ALTER TABLE articles ADD COLUMN stock_par_variante BOOLEAN NOT NULL DEFAULT FALSE"))
         colonnes_mvt = {c['name'] for c in inspecteur.get_columns('mouvements_stock')}

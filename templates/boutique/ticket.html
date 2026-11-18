@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ticket n°{{ commande.numero }} - {{ commande.boutique.nom_boutique }}</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: Arial, Helvetica, sans-serif; color: #111; background: #e5e7eb; }
+        .barre { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; padding: 12px; background: #0b1d35; }
+        .barre a, .barre button { font: 600 15px Arial; padding: 10px 16px; border-radius: 10px; border: none; cursor: pointer; text-decoration: none; color: #0b1d35; background: #e2eaf5; }
+        .barre .vert { background: #22c55e; color: #fff; }
+        .ticket { width: 80mm; max-width: 100%; margin: 16px auto; background: #fff; padding: 5mm 4mm; font-size: 13px; box-shadow: 0 2px 10px rgba(0,0,0,.15); }
+        .centre { text-align: center; }
+        h1 { font-size: 17px; }
+        .sep { border-top: 1px dashed #000; margin: 7px 0; }
+        table { width: 100%; border-collapse: collapse; }
+        td { padding: 2px 0; vertical-align: top; }
+        .num { text-align: right; white-space: nowrap; }
+        .total td { font-size: 16px; font-weight: bold; padding-top: 4px; }
+        .petit { font-size: 11px; color: #333; }
+        @media print { body { background: #fff; } .barre { display: none; } .ticket { margin: 0; box-shadow: none; width: 80mm; } @page { size: 80mm auto; margin: 0; } }
+    </style>
+</head>
+<body>
+    <div class="barre">
+        <a href="{{ retour }}">← Retour</a>
+        <button type="button" onclick="window.print()">🖨 Imprimer</button>
+        <a href="{{ lien_wa }}" target="_blank" rel="noopener" class="vert">WhatsApp</a>
+    </div>
+    <div class="ticket">
+        <div class="centre">
+            <h1>{{ commande.boutique.nom_boutique }}</h1>
+            {% if commande.boutique.adresse %}<p class="petit">{{ commande.boutique.adresse }}</p>{% endif %}
+            {% if commande.boutique.whatsapp %}<p class="petit">Tél : {{ commande.boutique.whatsapp }}</p>{% endif %}
+            <div class="sep"></div>
+            <p><b>Ticket n°{{ commande.numero }}</b></p>
+            <p class="petit">{{ commande.date_commande.strftime('%d/%m/%Y à %H:%M') }}{% if commande.saisie_par %} · Vendeur : {{ commande.saisie_par }}{% endif %}</p>
+            {% if commande.client_nom and commande.client_nom != 'Client comptoir' %}<p class="petit">Client : {{ commande.client_nom }}{% if commande.client_telephone %} · {{ commande.client_telephone }}{% endif %}</p>{% endif %}
+        </div>
+        <div class="sep"></div>
+        <table>
+            {% for l in commande.articles_json %}
+            <tr><td colspan="2">{{ l.nom }}</td></tr>
+            <tr><td class="petit">{{ l.quantite }} × {{ "{:,.0f}".format(l.prix).replace(',', ' ') }}</td>
+                <td class="num">{{ "{:,.0f}".format(l.prix * l.quantite).replace(',', ' ') }}</td></tr>
+            {% endfor %}
+        </table>
+        <div class="sep"></div>
+        <table>
+            {% if commande.remise %}
+            <tr><td>Sous-total</td><td class="num">{{ "{:,.0f}".format(commande.sous_total).replace(',', ' ') }}</td></tr>
+            <tr><td>Remise</td><td class="num">-{{ "{:,.0f}".format(commande.remise).replace(',', ' ') }}</td></tr>
+            {% endif %}
+            <tr class="total"><td>TOTAL</td><td class="num">{{ "{:,.0f}".format(commande.total).replace(',', ' ') }} FCFA</td></tr>
+            {% if commande.mode_paiement %}
+            <tr><td>Payé : {{ modes[commande.mode_paiement][0] if commande.mode_paiement in modes else commande.mode_paiement }}</td>
+                <td class="num">{% if commande.montant_recu %}{{ "{:,.0f}".format(commande.montant_recu).replace(',', ' ') }}{% endif %}</td></tr>
+            {% if commande.montant_recu and commande.montant_recu > commande.total %}
+            <tr><td>Monnaie rendue</td><td class="num">{{ "{:,.0f}".format(commande.montant_recu - commande.total).replace(',', ' ') }}</td></tr>
+            {% endif %}
+            {% endif %}
+        </table>
+        <div class="sep"></div>
+        <p class="centre">Merci pour votre achat !</p>
+        <p class="centre petit">Commandez aussi en ligne, livré chez vous :<br>{{ url_for('client.catalogue', code=commande.boutique.lien_public, _external=True) }}</p>
+    </div>
+</body>
+</html>

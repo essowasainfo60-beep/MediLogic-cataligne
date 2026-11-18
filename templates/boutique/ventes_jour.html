@@ -1,0 +1,85 @@
+{% extends "base.html" %}
+
+{% block title %}Ventes du jour - {{ current_user.nom_boutique }}{% endblock %}
+
+{% block content %}
+<div class="max-w-4xl mx-auto px-4 space-y-4 pb-24">
+    <div class="flex flex-wrap items-end justify-between gap-2">
+        <div>
+            <h1 class="text-2xl font-extrabold text-gray-900"><i class="fas fa-receipt text-green-600 mr-1"></i> {{ 'Ventes du jour' if tout_voir else 'Mes ventes du jour' }}</h1>
+            <p class="text-sm text-gray-500">Ventes au comptoir · {{ jour.strftime('%d/%m/%Y') }}{% if vendeur %} · {{ vendeur }}{% endif %}</p>
+        </div>
+        <a href="{{ url_for('boutique.vendre') }}" class="bg-green-600 text-white px-4 py-2.5 rounded-xl font-semibold"><i class="fas fa-cash-register mr-1"></i> Vendre</a>
+    </div>
+
+    <!-- Jour / vendeur -->
+    <form method="GET" class="flex flex-wrap items-center gap-2 bg-white rounded-2xl shadow-sm p-3">
+        <a href="{{ url_for('boutique.ventes_jour', jour=hier.isoformat(), vendeur=vendeur if tout_voir else None) }}" class="px-3 py-2 rounded-lg bg-gray-100" aria-label="Jour précédent"><i class="fas fa-chevron-left"></i></a>
+        <input type="date" name="jour" value="{{ jour.isoformat() }}" max="{{ aujourdhui_iso }}" onchange="this.form.submit()" class="border border-gray-300 rounded-lg px-2 py-1.5">
+        {% if demain %}<a href="{{ url_for('boutique.ventes_jour', jour=demain.isoformat(), vendeur=vendeur if tout_voir else None) }}" class="px-3 py-2 rounded-lg bg-gray-100" aria-label="Jour suivant"><i class="fas fa-chevron-right"></i></a>{% endif %}
+        {% if tout_voir and vendeurs %}
+        <select name="vendeur" onchange="this.form.submit()" class="border border-gray-300 rounded-lg px-2 py-1.5">
+            <option value="">Tous les vendeurs</option>
+            {% for v in vendeurs %}<option value="{{ v }}" {{ 'selected' if v == vendeur }}>{{ v }}</option>{% endfor %}
+        </select>
+        {% endif %}
+    </form>
+
+    <!-- Totaux du jour -->
+    <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        <div class="bg-green-600 text-white rounded-2xl p-4 col-span-2">
+            <p class="text-sm opacity-90">Encaissé</p>
+            <p class="text-3xl font-extrabold">{{ "{:,.0f}".format(total).replace(',', ' ') }} <span class="text-base">FCFA</span></p>
+            <p class="text-sm opacity-90">{{ nb }} vente{{ 's' if nb > 1 }} · {{ articles }} article{{ 's' if articles > 1 }}</p>
+        </div>
+        {% if benefice is not none %}
+        <div class="bg-white rounded-2xl shadow-sm p-4 col-span-2 sm:col-span-2">
+            <p class="text-sm text-gray-500">Bénéfice{% if benefice_partiel %} <span class="text-xs">(articles avec prix d'achat)</span>{% endif %}</p>
+            <p class="text-2xl font-extrabold text-emerald-700">{{ "{:,.0f}".format(benefice).replace(',', ' ') }} FCFA</p>
+        </div>
+        {% endif %}
+    </div>
+    {% if par_mode %}
+    <div class="bg-white rounded-2xl shadow-sm p-4">
+        <p class="text-sm font-bold text-gray-700 mb-2">Par moyen de paiement</p>
+        <div class="grid grid-cols-2 sm:grid-cols-4 gap-2">
+            {% for cle, montant in par_mode.items() %}
+            <div class="bg-gray-50 rounded-xl px-3 py-2"><p class="text-xs text-gray-500"><i class="fas {{ modes[cle][1] if cle in modes else 'fa-coins' }} mr-1"></i>{{ modes[cle][0] if cle in modes else cle }}</p>
+                <p class="font-extrabold">{{ "{:,.0f}".format(montant).replace(',', ' ') }} FCFA</p></div>
+            {% endfor %}
+        </div>
+        {% if par_mode.get('especes') %}<p class="text-xs text-gray-500 mt-2">💵 En fin de journée, l'argent liquide dans le tiroir doit être de {{ "{:,.0f}".format(par_mode['especes']).replace(',', ' ') }} FCFA (ventes en espèces du jour{{ ' de ' ~ vendeur if vendeur }}).</p>{% endif %}
+    </div>
+    {% endif %}
+
+    <!-- Liste -->
+    <div class="space-y-2">
+        {% for v in ventes %}
+        <div class="bg-white rounded-2xl shadow-sm p-3 {{ 'opacity-60' if v.statut != 'livree' }}">
+            <div class="flex items-start justify-between gap-2">
+                <div class="min-w-0">
+                    <p class="font-bold text-gray-900">n°{{ v.numero }} · {{ v.date_commande.strftime('%H:%M') }}
+                        {% if v.statut == 'annulee' %}<span class="ml-1 text-xs bg-red-100 text-red-700 rounded-full px-2 py-0.5">Annulée</span>{% elif v.statut == 'retournee' %}<span class="ml-1 text-xs bg-orange-100 text-orange-700 rounded-full px-2 py-0.5">Retour</span>{% endif %}</p>
+                    <p class="text-sm text-gray-600 truncate">{% for l in v.articles_json %}{{ l.quantite }}× {{ l.nom }}{{ ', ' if not loop.last }}{% endfor %}</p>
+                    <p class="text-xs text-gray-500">{{ modes[v.mode_paiement][0] if v.mode_paiement in modes else 'Espèces' }}{% if tout_voir and v.saisie_par %} · {{ v.saisie_par }}{% endif %}{% if v.client_nom != 'Client comptoir' %} · {{ v.client_nom }}{% endif %}</p>
+                </div>
+                <p class="font-extrabold whitespace-nowrap {{ 'line-through' if v.statut == 'annulee' }}">{{ "{:,.0f}".format(v.total).replace(',', ' ') }} F</p>
+            </div>
+            <div class="flex flex-wrap gap-2 mt-2 text-sm">
+                <a href="{{ url_for('boutique.ticket_vente', commande_id=v.id, retour=request.full_path) }}" class="px-3 py-1.5 rounded-lg bg-gray-100"><i class="fas fa-receipt mr-1"></i>Ticket</a>
+                <a href="{{ url_for('boutique.commande_details', commande_id=v.id) }}" class="px-3 py-1.5 rounded-lg bg-gray-100">Détails / retour</a>
+                {% if tout_voir and v.statut == 'livree' %}
+                <form method="POST" action="{{ url_for('boutique.annuler_vente', commande_id=v.id) }}"
+                      onsubmit="const m = prompt('Annuler la vente n°{{ v.numero }} ({{ v.total|int }} FCFA) ?\nLe stock revient et l\'argent sort de la caisse.\n\nMotif (facultatif) :', ''); if (m === null) return false; this.motif.value = m; return true;">
+                    <input type="hidden" name="motif"><input type="hidden" name="retour" value="{{ request.full_path }}">
+                    <button type="submit" class="px-3 py-1.5 rounded-lg bg-red-50 text-red-700"><i class="fas fa-ban mr-1"></i>Annuler</button>
+                </form>
+                {% endif %}
+            </div>
+        </div>
+        {% else %}
+        <div class="text-center text-gray-500 py-12"><i class="fas fa-cash-register text-4xl text-gray-300 mb-2"></i><p>Aucune vente au comptoir ce jour-là.</p></div>
+        {% endfor %}
+    </div>
+</div>
+{% endblock %}

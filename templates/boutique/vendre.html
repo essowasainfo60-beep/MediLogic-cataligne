@@ -1,0 +1,442 @@
+{% extends "base.html" %}
+
+{% block title %}Vendre - {{ current_user.nom_boutique }}{% endblock %}
+
+{% block extra_css %}
+<style>
+    .tuile { background: #fff; border: 2px solid #f3f4f6; border-radius: 1rem; overflow: hidden; text-align: left; transition: transform .1s; }
+    .tuile:active { transform: scale(.97); }
+    .tuile.epuise { opacity: .45; }
+    .tuile img, .tuile .sans-photo { width: 100%; aspect-ratio: 1 / 1; object-fit: cover; background: #f3f4f6; }
+    .puce { min-width: 2.8rem; padding: .5rem .8rem; border: 2px solid #e5e7eb; border-radius: .8rem; font-weight: 600; background: #fff; }
+    .puce.choisie { border-color: #7c3aed; background: #7c3aed; color: #fff; }
+    .puce.vide { color: #9ca3af; text-decoration: line-through; border-style: dashed; }
+    .mode { border: 2px solid #e5e7eb; border-radius: .9rem; padding: .55rem .4rem; font-weight: 600; font-size: .85rem; background: #fff; }
+    .mode.choisi { border-color: #16a34a; background: #f0fdf4; color: #166534; }
+    @keyframes eclair { 0% { background: #bbf7d0 } 100% { background: transparent } }
+    .eclair { animation: eclair .7s ease-out; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="max-w-6xl mx-auto px-3 sm:px-6 pb-40 md:pb-8">
+    <div class="flex items-center justify-between gap-2 mb-3">
+        <h1 class="text-2xl font-extrabold text-gray-900"><i class="fas fa-cash-register text-green-600 mr-1"></i> Vendre</h1>
+        <span class="text-xs text-gray-500 text-right">Vendeur : <b>{{ vendeur }}</b></span>
+    </div>
+
+    <div class="md:grid md:grid-cols-[1fr_380px] md:gap-5">
+        <!-- Articles -->
+        <div>
+            <div class="sticky top-16 z-20 bg-gray-50/95 backdrop-blur pt-1 pb-3">
+                <div class="flex gap-2">
+                    <div class="relative flex-1">
+                        <i class="fas fa-barcode absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400"></i>
+                        <input id="recherche" type="search" autocomplete="off" autofocus enterkeyhint="search"
+                               placeholder="Scannez, ou tapez nom / n° / code"
+                               class="w-full pl-10 pr-3 py-3.5 border-2 border-gray-200 rounded-2xl text-base focus:outline-none focus:border-green-500">
+                    </div>
+                    <button type="button" id="btnCamera" class="flex-shrink-0 w-14 rounded-2xl bg-gray-900 text-white text-xl" aria-label="Scanner avec la caméra">
+                        <i class="fas fa-camera"></i></button>
+                </div>
+                <p id="messageScan" class="hidden mt-2 text-sm rounded-xl px-3 py-2"></p>
+            </div>
+            <div id="tuiles" class="grid grid-cols-3 sm:grid-cols-4 lg:grid-cols-5 gap-2.5"></div>
+            <p id="aucun" class="hidden text-center text-gray-500 py-10">Aucun article trouvé.</p>
+        </div>
+
+        <!-- Panier (colonne sur ordinateur / tablette) -->
+        <aside class="hidden md:block">
+            <div class="sticky top-20 bg-white rounded-2xl shadow-sm border border-gray-100 p-4" id="panierCote"></div>
+        </aside>
+    </div>
+</div>
+
+<!-- Barre du panier (téléphone) -->
+<div id="barrePanier" class="md:hidden fixed inset-x-0 bottom-16 z-40 px-3 pb-2">
+    <button type="button" id="ouvrirCaisse" class="w-full flex items-center gap-3 bg-green-600 text-white rounded-2xl px-4 py-3.5 shadow-xl disabled:bg-gray-300">
+        <span class="h-9 min-w-9 px-2 rounded-xl bg-white/20 flex items-center justify-center font-bold" id="nbArticles">0</span>
+        <span class="flex-1 text-left font-bold text-lg" id="totalBarre">0 FCFA</span>
+        <span class="font-semibold">Encaisser <i class="fas fa-chevron-up ml-1"></i></span>
+    </button>
+</div>
+
+<!-- Fenêtre : choix de la variante -->
+<div id="feuilleVariante" class="fixed inset-0 z-[65] hidden">
+    <div class="absolute inset-0 bg-black/50" data-fermer></div>
+    <div class="absolute inset-x-0 bottom-0 md:inset-auto md:left-1/2 md:top-1/2 md:-translate-x-1/2 md:-translate-y-1/2 md:w-[440px] bg-white rounded-t-3xl md:rounded-3xl p-4 pb-[max(1rem,env(safe-area-inset-bottom))] max-h-[85vh] overflow-y-auto">
+        <div class="flex items-center gap-3 mb-3">
+            <img id="vPhoto" alt="" class="h-14 w-14 rounded-xl object-cover bg-gray-100">
+            <div class="flex-1 min-w-0"><p id="vNom" class="font-bold leading-tight"></p><p id="vPrix" class="text-purple-700 font-extrabold"></p></div>
+            <button type="button" data-fermer class="h-10 w-10 rounded-full bg-gray-100 text-xl" aria-label="Fermer">&times;</button>
+        </div>
+        <div id="vOptions" class="space-y-3"></div>
+        <p id="vInfo" class="text-sm mt-3"></p>
+        <button type="button" id="vAjouter" class="mt-4 w-full bg-green-600 text-white rounded-2xl font-bold py-3.5 text-lg disabled:bg-gray-300">Ajouter</button>
+    </div>
+</div>
+
+<!-- Fenêtre : encaissement (téléphone) -->
+<div id="feuilleCaisse" class="fixed inset-0 z-[65] hidden md:hidden">
+    <div class="absolute inset-0 bg-black/50" data-fermer></div>
+    <div class="absolute inset-x-0 bottom-0 bg-white rounded-t-3xl p-4 pb-[max(1rem,env(safe-area-inset-bottom))] max-h-[92vh] overflow-y-auto" id="panierFeuille"></div>
+</div>
+
+<!-- Vente réussie -->
+<div id="feuilleOk" class="fixed inset-0 z-[70] hidden bg-black/60 flex items-center justify-center p-4">
+    <div class="bg-white rounded-3xl p-6 w-full max-w-sm text-center">
+        <p class="text-5xl">✅</p>
+        <p class="text-xl font-extrabold mt-2">Vente enregistrée</p>
+        <p id="okNumero" class="text-gray-500 text-sm"></p>
+        <p id="okTotal" class="text-2xl font-extrabold text-gray-900 mt-3"></p>
+        <p id="okMonnaie" class="hidden mt-2 text-lg font-bold text-green-700 bg-green-50 rounded-xl py-2"></p>
+        <div class="grid grid-cols-2 gap-2 mt-5">
+            <a id="okTicket" href="#" class="bg-gray-900 text-white rounded-xl py-3 font-semibold"><i class="fas fa-receipt mr-1"></i> Ticket</a>
+            <button type="button" id="okNouvelle" class="bg-green-600 text-white rounded-xl py-3 font-semibold"><i class="fas fa-plus mr-1"></i> Nouvelle vente</button>
+        </div>
+    </div>
+</div>
+
+<template id="modeleCaisse">
+    <div class="flex items-center justify-between mb-3">
+        <p class="text-lg font-extrabold">Panier <span class="text-gray-400 font-semibold" data-nb></span></p>
+        <button type="button" data-vider class="text-sm text-red-600"><i class="fas fa-trash mr-1"></i>Vider</button>
+    </div>
+    <ul data-lignes class="divide-y divide-gray-100 max-h-[38vh] md:max-h-[42vh] overflow-y-auto -mx-1 px-1"></ul>
+    <p data-vide class="text-center text-gray-400 py-8 text-sm">Scannez ou touchez un article pour l'ajouter.</p>
+    <div data-pied class="space-y-3 pt-3 mt-2 border-t border-gray-100">
+        <div class="flex justify-between text-sm text-gray-600"><span>Sous-total</span><span data-sous-total></span></div>
+        <div class="flex items-center justify-between gap-2 text-sm">
+            <span class="text-gray-600">Remise</span>
+            <div class="flex items-center gap-1">
+                <input data-remise type="number" min="0" inputmode="numeric" placeholder="0" class="w-24 border border-gray-300 rounded-lg px-2 py-1.5 text-right">
+                <select data-remise-type class="border border-gray-300 rounded-lg px-1 py-1.5"><option value="f">FCFA</option><option value="p">%</option></select>
+            </div>
+        </div>
+        <div class="flex justify-between items-end"><span class="font-bold">Total à payer</span><span data-total class="text-3xl font-extrabold text-gray-900"></span></div>
+        <div>
+            <p class="text-sm font-semibold text-gray-700 mb-1.5">Paiement</p>
+            <div class="grid grid-cols-4 gap-1.5" data-modes>
+                {% for cle, (nom, icone) in modes.items() if cle != 'autre' %}
+                <button type="button" class="mode {{ 'choisi' if loop.first }}" data-mode="{{ cle }}"><i class="fas {{ icone }} block mb-0.5"></i>{{ nom }}</button>
+                {% endfor %}
+            </div>
+        </div>
+        <div data-bloc-recu>
+            <div class="flex items-center gap-2">
+                <label class="text-sm font-semibold text-gray-700 flex-1">Reçu du client</label>
+                <input data-recu type="number" min="0" inputmode="numeric" placeholder="somme donnée" class="w-36 border-2 border-gray-200 rounded-xl px-3 py-2 text-right font-bold">
+            </div>
+            <div class="flex flex-wrap gap-1.5 mt-2" data-billets></div>
+            <p data-monnaie class="hidden mt-2 text-center font-bold rounded-xl py-2"></p>
+        </div>
+        <details class="text-sm">
+            <summary class="cursor-pointer text-gray-600"><i class="fas fa-user mr-1"></i> Client (facultatif : pour le ticket WhatsApp et la fidélité)</summary>
+            <div class="grid grid-cols-2 gap-2 mt-2">
+                <input data-client-nom maxlength="100" placeholder="Nom" class="border border-gray-300 rounded-lg px-2 py-2">
+                <input data-client-tel type="tel" maxlength="30" placeholder="Téléphone" class="border border-gray-300 rounded-lg px-2 py-2">
+            </div>
+        </details>
+        <button type="button" data-valider class="w-full bg-green-600 text-white rounded-2xl font-extrabold py-4 text-lg shadow-md disabled:bg-gray-300">
+            <i class="fas fa-check mr-1"></i> Valider la vente</button>
+    </div>
+</template>
+
+<script src="{{ url_for('static', filename='scanner.js') }}"></script>
+<script>
+(function () {
+    let CATALOGUE = {{ catalogue|tojson }};
+    const URL_VENTE = {{ url_for('boutique.vendre_valider')|tojson }};
+    const $ = (id) => document.getElementById(id);
+    const fcfa = (v) => Math.round(v).toLocaleString('fr-FR').replace(/ | /g, ' ') + ' FCFA';
+    const sansAcc = (t) => (t || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+    let panier = [];          // { id, cle, nom, prix, q, photo, max }
+    let mode = 'especes';
+    const champs = {};        // valeurs de la caisse, partagées entre la colonne et la feuille
+
+    // ---------- Sons ----------
+    let audio;
+    function bip(ok) {
+        try {
+            audio = audio || new (window.AudioContext || window.webkitAudioContext)();
+            const o = audio.createOscillator(), g = audio.createGain();
+            o.frequency.value = ok ? 1250 : 300; o.connect(g); g.connect(audio.destination);
+            g.gain.setValueAtTime(.15, audio.currentTime); o.start(); o.stop(audio.currentTime + (ok ? .09 : .25));
+        } catch (e) {}
+        if (navigator.vibrate) navigator.vibrate(ok ? 40 : [80, 60, 80]);
+    }
+    function message(t, ok) {
+        const m = $('messageScan');
+        m.textContent = t;
+        m.className = 'mt-2 text-sm rounded-xl px-3 py-2 font-semibold ' + (ok ? 'bg-green-50 text-green-800' : 'bg-red-50 text-red-700');
+        clearTimeout(message.t); message.t = setTimeout(() => m.classList.add('hidden'), 3500);
+    }
+
+    // ---------- Stock ----------
+    function enMain(a, cle) {
+        if (a.s === null || a.s === undefined) return null;          // stock non suivi
+        if (cle && a.suivi) return a.v[cle] ? a.v[cle].s : 0;
+        return a.s;
+    }
+    function dejaPris(id, cle, suivi) {
+        return panier.filter((l) => l.id === id && (!suivi || l.cle === cle)).reduce((n, l) => n + l.q, 0);
+    }
+
+    // ---------- Tuiles ----------
+    function dessinerTuiles() {
+        const q = sansAcc($('recherche').value.trim());
+        const liste = CATALOGUE.filter((a) => !q || sansAcc('n°' + a.n + ' ' + a.n + ' ' + a.nom + ' ' + (a.cb || '')).includes(q)
+            || Object.values(a.v).some((v) => v.cb && v.cb.includes(q)));
+        $('tuiles').innerHTML = '';
+        liste.slice(0, 120).forEach((a) => {
+            const s = enMain(a, null);
+            const b = document.createElement('button');
+            b.type = 'button';
+            b.className = 'tuile' + (s !== null && s <= 0 ? ' epuise' : '');
+            b.innerHTML = (a.photo ? '<img loading="lazy" alt="">' : '<div class="sans-photo flex items-center justify-center text-gray-300 text-3xl"><i class="fas fa-box"></i></div>')
+                + '<div class="p-1.5"><p class="text-[11px] text-purple-600 font-bold">n°' + a.n + '</p>'
+                + '<p class="text-xs font-semibold leading-tight line-clamp-2 nom"></p>'
+                + '<p class="text-sm font-extrabold text-gray-900 mt-0.5">' + fcfa(a.prix) + '</p>'
+                + '<p class="text-[11px] ' + (s !== null && s <= 3 ? 'text-red-600 font-semibold' : 'text-gray-500') + '">'
+                + (s === null ? '' : s <= 0 ? 'Épuisé' : s + ' en stock') + '</p></div>';
+            if (a.photo) b.querySelector('img').src = a.photo;
+            b.querySelector('.nom').textContent = a.nom;
+            b.addEventListener('click', () => choisir(a));
+            $('tuiles').appendChild(b);
+        });
+        $('aucun').classList.toggle('hidden', liste.length > 0);
+    }
+
+    // ---------- Ajout au panier ----------
+    function ajouter(a, cle, q) {
+        q = q || 1;
+        const max = enMain(a, cle);
+        const pris = dejaPris(a.id, cle, a.suivi || !cle);
+        if (max !== null && pris + q > max) {
+            bip(false);
+            message(max <= 0 ? '« ' + a.nom + (cle ? ' (' + a.v[cle].l + ')' : '') + ' » : épuisé dans votre stock'
+                             : '« ' + a.nom + ' » : il n\'en reste que ' + max, false);
+            return false;
+        }
+        const ligne = panier.find((l) => l.id === a.id && l.cle === (cle || null));
+        if (ligne) ligne.q += q;
+        else panier.push({ id: a.id, cle: cle || null, nom: a.nom + (cle ? ' (' + a.v[cle].l + ')' : ''),
+                           prix: cle ? a.v[cle].p : a.prix, q: q, photo: photoDe(a, cle) });
+        bip(true);
+        message('✓ ' + a.nom + (cle ? ' (' + a.v[cle].l + ')' : '') + ' ajouté', true);
+        dessinerPanier(true);
+        return true;
+    }
+    function photoDe(a, cle) {
+        if (cle) {
+            for (const part of cle.split('|')) {
+                const [o, v] = part.split('=');
+                const i = ((a.photos || {})[o] || {})[v];
+                if (i != null && a.tout[i]) return a.tout[i];
+            }
+        }
+        return a.photo;
+    }
+
+    // ---------- Variante : fenêtre de choix ----------
+    let artV = null, choixV = {};
+    function choisir(a) {
+        if (!Object.keys(a.options || {}).length) return ajouter(a, null, 1);
+        artV = a; choixV = {};
+        $('vNom').textContent = 'n°' + a.n + ' · ' + a.nom;
+        $('vPhoto').src = a.photo || '';
+        $('vOptions').innerHTML = '';
+        Object.entries(a.options).forEach(([o, valeurs]) => {
+            const d = document.createElement('div');
+            d.innerHTML = '<p class="text-sm font-bold mb-1.5"></p><div class="flex flex-wrap gap-1.5"></div>';
+            d.querySelector('p').textContent = o;
+            valeurs.forEach((v) => {
+                const b = document.createElement('button');
+                b.type = 'button'; b.className = 'puce'; b.textContent = v; b.dataset.o = o; b.dataset.v = v;
+                b.addEventListener('click', () => { choixV[o] = v; majVariante(); });
+                d.lastChild.appendChild(b);
+            });
+            $('vOptions').appendChild(d);
+        });
+        majVariante();
+        $('feuilleVariante').classList.remove('hidden');
+    }
+    const cleDe = (c) => Object.keys(c).sort().map((o) => o + '=' + c[o]).join('|');
+    function possible(a, partiel) {
+        if (!a.suivi) return true;
+        const m = Object.entries(partiel).map(([o, v]) => o + '=' + v);
+        return Object.entries(a.v).some(([cle, x]) => x.s > 0 && m.every((p) => cle.split('|').includes(p)));
+    }
+    function majVariante() {
+        const a = artV;
+        $('vOptions').querySelectorAll('.puce').forEach((b) => {
+            const p = Object.assign({}, choixV, { [b.dataset.o]: b.dataset.v });
+            b.classList.toggle('choisie', choixV[b.dataset.o] === b.dataset.v);
+            b.classList.toggle('vide', !possible(a, p));
+        });
+        const complet = Object.keys(a.options).every((o) => choixV[o]);
+        const cle = complet ? cleDe(choixV) : null;
+        const x = cle ? a.v[cle] : null;
+        $('vPrix').textContent = fcfa(x ? x.p : a.prix);
+        const s = cle ? enMain(a, cle) : null;
+        $('vInfo').textContent = !complet ? 'Choisissez : ' + Object.keys(a.options).filter((o) => !choixV[o]).join(', ').toLowerCase()
+            : s === null ? '' : s <= 0 ? 'Épuisé dans ce choix' : s + ' en stock dans ce choix';
+        $('vInfo').className = 'text-sm mt-3 ' + (complet && s !== null && s <= 0 ? 'text-red-600 font-semibold' : 'text-gray-600');
+        $('vAjouter').disabled = !complet || (s !== null && s <= 0);
+    }
+    $('vAjouter').addEventListener('click', () => {
+        if (ajouter(artV, cleDe(choixV), 1)) $('feuilleVariante').classList.add('hidden');
+    });
+
+    // ---------- Scan (douchette = saisie + Entrée ; caméra) ----------
+    function lireCode(code) {
+        code = (code || '').trim();
+        if (!code) return;
+        for (const a of CATALOGUE) {
+            if (a.cb && a.cb === code) { $('recherche').value = ''; dessinerTuiles(); return choisir(a); }
+            for (const [cle, v] of Object.entries(a.v)) {
+                if (v.cb && v.cb === code) { $('recherche').value = ''; dessinerTuiles(); return ajouter(a, cle, 1); }
+            }
+        }
+        if (/^\d{1,6}$/.test(code)) {
+            const a = CATALOGUE.find((x) => String(x.n) === code);
+            if (a) { $('recherche').value = ''; dessinerTuiles(); return choisir(a); }
+        }
+        const q = sansAcc(code);
+        const liste = CATALOGUE.filter((a) => sansAcc(a.nom).includes(q));
+        if (liste.length === 1) { $('recherche').value = ''; dessinerTuiles(); return choisir(liste[0]); }
+        bip(false);
+        message(liste.length ? liste.length + ' articles trouvés : touchez le bon.' : 'Code ' + code + ' inconnu : ajoutez-le sur la fiche de l\'article.', !!liste.length);
+    }
+    $('recherche').addEventListener('input', dessinerTuiles);
+    $('recherche').addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); lireCode($('recherche').value); } });
+    $('btnCamera').addEventListener('click', () => Scanner.ouvrir(lireCode));
+
+    // ---------- Panier et encaissement ----------
+    function totaux() {
+        const st = panier.reduce((n, l) => n + l.prix * l.q, 0);
+        const r = parseFloat(champs.remise) || 0;
+        const remise = Math.min(st, Math.max(0, champs.remiseType === 'p' ? Math.round(st * r / 100) : r));
+        return { st, remise, total: st - remise, nb: panier.reduce((n, l) => n + l.q, 0) };
+    }
+    function remplir(conteneur) {
+        if (!conteneur.dataset.pret) {
+            conteneur.appendChild($('modeleCaisse').content.cloneNode(true));
+            conteneur.dataset.pret = '1';
+            conteneur.querySelector('[data-vider]').addEventListener('click', () => { if (panier.length && confirm('Vider le panier ?')) { panier = []; dessinerPanier(); } });
+            conteneur.querySelector('[data-remise]').addEventListener('input', (e) => { champs.remise = e.target.value; dessinerPanier(false, conteneur); });
+            conteneur.querySelector('[data-remise-type]').addEventListener('change', (e) => { champs.remiseType = e.target.value; dessinerPanier(false, conteneur); });
+            conteneur.querySelector('[data-recu]').addEventListener('input', (e) => { champs.recu = e.target.value; dessinerPanier(false, conteneur); });
+            conteneur.querySelector('[data-client-nom]').addEventListener('input', (e) => { champs.nom = e.target.value; });
+            conteneur.querySelector('[data-client-tel]').addEventListener('input', (e) => { champs.tel = e.target.value; });
+            conteneur.querySelectorAll('[data-mode]').forEach((b) => b.addEventListener('click', () => { mode = b.dataset.mode; dessinerPanier(); }));
+            conteneur.querySelector('[data-valider]').addEventListener('click', valider);
+        }
+        const t = totaux();
+        const ul = conteneur.querySelector('[data-lignes]');
+        ul.innerHTML = '';
+        panier.forEach((l, i) => {
+            const li = document.createElement('li');
+            li.className = 'py-2 flex items-center gap-2';
+            li.innerHTML = '<img alt="" class="h-11 w-11 rounded-lg object-cover bg-gray-100 flex-shrink-0">'
+                + '<div class="flex-1 min-w-0"><p class="text-sm font-semibold leading-tight truncate nom"></p><p class="text-xs text-gray-500">' + fcfa(l.prix) + '</p></div>'
+                + '<div class="flex items-center border border-gray-200 rounded-lg"><button type="button" class="px-2.5 py-1 text-lg" data-m>−</button>'
+                + '<span class="w-7 text-center font-bold">' + l.q + '</span><button type="button" class="px-2.5 py-1 text-lg" data-p>+</button></div>'
+                + '<p class="w-20 text-right text-sm font-bold">' + fcfa(l.prix * l.q) + '</p>';
+            if (l.photo) li.querySelector('img').src = l.photo; else li.querySelector('img').classList.add('invisible');
+            li.querySelector('.nom').textContent = l.nom;
+            li.querySelector('[data-m]').addEventListener('click', () => { l.q -= 1; if (l.q <= 0) panier.splice(i, 1); dessinerPanier(); });
+            li.querySelector('[data-p]').addEventListener('click', () => {
+                const a = CATALOGUE.find((x) => x.id === l.id);
+                const max = enMain(a, l.cle);
+                if (max !== null && dejaPris(a.id, l.cle, a.suivi || !l.cle) + 1 > max) { bip(false); message('Il n\'en reste que ' + max, false); return; }
+                l.q += 1; dessinerPanier();
+            });
+            ul.appendChild(li);
+        });
+        conteneur.querySelector('[data-nb]').textContent = t.nb ? '(' + t.nb + ')' : '';
+        conteneur.querySelector('[data-vide]').classList.toggle('hidden', panier.length > 0);
+        conteneur.querySelector('[data-pied]').classList.toggle('hidden', !panier.length);
+        conteneur.querySelector('[data-sous-total]').textContent = fcfa(t.st);
+        conteneur.querySelector('[data-total]').textContent = fcfa(t.total);
+        if (document.activeElement !== conteneur.querySelector('[data-remise]')) conteneur.querySelector('[data-remise]').value = champs.remise || '';
+        conteneur.querySelector('[data-remise-type]').value = champs.remiseType || 'f';
+        if (document.activeElement !== conteneur.querySelector('[data-recu]')) conteneur.querySelector('[data-recu]').value = champs.recu || '';
+        conteneur.querySelectorAll('[data-mode]').forEach((b) => b.classList.toggle('choisi', b.dataset.mode === mode));
+        conteneur.querySelector('[data-bloc-recu]').classList.toggle('hidden', mode !== 'especes');
+        // Billets rapides : le montant exact, puis les billets au-dessus
+        const billets = conteneur.querySelector('[data-billets]');
+        billets.innerHTML = '';
+        const prop = [t.total];
+        [1000, 2000, 5000, 10000].forEach((b) => { const v = Math.ceil(t.total / b) * b; if (v > t.total && !prop.includes(v)) prop.push(v); });
+        prop.slice(0, 4).forEach((v, i) => {
+            const b = document.createElement('button');
+            b.type = 'button'; b.className = 'px-3 py-1.5 rounded-full border border-gray-300 text-sm font-semibold bg-white';
+            b.textContent = i === 0 ? 'Compte juste' : fcfa(v);
+            b.addEventListener('click', () => { champs.recu = String(v); dessinerPanier(); });
+            billets.appendChild(b);
+        });
+        const recu = parseFloat(champs.recu);
+        const mon = conteneur.querySelector('[data-monnaie]');
+        mon.classList.toggle('hidden', !(mode === 'especes' && recu > 0));
+        if (recu > 0) {
+            const r = recu - t.total;
+            mon.textContent = r >= 0 ? 'Monnaie à rendre : ' + fcfa(r) : 'Il manque ' + fcfa(-r);
+            mon.className = 'mt-2 text-center font-bold rounded-xl py-2 ' + (r >= 0 ? 'bg-green-50 text-green-800' : 'bg-red-50 text-red-700');
+        }
+        conteneur.querySelector('[data-valider]').disabled = !panier.length || (mode === 'especes' && recu > 0 && recu < t.total);
+    }
+    function dessinerPanier(eclair, sauf) {
+        const t = totaux();
+        $('nbArticles').textContent = t.nb;
+        $('totalBarre').textContent = fcfa(t.total);
+        $('ouvrirCaisse').disabled = !panier.length;
+        if (eclair) { const b = $('ouvrirCaisse'); b.classList.remove('eclair'); void b.offsetWidth; b.classList.add('eclair'); }
+        remplir($('panierCote'));
+        if (!$('feuilleCaisse').classList.contains('hidden') || $('panierFeuille').dataset.pret) remplir($('panierFeuille'));
+    }
+    $('ouvrirCaisse').addEventListener('click', () => { remplir($('panierFeuille')); $('feuilleCaisse').classList.remove('hidden'); });
+    document.querySelectorAll('[data-fermer]').forEach((b) => b.addEventListener('click', () => b.closest('.fixed').classList.add('hidden')));
+
+    let envoi = false;
+    async function valider() {
+        if (envoi || !panier.length) return;
+        const t = totaux();
+        envoi = true;
+        document.querySelectorAll('[data-valider]').forEach((b) => { b.disabled = true; b.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i> Enregistrement…'; });
+        try {
+            const r = await fetch(URL_VENTE, { method: 'POST', headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+                body: JSON.stringify({ lignes: panier.map((l) => ({ article_id: l.id, cle: l.cle, quantite: l.q })), remise: t.remise,
+                                       mode, recu: mode === 'especes' ? (champs.recu || null) : null, client_nom: champs.nom || '', client_tel: champs.tel || '' }) });
+            const d = await r.json();
+            if (!d.success) throw new Error(d.message || 'Vente refusée');
+            CATALOGUE = d.catalogue;
+            $('okNumero').textContent = 'Ticket n°' + d.numero;
+            $('okTotal').textContent = fcfa(d.total);
+            $('okMonnaie').classList.toggle('hidden', !(d.monnaie > 0));
+            $('okMonnaie').textContent = 'Monnaie à rendre : ' + fcfa(d.monnaie || 0);
+            $('okTicket').href = d.ticket;
+            $('feuilleCaisse').classList.add('hidden');
+            $('feuilleOk').classList.remove('hidden');
+            bip(true);
+        } catch (e) {
+            bip(false);
+            alert(e.message || 'Erreur, réessayez');
+        } finally {
+            envoi = false;
+            document.querySelectorAll('[data-valider]').forEach((b) => { b.innerHTML = '<i class="fas fa-check mr-1"></i> Valider la vente'; });
+            dessinerPanier();
+        }
+    }
+    $('okNouvelle').addEventListener('click', () => {
+        panier = []; Object.keys(champs).forEach((k) => delete champs[k]); mode = 'especes';
+        $('feuilleOk').classList.add('hidden');
+        dessinerPanier(); dessinerTuiles();
+        $('recherche').focus();
+    });
+
+    dessinerTuiles();
+    dessinerPanier();
+})();
+</script>
+{% endblock %}
