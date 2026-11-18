@@ -28,6 +28,13 @@
     .galerie-points button.actif { width: 18px; background: #7c3aed; }
     .galerie-compteur { position: absolute; top: 8px; right: 8px; background: rgba(17,24,39,.65); color: #fff; font-size: 11px; padding: 2px 8px; border-radius: 9999px; z-index: 2; }
 
+    /* ===== Vidéo d'article (1re vue du carrousel) ===== */
+    .vue-video { flex: 0 0 100%; width: 100%; aspect-ratio: 1 / 1; position: relative; background: #000; scroll-snap-align: center; }
+    .vue-video video { width: 100%; height: 100%; object-fit: contain; }
+    .badge-son { position: absolute; left: 8px; bottom: 26px; background: rgba(17,24,39,.7); color: #fff; font-size: 11px; padding: 3px 9px; border-radius: 9999px; pointer-events: none; }
+    .vue-video.son .badge-son { display: none; }
+    .badge-video { position: absolute; top: 8px; left: 8px; background: #dc2626; color: #fff; font-size: 11px; font-weight: 700; padding: 2px 9px; border-radius: 9999px; z-index: 2; }
+
     /* ===== Description ===== */
     .description { white-space: pre-line; overflow-wrap: anywhere; }
     .description.repliee { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
@@ -187,27 +194,36 @@
     <div id="articles" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
         {% for article in articles %}
         {% set photos = (article.photos_urls or [])|select|list %}
+        {% set video = article.video_url %}
+        {% set nb_vues = photos|length + (1 if video else 0) %}
         <article id="article-{{ article.numero }}" class="carte scroll-mt-24 bg-white rounded-2xl shadow-md hover:shadow-xl transition overflow-hidden flex flex-col"
                  data-article='{{ {"id": article.id, "numero": article.numero, "nom": article.nom, "prix": article.prix, "photos": photos,
                                    "epuise": (article.disponible is not none and article.disponible <= 0),
                                    "d": (article.donnees_client if article.options else None)}|tojson }}'
-                 data-nom="{{ ('n°' ~ article.numero ~ ' ' ~ article.numero ~ ' ' ~ article.nom ~ ' ' ~ (article.description or ''))|lower }}" data-prix="{{ article.prix }}" data-ordre="{{ loop.index0 }}">
+                 data-nom="{{ ('n°' ~ article.numero ~ ' ' ~ article.numero ~ ' ' ~ article.nom ~ ' ' ~ (article.description or ''))|lower }}" data-prix="{{ article.prix }}" data-ordre="{{ loop.index0 }}" data-decalage="{{ 1 if video else 0 }}">
 
-            {% if photos %}
+            {% if photos or video %}
             <div class="galerie" data-galerie>
                 <div class="galerie-piste">
+                    {% if video %}
+                    <div class="vue-video">
+                        <video src="{{ video }}#t=0.1" muted playsinline preload="metadata" data-video {% if photos %}poster="{{ photos[0] }}"{% endif %}></video>
+                        <span class="badge-son"><i class="fas fa-volume-xmark"></i> Touchez pour le son</span>
+                    </div>
+                    {% endif %}
                     {% for url in photos %}
                     <img src="{{ url }}" alt="{{ article.nom }} - photo {{ loop.index }}" loading="{{ 'eager' if loop.first and loop.index0 < 3 else 'lazy' }}"
                          data-photos='{{ photos|tojson }}' data-index="{{ loop.index0 }}">
                     {% endfor %}
                 </div>
-                {% if photos|length > 1 %}
+                {% if video %}<span class="badge-video"><i class="fas fa-play"></i> Vidéo</span>{% endif %}
+                {% if nb_vues > 1 %}
                 <button type="button" class="galerie-fleche gauche" aria-label="Photo précédente"><i class="fas fa-chevron-left"></i></button>
                 <button type="button" class="galerie-fleche droite" aria-label="Photo suivante"><i class="fas fa-chevron-right"></i></button>
                 <div class="galerie-points">
-                    {% for url in photos %}<button type="button" aria-label="Photo {{ loop.index }}" class="{{ 'actif' if loop.first }}"></button>{% endfor %}
+                    {% for i in range(nb_vues) %}<button type="button" aria-label="Vue {{ loop.index }}" class="{{ 'actif' if loop.first }}"></button>{% endfor %}
                 </div>
-                <span class="galerie-compteur">1/{{ photos|length }}</span>
+                <span class="galerie-compteur">1/{{ nb_vues }}</span>
                 {% endif %}
             </div>
             {% else %}
@@ -405,10 +421,11 @@
                 // La photo affichée est celle que le client choisit (couleur, modèle…)
                 const carte = galerie.closest('.carte');
                 if (carte) {
+                    const p = Math.max(0, i - (+carte.dataset.decalage || 0));
                     const champ = carte.querySelector('input[name="photo_index"]');
-                    if (champ) champ.value = i;
+                    if (champ) champ.value = p;
                     const num = carte.querySelector('.num-photo');
-                    if (num) num.textContent = i + 1;
+                    if (num) num.textContent = p + 1;
                 }
             }, 60);
         }, { passive: true });
@@ -421,11 +438,38 @@
             const visible = new Set();
             new IntersectionObserver((entrees) => entrees.forEach((e) => e.isIntersecting ? visible.add(galerie) : visible.delete(galerie)))
                 .observe(galerie);
-            setInterval(() => { if (!pause && visible.has(galerie) && !document.hidden) aller(indexCourant() + 1); }, 4000);
+            const film = galerie.querySelector('video');
+            setInterval(() => {
+                if (film && !film.paused && !film.ended) return;           // on laisse la vidéo se terminer
+                if (!pause && visible.has(galerie) && !document.hidden) aller(indexCourant() + 1);
+            }, 4000);
         }
         return { aller };
     }
     document.querySelectorAll('[data-galerie]').forEach((g) => activerGalerie(g, true));
+
+    // ---------- Vidéos : lecture sans le son quand elles sont à l'écran ; toucher = son ----------
+    const films = document.querySelectorAll('video[data-video]');
+    if (films.length && 'IntersectionObserver' in window) {
+        const obs = new IntersectionObserver((entrees) => entrees.forEach((e) => {
+            const v = e.target;
+            if (e.intersectionRatio >= 0.6) { v.play().catch(() => {}); }
+            else if (!v.paused) { v.pause(); }
+        }), { threshold: [0, 0.6] });
+        films.forEach((v) => obs.observe(v));
+    }
+    films.forEach((v) => v.parentElement.addEventListener('click', () => {
+        v.muted = !v.muted;
+        v.parentElement.classList.toggle('son', !v.muted);
+        if (v.paused || v.ended) v.play().catch(() => {});
+        if (!v.muted) films.forEach((autre) => { if (autre !== v) { autre.muted = true; autre.parentElement.classList.remove('son'); } });
+    }));
+    films.forEach((v) => v.addEventListener('ended', () => {
+        const g = v.closest('[data-galerie]');
+        const piste = g && g.querySelector('.galerie-piste');
+        if (piste && piste.children.length > 1) piste.scrollTo({ left: piste.clientWidth });
+        else v.play().catch(() => {});
+    }));
 
     // ---------- Visionneuse plein écran ----------
     const vis = document.getElementById('visionneuse');
@@ -623,7 +667,7 @@
         art.prixVarie = prixVariantes.some((p) => p !== art.prixMin);
         choisis = {}; quantite = 1; mode = m === 'demande' ? 'demande' : 'achat';
         const piste = carte.querySelector('.galerie-piste');
-        photo = piste ? Math.round(piste.scrollLeft / piste.clientWidth) : 0;
+        photo = piste ? Math.max(0, Math.round(piste.scrollLeft / piste.clientWidth) - (+carte.dataset.decalage || 0)) : 0;
         if (art.photos.length > 1) choixDePhoto(photo);
         $('fNom').textContent = (art.numero ? 'n°' + art.numero + ' · ' : '') + art.nom;
         $('fPhotos').innerHTML = '';

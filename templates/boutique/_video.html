@@ -1,0 +1,21 @@
+{# Vidéo courte de l'article (variables : article facultatif). Envoyée à part, avec une barre de progression. #}
+<div id="blocVideo" data-url="{{ url_for('boutique.envoyer_video') }}" class="border-2 border-dashed border-purple-200 rounded-xl p-3">
+    <label class="block text-gray-700 text-sm font-bold mb-1">🎬 Vidéo courte (facultatif)</label>
+    <p class="text-xs text-gray-500 mb-2">30 secondes au plus. Montrez l'article porté, sous tous les angles : les clients achètent plus facilement.
+        La vidéo est allégée automatiquement pour ne pas consommer le forfait de vos clients.</p>
+    <input type="hidden" name="video_id" id="videoId">
+    {% if article is defined and article and article.video_url %}
+    <div id="videoActuelle" class="mb-2">
+        <video src="{{ article.video_url }}" controls playsinline preload="metadata" class="w-full max-h-64 rounded-lg bg-black"></video>
+        <label class="mt-2 flex items-center gap-2 text-sm text-red-600"><input type="checkbox" name="retirer_video" value="1"> Retirer la vidéo</label>
+    </div>
+    {% endif %}
+    <input type="file" accept="video/*" id="videoInput"
+           class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary transition">
+    <div id="videoProgres" class="hidden mt-2">
+        <div class="h-2 bg-gray-100 rounded-full overflow-hidden"><div id="videoBarre" class="h-full bg-purple-600 transition-all" style="width:0%"></div></div>
+        <p id="videoTexte" class="text-xs text-gray-600 mt-1"></p>
+    </div>
+    <video id="videoApercu" controls playsinline muted class="hidden mt-2 w-full max-h-64 rounded-lg bg-black"></video>
+</div>
+<script src="{{ url_for('static', filename='video_article.js') }}" defer></script>

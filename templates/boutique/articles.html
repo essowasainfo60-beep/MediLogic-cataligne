@@ -77,6 +77,7 @@
                 <div data-item="n°{{ article.numero }} {{ article.nom }} {{ article.description or '' }}" class="bg-white rounded-xl shadow-md overflow-hidden hover:shadow-lg transition {{ 'opacity-75' if archives }}">
                     <!-- Images -->
                     <div class="relative h-48 bg-gray-100">
+                        {% if article.video_url %}<div class="absolute top-2 left-2 z-10 bg-red-600 text-white text-xs font-bold px-2 py-1 rounded-full"><i class="fas fa-play mr-1"></i>Vidéo</div>{% endif %}
                         {% if article.photos_urls and article.photos_urls|length > 0 %}
                             <img src="{{ article.photos_urls[0] }}" alt="{{ article.nom }}" loading="lazy"
                                  class="w-full h-full object-cover">

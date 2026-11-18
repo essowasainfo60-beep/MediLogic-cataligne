@@ -18,6 +18,13 @@
     </div>
     {% endif %}
 
+    {% if article.video_url %}
+    <div class="bg-black rounded-2xl overflow-hidden shadow-md">
+        <video src="{{ article.video_url }}#t=0.1" controls playsinline preload="metadata" class="w-full max-h-[70vh]"
+               {% if photos %}poster="{{ photos[0] }}"{% endif %}></video>
+    </div>
+    {% endif %}
+
     {% if photos %}
     <div>
         <h2 class="font-bold text-gray-900 mb-2">{{ 'Toutes les photos de l\'article' if choisie else 'Photos de l\'article' }}</h2>

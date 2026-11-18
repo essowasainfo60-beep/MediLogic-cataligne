@@ -60,6 +60,12 @@ def photo(photo_id):
     reponse.headers['Cache-Control'] = 'public, max-age=31536000, immutable'
     return reponse
 
+@client_bp.route('/video/<int:video_id>')
+def video(video_id):
+    """Vidéo d'article, lue par morceaux (iPhone, reprise de lecture)."""
+    import videos
+    return videos.servir(video_id)
+
 # ==================== ACCUEIL & SELECTION BOUTIQUE ====================
 
 def boutique_visitee():

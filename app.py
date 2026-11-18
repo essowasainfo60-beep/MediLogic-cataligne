@@ -171,6 +171,8 @@ def mettre_a_jour_schema():
                 conn.execute(text(f"ALTER TABLE articles ADD COLUMN {nom} JSON"))
         if 'annonce' not in colonnes_articles:
             conn.execute(text("ALTER TABLE articles ADD COLUMN annonce VARCHAR(12)"))
+        if 'video_url' not in colonnes_articles:
+            conn.execute(text("ALTER TABLE articles ADD COLUMN video_url VARCHAR(50)"))
         if 'stock_par_variante' not in colonnes_articles:
             conn.execute(text("ALTER TABLE articles ADD COLUMN stock_par_variante BOOLEAN NOT NULL DEFAULT FALSE"))
         colonnes_mvt = {c['name'] for c in inspecteur.get_columns('mouvements_stock')}

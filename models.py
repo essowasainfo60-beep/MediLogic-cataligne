@@ -201,6 +201,8 @@ class Article(db.Model):
     stock_par_variante = db.Column(db.Boolean, nullable=False, default=False, server_default='0')
     # Annonce aux clients abonnés : 'en_attente' (partira à la prochaine annonce), 'annoncee', ou vide
     annonce = db.Column(db.String(12), nullable=True)
+    # Courte vidéo de présentation (/video/<id>), stockée dans la base comme les photos
+    video_url = db.Column(db.String(50), nullable=True)
     # Photo à montrer quand le client choisit une valeur : {"Couleur": {"Noir": "<url de la photo>"}}
     photos_choix = db.Column(db.JSON, nullable=True)
 
@@ -556,6 +558,23 @@ class Photo(db.Model):
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
     boutique = db.relationship('Boutique', backref=db.backref('photos', cascade='all, delete-orphan', lazy='dynamic'))
+
+
+class Video(db.Model):
+    """Courte vidéo d'article stockée dans la base (recompressée en MP4 720p quand ffmpeg est là)."""
+    __tablename__ = 'videos'
+
+    id = db.Column(db.Integer, primary_key=True)
+    boutique_id = db.Column(db.Integer, db.ForeignKey('boutiques.id'), nullable=False, index=True)
+    article_id = db.Column(db.Integer, db.ForeignKey('articles.id', ondelete='SET NULL'), nullable=True, index=True)
+    donnees = db.Column(db.LargeBinary, nullable=False)
+    mime = db.Column(db.String(50), nullable=False, default='video/mp4')
+    taille = db.Column(db.Integer, nullable=False, default=0)
+    duree = db.Column(db.Integer, nullable=True)                     # secondes
+    statut = db.Column(db.String(15), nullable=False, default='prete')   # a_compresser | prete
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    boutique = db.relationship('Boutique', backref=db.backref('videos', cascade='all, delete-orphan', lazy='dynamic'))
 
 
 class CleBiometrique(db.Model):

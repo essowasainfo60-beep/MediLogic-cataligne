@@ -3,7 +3,7 @@ services:
     name: medilogic-cataligne
     runtime: python
     buildCommand: pip install -r requirements.txt
-    startCommand: gunicorn app:app
+    startCommand: gunicorn app:app --timeout 120
     # Les valeurs sont saisies dans le tableau de bord Render (jamais dans Git).
     envVars:
       - key: DATABASE_URL

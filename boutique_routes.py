@@ -15,6 +15,7 @@ import discussions
 import notifications
 import nouveautes
 import demandes
+import videos
 import suivi_gps
 import stats_avancees
 import promos
@@ -46,7 +47,7 @@ GESTION = {
     'photo_principale', 'archiver_article', 'restaurer_article', 'articles_archives', 'livreurs', 'basculer_livreur', 'modifier_livreur',
     'ajouter_zone', 'modifier_zone', 'zones_modele', 'envoyer_espace_livreur', 'nouveau_lien_livreur',
     'statistiques', 'historique', 'message_statut', 'historique_csv', 'retour_commande', 'codes_promo', 'modifier_code_promo', 'regler_fidelite',
-    'annoncer_article', 'annoncer_nouveautes',
+    'annoncer_article', 'annoncer_nouveautes', 'envoyer_video',
 }
 ROLES_AUTORISES = {'vendeur': set(), 'caissier': CAISSE, 'gestionnaire': CAISSE | GESTION}
 
@@ -743,6 +744,8 @@ def ajouter_article():
             options=lire_options_article(request.form),
         )
         enregistrer_avec_numero(article, 'numero', Article.prochain_numero)
+        if request.form.get('video_id'):
+            videos.rattacher(article, request.form.get('video_id'))
         if article.options:
             erreur = enregistrer_variantes(article, request.form, 'entree', 'Stock initial')
             if erreur:
@@ -826,6 +829,11 @@ def modifier_article(article_id):
             flash(erreur, 'warning')
         enregistrer_photos_choix(article, request.form)
 
+        if request.form.get('video_id'):
+            videos.rattacher(article, request.form.get('video_id'))
+        elif request.form.get('retirer_video'):
+            videos.retirer(article)
+
         urls, echecs = enregistrer_photos(request.files.getlist('nouvelles_photos'), current_user.id)
         if urls:
             # Nouvelle liste (et non .extend) pour que SQLAlchemy détecte le changement du JSON
@@ -838,6 +846,16 @@ def modifier_article(article_id):
         return redirect(url_for('boutique.articles'))
 
     return render_template('boutique/modifier_article.html', article=article)
+
+@boutique_bp.route('/videos', methods=['POST'])
+@login_required
+def envoyer_video():
+    """Envoi d'une vidéo d'article (avant d'enregistrer l'article) : renvoie son numéro."""
+    video, erreur = videos.enregistrer(request.files.get('video'), boutique_connectee().id, request.form.get('duree'))
+    if erreur:
+        return jsonify(success=False, message=erreur), 400
+    return jsonify(success=True, id=video.id, url=videos.url(video), taille=video.taille)
+
 
 @boutique_bp.route('/supprimer_photo/<int:article_id>/<int:photo_index>', methods=['POST'])
 @login_required
