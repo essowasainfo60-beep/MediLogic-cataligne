@@ -55,6 +55,8 @@ class Boutique(UserMixin, db.Model):
     # Abonnement mensuel (fixé par l'administrateur, voir abonnement.py)
     abonnement_prix = db.Column(db.Float, nullable=True)          # FCFA par mois ; vide ou 0 = gratuit
     abonnement_debut = db.Column(db.String(7), nullable=True)     # premier mois facturé, 'AAAA-MM'
+    formule = db.Column(db.String(20), nullable=True)             # 'demarrage' | 'pro' | 'premium' (voir abonnement.FORMULES)
+    essai_fin = db.Column(db.Date, nullable=True)                 # formule Démarrage : dernier jour de l'essai gratuit
     derniere_activite = db.Column(db.DateTime, nullable=True)     # dernière utilisation de l'espace boutique
     # Code secret du lien envoyé aux clients (/c/<code>) : impossible à deviner,
     # contrairement à /boutique/1, /boutique/2… Régénérable pour couper l'ancien lien.

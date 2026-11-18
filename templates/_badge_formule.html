@@ -1,0 +1,2 @@
+{# Badge de la formule d'abonnement (Démarrage / Pro / Premium). Variable : f (formule) et taille (facultative) #}
+{% if f %}<span class="inline-flex items-center gap-1 rounded-full border font-bold {{ f.couleur }} {{ 'text-[10px] px-1.5 py-0' if taille == 'mini' else 'text-xs px-2.5 py-0.5' }}" title="Formule d'abonnement LivraPlus"><i class="fas {{ f.icone }}"></i> {{ f.nom }}</span>{% endif %}

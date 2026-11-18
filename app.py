@@ -243,6 +243,7 @@ def mettre_a_jour_schema():
                                 ('derniere_annonce', 'TIMESTAMP'),
                                 ('cle_synchro', 'VARCHAR(64)'),
                                 ('derniere_synchro', 'TIMESTAMP'),
+                                ('formule', 'VARCHAR(20)'), ('essai_fin', 'DATE'),
                                 ('abonnement_prix', 'FLOAT'), ('abonnement_debut', 'VARCHAR(7)'),
                                 ('derniere_activite', 'TIMESTAMP'), ('latitude', 'FLOAT'), ('longitude', 'FLOAT'),
                                 ('message_statut', 'TEXT'),

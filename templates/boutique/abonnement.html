@@ -9,10 +9,69 @@
         <p class="text-sm text-gray-500">Paiement mensuel, entre le 1<sup>er</sup> et le 8 de chaque mois.</p>
     </div>
 
+    <!-- Ma formule -->
+    <div class="bg-white rounded-2xl shadow-md p-5">
+        <div class="flex flex-wrap items-center justify-between gap-3">
+            <div>
+                <p class="text-sm text-gray-500">Votre formule</p>
+                {% if formule %}
+                <p class="mt-1">{% with f=formule %}{% include '_badge_formule.html' %}{% endwith %}</p>
+                {% else %}
+                <p class="font-semibold text-gray-700 mt-1">Aucune formule pour le moment (tout est ouvert)</p>
+                {% endif %}
+            </div>
+            {% if est_gestionnaire %}
+            <a href="{{ url_for('boutique.gestion_abonnements') }}" class="bg-amber-500 text-white px-4 py-2.5 rounded-xl font-semibold"><i class="fas fa-crown mr-1"></i> Gérer les abonnements des boutiques</a>
+            {% endif %}
+        </div>
+        {% if est_gestionnaire %}
+        <p class="text-sm text-gray-600 mt-3"><i class="fas fa-circle-info text-amber-500 mr-1"></i> Boutique phare : Premium à vie, rien à payer, aucune limite.</p>
+        {% else %}
+        <div class="grid grid-cols-2 gap-3 mt-4 text-sm">
+            {% for quoi, libelle in [('articles', 'Articles en vente'), ('videos', 'Vidéos')] %}
+            {% set maxi = formule[quoi] if formule else None %}
+            <div class="rounded-xl bg-gray-50 p-3">
+                <p class="text-gray-500">{{ libelle }}</p>
+                <p class="text-xl font-bold {{ 'text-red-600' if maxi is not none and utilise[quoi] >= maxi else 'text-gray-900' }}">{{ utilise[quoi] }}{% if maxi is not none %} / {{ maxi }}{% else %} <span class="text-sm font-normal text-gray-500">(illimité)</span>{% endif %}</p>
+            </div>
+            {% endfor %}
+        </div>
+        {% if situation.essai %}
+        <p class="mt-3 text-sm text-sky-800 bg-sky-50 rounded-xl px-3 py-2"><i class="fas fa-seedling mr-1"></i> Essai gratuit jusqu'au <b>{{ situation.essai_fin.strftime('%d/%m/%Y') }}</b>. Ensuite, choisissez Pro ou Premium.</p>
+        {% elif situation.essai_fini %}
+        <p class="mt-3 text-sm text-white bg-red-600 rounded-xl px-3 py-2"><i class="fas fa-lock mr-1"></i> Essai gratuit terminé le {{ situation.essai_fin.strftime('%d/%m/%Y') }} : choisissez Pro ou Premium pour rouvrir votre espace.</p>
+        {% endif %}
+        {% endif %}
+    </div>
+
+    {% if not est_gestionnaire %}
+    <!-- Les formules -->
+    <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        {% for code, f in formules.items() %}
+        <div class="bg-white rounded-2xl shadow-sm p-4 border-2 {{ 'border-purple-500' if formule and formule.code == code else 'border-transparent' }}">
+            <div class="flex items-center justify-between">{% include '_badge_formule.html' %}{% if formule and formule.code == code %}<span class="text-xs font-semibold text-purple-700">Votre formule</span>{% endif %}</div>
+            <p class="text-2xl font-extrabold text-gray-900 mt-2">{% if f.prix %}{{ fcfa(f.prix) }}<span class="text-sm font-normal text-gray-500"> / mois</span>{% else %}Gratuit<span class="text-sm font-normal text-gray-500"> · {{ f.essai_jours }} jours</span>{% endif %}</p>
+            <ul class="mt-3 space-y-1 text-sm text-gray-700">
+                <li><i class="fas fa-check text-green-600 mr-1"></i> {{ f.articles ~ ' articles' if f.articles else 'Articles illimités' }}</li>
+                <li><i class="fas fa-check text-green-600 mr-1"></i> {{ f.videos ~ ' vidéos' if f.videos else 'Vidéos illimitées' }}</li>
+                <li><i class="fas fa-check text-green-600 mr-1"></i> Catalogue en ligne, commandes, livraisons</li>
+                <li>{% if f.module %}<i class="fas fa-check text-green-600 mr-1"></i>{% else %}<i class="fas fa-xmark text-gray-400 mr-1"></i><span class="text-gray-400">{% endif %} Vente au comptoir, tickets, codes-barres, créances, approvisionnement{% if not f.module %}</span>{% endif %}</li>
+            </ul>
+        </div>
+        {% endfor %}
+    </div>
+    {% if gestionnaire %}
+    <p class="text-sm text-gray-600">Pour changer de formule, contactez <b>{{ gestionnaire.nom_boutique }}</b>{% if gestionnaire.whatsapp %} :
+        <a class="text-green-700 font-semibold" href="https://wa.me/{{ gestionnaire.whatsapp|replace('+', '')|replace(' ', '') }}?text={{ ('Bonjour, je souhaite changer de formule LivraPlus pour ma boutique ' ~ boutique.nom_boutique)|urlencode }}" target="_blank" rel="noopener"><i class="fab fa-whatsapp"></i> WhatsApp</a>{% endif %}.</p>
+    {% endif %}
+    {% endif %}
+
     {% if not situation.exige %}
+    {% if not situation.essai and not situation.essai_fini %}
     <div class="bg-white rounded-2xl shadow-md p-6 text-gray-700">
         <i class="fas fa-gift text-green-600 mr-1"></i> Aucun abonnement à payer pour le moment.
     </div>
+    {% endif %}
     {% else %}
     <div class="grid grid-cols-1 lg:grid-cols-5 gap-6">
         <!-- Situation -->

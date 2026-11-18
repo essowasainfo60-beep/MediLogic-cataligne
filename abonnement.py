@@ -9,26 +9,103 @@ Règles :
 - le paiement s'enregistre comme une charge « Abonnement logiciel » (montant imposé),
   avec le moyen de paiement, la date et la référence du dépôt (sauf espèces).
 """
-from datetime import date, datetime
+import os
+from datetime import date, datetime, timedelta
 
-from models import db, MouvementCaisse, PaiementAbonnement
+from models import db, Article, MouvementCaisse, PaiementAbonnement
 
 CATEGORIE = 'Abonnement logiciel'
 JOUR_LIMITE = 8
 
-# ---- Module « Ma Boutique » (vente au comptoir, tickets, scanner, créances, approvisionnement…) ----
-# Réservé aux abonnements d'au moins PRIX_MODULE_BOUTIQUE FCFA par mois. Tant que les formules
-# d'abonnement ne sont pas en place, MODULE_BOUTIQUE_RESERVE = False : tout le monde y a accès.
-# Le jour où l'on active les formules : passer à True (rien d'autre à changer).
-MODULE_BOUTIQUE_RESERVE = False
-PRIX_MODULE_BOUTIQUE = 10000
+# ---- Formules d'abonnement ----
+# articles / videos : nombre maximum (None = illimité) ; module : vente au comptoir et outils
+# « Ma Boutique » (caisse, tickets, scanner, créances, approvisionnement…) ; essai_jours : essai gratuit.
+FORMULES = {
+    'demarrage': {'nom': 'Démarrage', 'prix': 0, 'articles': 100, 'videos': 3, 'module': False, 'essai_jours': 30,
+                  'couleur': 'bg-sky-100 text-sky-800 border-sky-300', 'icone': 'fa-seedling'},
+    'pro': {'nom': 'Pro', 'prix': 10000, 'articles': 100, 'videos': 15, 'module': True,
+            'couleur': 'bg-indigo-100 text-indigo-800 border-indigo-300', 'icone': 'fa-star'},
+    'premium': {'nom': 'Premium', 'prix': 25000, 'articles': None, 'videos': None, 'module': True,
+                'couleur': 'bg-amber-100 text-amber-800 border-amber-400', 'icone': 'fa-crown'},
+}
+# Boutique qui gère les abonnements de toutes les boutiques (L'UNIK, la boutique phare) :
+# toujours Premium, jamais rien à payer, jamais suspendue.
+GESTIONNAIRE_ID = int(os.environ.get('LIVRAPLUS_GESTIONNAIRE_ID') or 4)
+# Le module « Ma Boutique » n'est ouvert qu'aux formules qui l'incluent (Pro, Premium).
+# Une boutique sans formule (anciennes boutiques, en attendant qu'on leur en donne une) garde tout.
+MODULE_BOUTIQUE_RESERVE = True
+PRIX_MODULE_BOUTIQUE = FORMULES['pro']['prix']
+
+
+def est_gestionnaire(boutique):
+    return boutique is not None and boutique.id == GESTIONNAIRE_ID
+
+
+def formule(boutique):
+    """Code de la formule ('demarrage', 'pro', 'premium') ou None (pas encore de formule)."""
+    if boutique is None:
+        return None
+    if est_gestionnaire(boutique):
+        return 'premium'
+    return boutique.formule if boutique.formule in FORMULES else None
+
+
+def infos_formule(boutique):
+    f = formule(boutique)
+    return dict(FORMULES[f], code=f) if f else None
 
 
 def module_boutique(boutique):
     """La boutique a-t-elle accès à la vente au comptoir et aux outils « Ma Boutique » ?"""
     if not MODULE_BOUTIQUE_RESERVE or boutique is None:
         return True
-    return (boutique.abonnement_prix or 0) >= PRIX_MODULE_BOUTIQUE
+    f = formule(boutique)
+    return True if f is None else FORMULES[f]['module']
+
+
+def utilisation(boutique):
+    """Articles en vente et vidéos utilisées (comptées dans les limites de la formule)."""
+    base = Article.query.filter(Article.boutique_id == boutique.id, Article.archive.is_(False))
+    return {'articles': base.count(), 'videos': base.filter(Article.video_url.isnot(None)).count()}
+
+
+def limite(boutique, quoi):
+    f = formule(boutique)
+    return FORMULES[f][quoi] if f else None
+
+
+def peut_ajouter(boutique, quoi, combien=1):
+    """(True, None) ou (False, message) : 'articles' ou 'videos'."""
+    maxi = limite(boutique, quoi)
+    if maxi is None:
+        return True, None
+    deja = utilisation(boutique)[quoi]
+    if deja + combien <= maxi:
+        return True, None
+    nom = FORMULES[formule(boutique)]['nom']
+    chose = 'articles en vente' if quoi == 'articles' else 'vidéos'
+    return False, (f"Votre formule {nom} permet {maxi} {chose} (vous en avez {deja}). "
+                   f"Archivez-en un ou passez à une formule supérieure (page Abonnement).")
+
+
+def choisir_formule(boutique, code, prix=None, debut=None, essai_fin=None):
+    """Donne une formule à une boutique (par la boutique gestionnaire). code '' = aucune formule (gratuit)."""
+    if code and code not in FORMULES:
+        raise ValueError('Formule inconnue')
+    boutique.formule = code or None
+    if code == 'demarrage':
+        boutique.abonnement_prix = None
+        boutique.abonnement_debut = None
+        boutique.essai_fin = essai_fin or boutique.essai_fin or (date.today() + timedelta(days=FORMULES['demarrage']['essai_jours']))
+    elif code:
+        boutique.abonnement_prix = prix if prix is not None else FORMULES[code]['prix']
+        boutique.abonnement_debut = debut or boutique.abonnement_debut or premier_mois_par_defaut()
+        boutique.essai_fin = None
+    else:
+        boutique.abonnement_prix = None
+        boutique.abonnement_debut = None
+        boutique.essai_fin = None
+    db.session.commit()
 MOIS_FR = ['janvier', 'février', 'mars', 'avril', 'mai', 'juin', 'juillet', 'août',
            'septembre', 'octobre', 'novembre', 'décembre']
 
@@ -63,6 +140,16 @@ def etat(boutique, aujourdhui=None):
     """Situation de l'abonnement, pour l'affichage et le blocage.
     niveau : 'gratuit', 'ok', 'jaune', 'orange', 'rouge' ou 'bloque'."""
     aujourdhui = aujourdhui or date.today()
+    if est_gestionnaire(boutique):
+        return {'niveau': 'gratuit', 'exige': False, 'bloque': False, 'prix': 0, 'mois_a_payer': None}
+    if formule(boutique) == 'demarrage':
+        fin = boutique.essai_fin or aujourdhui
+        reste = (fin - aujourdhui).days
+        if reste < 0:
+            return {'niveau': 'bloque', 'exige': False, 'bloque': True, 'prix': 0, 'mois_a_payer': None,
+                    'essai_fini': True, 'essai_fin': fin}
+        return {'niveau': 'gratuit', 'exige': False, 'bloque': False, 'prix': 0, 'mois_a_payer': None,
+                'essai': True, 'essai_fin': fin, 'jours_essai': reste}
     mois = cle_mois(aujourdhui)
     prix = boutique.abonnement_prix or 0
     debut = boutique.abonnement_debut

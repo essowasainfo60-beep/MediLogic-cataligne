@@ -26,10 +26,13 @@
         <div class="min-w-0">
             <p class="text-sm text-gray-500">Bonjour {{ current_user.proprietaire_prenom }} 👋</p>
             <h1 class="text-2xl md:text-3xl font-extrabold text-gray-900 tracking-tight truncate">{{ current_user.nom_boutique }}</h1>
+            {% if formule_boutique %}<a href="{{ url_for('boutique.abonnement_page') }}" class="inline-block mt-1">{% with f=formule_boutique %}{% include '_badge_formule.html' %}{% endwith %}</a>{% endif %}
         </div>
         <div class="flex-shrink-0 flex gap-2">
+            {% if peut('boutique.vendre') %}
             <a href="{{ url_for('boutique.vendre') }}" class="inline-flex items-center gap-2 bg-green-600 text-white px-4 py-2.5 rounded-xl font-semibold hover:bg-green-700 shadow-sm">
                 <i class="fas fa-cash-register"></i> <span>Vendre</span></a>
+            {% endif %}
             <a href="{{ url_for('boutique.nouvelle_commande') }}" class="inline-flex items-center gap-2 bg-purple-600 text-white px-4 py-2.5 rounded-xl font-semibold hover:bg-purple-700 shadow-sm">
                 <i class="fas fa-plus"></i> <span class="hidden sm:inline">Commande</span>
             </a>

@@ -92,7 +92,7 @@
                     ('boutique.historique', 'fa-clock-rotate-left', 'Historique et export')]),
         ('Équipe', [('boutique.livreurs', 'fa-id-badge', 'Livreurs et zones'), ('boutique.vendeurs', 'fa-users', 'Équipe et accès')]),
         ('Ma boutique', [('boutique.partager', 'fa-share-nodes', 'Partager mon catalogue'), ('boutique.profil', 'fa-store', 'Ma boutique et réglages'), ('boutique.synchro_page', 'fa-arrows-rotate', 'Synchronisation Ma Boutik'),
-                         ('boutique.abonnement_page', 'fa-file-signature', 'Abonnement LivraPlus')]),
+                         ('boutique.abonnement_page', 'fa-file-signature', 'Abonnement LivraPlus'), ('boutique.gestion_abonnements', 'fa-crown', 'Abonnements des boutiques')]),
     ] %}
 
     <!-- Navigation -->
@@ -187,7 +187,7 @@
                             </span>
                             <span class="hidden sm:block text-left leading-tight">
                                 <span class="block text-sm font-semibold text-gray-800">{{ current_user.proprietaire_prenom }}</span>
-                                <span class="block text-[11px] text-gray-400">{{ current_user.role_libelle }}</span>
+                                <span class="block text-[11px] text-gray-400">{{ current_user.role_libelle }}{% if formule_boutique %} · {% with f=formule_boutique, taille='mini' %}{% include '_badge_formule.html' %}{% endwith %}{% endif %}</span>
                             </span>
                             <i class="fas fa-chevron-down text-xs text-gray-400"></i>
                         </summary>
@@ -195,11 +195,15 @@
                             <div class="px-4 py-2 border-b border-gray-100 mb-1">
                                 <p class="font-semibold text-gray-800">{{ current_user.proprietaire_prenom }} {{ current_user.proprietaire_nom }}</p>
                                 <p class="text-xs text-gray-500 truncate">{{ current_user.email }}</p>
+                                {% if formule_boutique %}<p class="mt-1">{% with f=formule_boutique %}{% include '_badge_formule.html' %}{% endwith %}</p>{% endif %}
                             </div>
                             {% if peut('boutique.codes_promo') %}
                             <a href="{{ url_for('boutique.codes_promo') }}" class="flex items-center gap-3 px-4 py-2 text-gray-700 hover:bg-gray-50"><i class="fas fa-ticket w-4 text-center"></i> Codes promo</a>
                             {% endif %}
                             <a href="{{ url_for('boutique.abonnement_page') }}" class="flex items-center gap-3 px-4 py-2 text-gray-700 hover:bg-gray-50"><i class="fas fa-file-signature w-4 text-center"></i> Abonnement LivraPlus</a>
+                            {% if peut('boutique.gestion_abonnements') %}
+                            <a href="{{ url_for('boutique.gestion_abonnements') }}" class="flex items-center gap-3 px-4 py-2 text-amber-700 font-semibold hover:bg-amber-50"><i class="fas fa-crown w-4 text-center"></i> Abonnements des boutiques</a>
+                            {% endif %}
                             {% if peut('boutique.historique') %}
                             <a href="{{ url_for('boutique.historique') }}" class="flex items-center gap-3 px-4 py-2 text-gray-700 hover:bg-gray-50"><i class="fas fa-clock-rotate-left w-4 text-center"></i> Historique et export</a>
                             {% endif %}
@@ -283,6 +287,7 @@
             <span class="min-w-0 flex-1">
                 <span class="block font-bold text-gray-900 truncate leading-tight">{{ current_user.nom_boutique }}</span>
                 <span class="block text-xs text-gray-500 truncate">{{ current_user.proprietaire_prenom }} · {{ current_user.role_libelle }}</span>
+                {% if formule_boutique %}<span class="block mt-0.5">{% with f=formule_boutique, taille='mini' %}{% include '_badge_formule.html' %}{% endwith %}</span>{% endif %}
             </span>
             <button type="button" onclick="fermerMenuLateral()" aria-label="Fermer le menu" class="h-9 w-9 rounded-lg text-gray-500 hover:bg-gray-100 flex-shrink-0"><i class="fas fa-xmark text-lg"></i></button>
         </div>
@@ -382,7 +387,20 @@
 
     <!-- Messages -->
     <div class="max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 mt-4">
-        {% if espace_boutique and etat_abonnement and etat_abonnement.niveau in ['jaune', 'orange', 'rouge', 'bloque'] and request.endpoint != 'boutique.abonnement_page' %}
+        {% if espace_boutique and etat_abonnement and etat_abonnement.essai and etat_abonnement.jours_essai <= 7 and request.endpoint != 'boutique.abonnement_page' %}
+        <div class="bandeau-abonnement mb-3 px-4 py-3 rounded-xl border-2 bg-sky-50 border-sky-300 text-sky-900 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-sm">
+            <span><i class="fas fa-seedling mr-1"></i> <strong>Essai gratuit (formule Démarrage) :</strong>
+                {% if etat_abonnement.jours_essai == 0 %}dernier jour aujourd'hui !{% else %}encore {{ etat_abonnement.jours_essai + 1 }} jour(s), jusqu'au {{ etat_abonnement.essai_fin.strftime('%d/%m/%Y') }}.{% endif %}
+                Choisissez la formule Pro ou Premium pour continuer.</span>
+            <a href="{{ url_for('boutique.abonnement_page') }}" class="text-center whitespace-nowrap font-semibold px-4 py-2 rounded-lg bg-gray-900 text-white">Voir les formules</a>
+        </div>
+        {% elif espace_boutique and etat_abonnement and etat_abonnement.essai_fini and request.endpoint != 'boutique.abonnement_page' %}
+        <div class="bandeau-abonnement mb-3 px-4 py-3 rounded-xl border-2 bg-red-600 border-red-700 text-white flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-sm">
+            <span><i class="fas fa-lock mr-1"></i> <strong>Essai gratuit terminé le {{ etat_abonnement.essai_fin.strftime('%d/%m/%Y') }}.</strong>
+                Seul le tableau de bord reste ouvert : choisissez la formule Pro ou Premium pour continuer.</span>
+            <a href="{{ url_for('boutique.abonnement_page') }}" class="text-center whitespace-nowrap font-semibold px-4 py-2 rounded-lg bg-white text-red-700">Voir les formules</a>
+        </div>
+        {% elif espace_boutique and etat_abonnement and etat_abonnement.niveau in ['jaune', 'orange', 'rouge', 'bloque'] and request.endpoint != 'boutique.abonnement_page' %}
         {% set ab = etat_abonnement %}
         {% set styles = {'jaune': 'bg-yellow-50 border-yellow-300 text-yellow-900', 'orange': 'bg-orange-50 border-orange-400 text-orange-900',
                          'rouge': 'bg-red-50 border-red-500 text-red-800', 'bloque': 'bg-red-600 border-red-700 text-white'} %}

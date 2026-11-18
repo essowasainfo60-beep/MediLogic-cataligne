@@ -1,0 +1,206 @@
+{% extends "base.html" %}
+{% from "_macros.html" import recherche %}
+
+{% block title %}Abonnements des boutiques{% endblock %}
+
+{% macro situation(etat) %}
+{% set n = etat.niveau %}
+{% set style = {'gratuit': 'bg-gray-100 text-gray-700', 'ok': 'bg-green-100 text-green-800', 'jaune': 'bg-yellow-100 text-yellow-800',
+                'orange': 'bg-orange-100 text-orange-800', 'rouge': 'bg-red-100 text-red-800', 'bloque': 'bg-red-600 text-white'}[n] %}
+<span class="px-2.5 py-1 rounded-full text-xs font-semibold {{ style }}">
+    {% if etat.essai %}Essai jusqu'au {{ etat.essai_fin.strftime('%d/%m/%Y') }}
+    {% elif etat.essai_fini %}🔒 Essai terminé le {{ etat.essai_fin.strftime('%d/%m/%Y') }}
+    {% elif n == 'gratuit' %}Rien à payer{% elif n == 'ok' %}✓ À jour{% elif n == 'bloque' %}🔒 Suspendue — {{ etat.libelle_mois_a_payer }} impayé
+    {% else %}{{ etat.libelle_mois_a_payer|capitalize }} à payer ({{ etat.jours_restants + 1 }} j){% endif %}
+</span>
+{% endmacro %}
+
+{% block content %}
+<div class="max-w-6xl mx-auto px-4 space-y-5 pb-24">
+    <div>
+        <h1 class="text-2xl md:text-3xl font-extrabold text-gray-900"><i class="fas fa-crown text-amber-500 mr-2"></i> Abonnements des boutiques</h1>
+        <p class="text-sm text-gray-500">Activer une boutique, lui donner une formule, programmer et encaisser son abonnement · {{ mois_libelle }}</p>
+    </div>
+
+    <!-- Résumé -->
+    <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        <a href="{{ url_for('boutique.gestion_abonnements') }}" class="bg-white rounded-2xl shadow-sm p-4 {{ 'ring-2 ring-purple-500' if not filtre }}">
+            <p class="text-xs text-gray-500">Boutiques</p><p class="text-2xl font-bold">{{ resume.total }}</p>
+            <p class="text-xs text-gray-500">{{ resume.actives }} active(s)</p></a>
+        <a href="{{ url_for('boutique.gestion_abonnements', voir='attente') }}" class="bg-white rounded-2xl shadow-sm p-4 {{ 'ring-2 ring-purple-500' if filtre == 'attente' }}">
+            <p class="text-xs text-gray-500">À activer</p><p class="text-2xl font-bold {{ 'text-yellow-600' if resume.attente_activation }}">{{ resume.attente_activation }}</p>
+            <p class="text-xs text-gray-500">nouvelles inscriptions</p></a>
+        <a href="{{ url_for('boutique.gestion_abonnements', voir='retard') }}" class="bg-white rounded-2xl shadow-sm p-4 {{ 'ring-2 ring-purple-500' if filtre == 'retard' }}">
+            <p class="text-xs text-gray-500">À payer / suspendues</p><p class="text-2xl font-bold {{ 'text-red-600' if resume.en_retard }}">{{ resume.en_retard }}</p>
+            <p class="text-xs text-gray-500">{{ resume.a_jour }} à jour</p></a>
+        <div class="bg-green-600 text-white rounded-2xl shadow-sm p-4">
+            <p class="text-xs opacity-80">Encaissé ce mois</p><p class="text-2xl font-bold">{{ fcfa(resume.encaisse_mois) }}</p>
+            <p class="text-xs opacity-80">attendu {{ fcfa(resume.attendu) }} / mois</p></div>
+    </div>
+    <div class="flex flex-wrap gap-2 text-sm">
+        {% for code, f in formules.items() %}
+        <a href="{{ url_for('boutique.gestion_abonnements', voir=code) }}" class="rounded-full {{ 'ring-2 ring-purple-500' if filtre == code }}">{% include '_badge_formule.html' %}</a>
+        <span class="text-gray-500 -ml-1 self-center">{{ resume.par_formule[code] }}</span>
+        {% endfor %}
+    </div>
+
+    {{ recherche('#listeBoutiques', 'Rechercher une boutique : nom, gérant, téléphone, email…', 'Aucune boutique', '') }}
+
+    <div id="listeBoutiques" class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        {% for x in fiches %}
+        {% set b = x.b %}
+        <div id="b{{ b.id }}" data-item="{{ b.nom_boutique }} {{ b.email }} {{ b.proprietaire_prenom }} {{ b.proprietaire_nom }} {{ b.whatsapp or '' }}"
+             class="bg-white rounded-2xl shadow-md p-4 space-y-3 border-l-4 {{ 'border-yellow-400' if not b.active else ('border-red-600' if x.etat.bloque else ('border-amber-400' if x.formule and x.formule.code == 'premium' else 'border-purple-400')) }}">
+            <div class="flex items-start gap-3">
+                {% if b.logo_url %}<img src="{{ b.logo_url }}" alt="" class="h-11 w-11 rounded-xl object-contain border flex-shrink-0">
+                {% else %}<span class="h-11 w-11 rounded-xl bg-[#0b1d35] text-teal-300 flex items-center justify-center font-bold flex-shrink-0">{{ b.nom_boutique[:1]|upper }}</span>{% endif %}
+                <div class="flex-1 min-w-0">
+                    <p class="font-bold text-gray-900">{{ b.nom_boutique }}
+                        {% if not b.active %}<span class="text-xs font-semibold text-yellow-800 bg-yellow-100 rounded-full px-2">{{ 'désactivée' if b.formule or b.paiements_abonnement else 'à activer' }}</span>{% endif %}</p>
+                    <p class="text-sm text-gray-600 truncate">{{ b.proprietaire_prenom }} {{ b.proprietaire_nom }}{% if b.whatsapp %} · <a class="text-green-700" href="https://wa.me/{{ b.whatsapp|replace('+', '')|replace(' ', '') }}" target="_blank" rel="noopener"><i class="fab fa-whatsapp"></i> {{ b.whatsapp }}</a>{% endif %}</p>
+                    <p class="text-xs text-gray-400 truncate">{{ b.email }} · inscrite le {{ b.date_inscription.strftime('%d/%m/%Y') if b.date_inscription else '—' }}</p>
+                    <div class="mt-1.5 flex flex-wrap items-center gap-1.5">
+                        {% if x.formule %}{% with f=x.formule %}{% include '_badge_formule.html' %}{% endwith %}{% else %}<span class="text-xs text-gray-500 border border-dashed border-gray-300 rounded-full px-2 py-0.5">Sans formule</span>{% endif %}
+                        {{ situation(x.etat) }}
+                        {% if b.abonnement_prix %}<span class="text-xs text-gray-600">{{ fcfa(b.abonnement_prix) }} / mois</span>{% endif %}
+                    </div>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-3 gap-2 text-center text-xs">
+                <div class="bg-gray-50 rounded-xl p-2"><p class="text-gray-500">Articles</p>
+                    <p class="font-semibold">{{ x.utilise.articles }}{% if x.formule and x.formule.articles %} / {{ x.formule.articles }}{% endif %}</p></div>
+                <div class="bg-gray-50 rounded-xl p-2"><p class="text-gray-500">Vidéos</p>
+                    <p class="font-semibold">{{ x.utilise.videos }}{% if x.formule and x.formule.videos %} / {{ x.formule.videos }}{% endif %}</p></div>
+                <div class="bg-gray-50 rounded-xl p-2"><p class="text-gray-500">Dernière activité</p>
+                    <p class="font-semibold">{{ x.derniere_activite.strftime('%d/%m %H:%M') if x.derniere_activite else '—' }}</p></div>
+            </div>
+
+            <!-- Activer / désactiver -->
+            <div class="flex flex-wrap gap-2">
+                {% if not b.active %}
+                {% if not b.formule %}
+                <form method="POST" action="{{ url_for('boutique.gestion_activer', boutique_id=b.id) }}">
+                    <input type="hidden" name="active" value="1"><input type="hidden" name="essai" value="1">
+                    <button class="bg-green-600 text-white px-3 py-2 rounded-lg text-sm font-semibold"><i class="fas fa-play mr-1"></i> Activer avec l'essai Démarrage ({{ formules.demarrage.essai_jours }} j)</button>
+                </form>
+                {% endif %}
+                <form method="POST" action="{{ url_for('boutique.gestion_activer', boutique_id=b.id) }}">
+                    <input type="hidden" name="active" value="1">
+                    <button class="bg-white border border-green-600 text-green-700 px-3 py-2 rounded-lg text-sm font-semibold"><i class="fas fa-check mr-1"></i> Activer{{ ' sans formule' if not b.formule }}</button>
+                </form>
+                {% else %}
+                <form method="POST" action="{{ url_for('boutique.gestion_activer', boutique_id=b.id) }}"
+                      data-question="Désactiver {{ b.nom_boutique }} ? Personne de cette boutique ne pourra plus se connecter." onsubmit="return confirm(this.dataset.question)">
+                    <input type="hidden" name="active" value="0">
+                    <button class="bg-white border border-red-300 text-red-600 px-3 py-2 rounded-lg text-sm font-semibold"><i class="fas fa-power-off mr-1"></i> Désactiver</button>
+                </form>
+                {% endif %}
+            </div>
+
+            <!-- Programmer l'abonnement -->
+            <details class="rounded-xl border border-gray-200" {{ 'open' if not b.formule and b.active }}>
+                <summary class="px-3 py-2 text-sm font-semibold text-purple-700 cursor-pointer"><i class="fas fa-sliders mr-1"></i> Programmer l'abonnement</summary>
+                <form method="POST" action="{{ url_for('boutique.gestion_formule', boutique_id=b.id) }}" class="formule-form p-3 pt-1 space-y-3 text-sm">
+                    <div class="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                        {% for code, f in formules.items() %}
+                        <label class="border-2 rounded-xl p-2 cursor-pointer has-[:checked]:border-purple-600 has-[:checked]:bg-purple-50">
+                            <input type="radio" name="formule" value="{{ code }}" data-prix="{{ f.prix }}" class="sr-only" {{ 'checked' if b.formule == code }}>
+                            <span class="block font-bold">{{ f.nom }}</span>
+                            <span class="block text-xs text-gray-500">{{ fcfa(f.prix) ~ '/mois' if f.prix else 'Essai ' ~ f.essai_jours ~ ' j' }}</span>
+                        </label>
+                        {% endfor %}
+                        <label class="border-2 rounded-xl p-2 cursor-pointer has-[:checked]:border-purple-600 has-[:checked]:bg-purple-50">
+                            <input type="radio" name="formule" value="" class="sr-only" {{ 'checked' if not b.formule }}>
+                            <span class="block font-bold">Aucune</span><span class="block text-xs text-gray-500">rien à payer</span>
+                        </label>
+                    </div>
+                    <div class="champs-payant flex flex-wrap items-end gap-2">
+                        <label class="text-gray-500">Prix / mois (FCFA)
+                            <input type="number" name="prix" min="0" step="500" value="{{ b.abonnement_prix|int if b.abonnement_prix else '' }}" placeholder="prix de la formule" class="block mt-1 w-36 border border-gray-300 rounded-lg px-2 py-1.5"></label>
+                        <label class="text-gray-500">1<sup>er</sup> mois facturé
+                            <input type="month" name="debut" value="{{ b.abonnement_debut or premier_mois }}" class="block mt-1 border border-gray-300 rounded-lg px-2 py-1.5"></label>
+                        <p class="w-full text-xs text-gray-500">Prix vide = prix normal de la formule. Mettez un autre prix pour une remise.</p>
+                    </div>
+                    <div class="champs-essai flex flex-wrap items-end gap-2">
+                        <label class="text-gray-500">Fin de l'essai gratuit
+                            <input type="date" name="essai_fin" value="{{ b.essai_fin.isoformat() if b.essai_fin else '' }}" min="{{ aujourdhui.isoformat() }}" class="block mt-1 border border-gray-300 rounded-lg px-2 py-1.5"></label>
+                        <span class="text-xs text-gray-500 pb-2">vide = {{ formules.demarrage.essai_jours }} jours à partir d'aujourd'hui</span>
+                    </div>
+                    <button class="bg-purple-600 text-white px-4 py-2 rounded-lg font-semibold">Enregistrer</button>
+                </form>
+            </details>
+
+            <!-- Encaisser -->
+            {% if x.etat.exige %}
+            <details class="rounded-xl border border-gray-200" {{ 'open' if x.etat.niveau in ['rouge', 'bloque'] }}>
+                <summary class="px-3 py-2 text-sm font-semibold text-green-700 cursor-pointer"><i class="fas fa-money-bill-wave mr-1"></i> Encaisser {{ x.etat.libelle_mois_a_payer }} ({{ fcfa(x.etat.prix) }})</summary>
+                <form method="POST" action="{{ url_for('boutique.gestion_encaisser', boutique_id=b.id) }}" class="p-3 pt-1 flex flex-wrap items-end gap-2 text-sm"
+                      data-question="Enregistrer le paiement de {{ x.etat.libelle_mois_a_payer }} ({{ fcfa(x.etat.prix) }}) pour {{ b.nom_boutique }} ?" onsubmit="return confirm(this.dataset.question)">
+                    <label class="text-gray-500">Moyen
+                        <select name="mode" class="block mt-1 border border-gray-300 rounded-lg px-2 py-1.5">
+                            {% for code, lib in modes.items() %}<option value="{{ code }}" {{ 'selected' if code == 'especes' }}>{{ lib }}</option>{% endfor %}
+                        </select></label>
+                    <label class="text-gray-500">Référence du dépôt
+                        <input type="text" name="reference" placeholder="sauf espèces" class="block mt-1 w-40 border border-gray-300 rounded-lg px-2 py-1.5"></label>
+                    <label class="text-gray-500">Date
+                        <input type="date" name="date_paiement" value="{{ aujourdhui.isoformat() }}" max="{{ aujourdhui.isoformat() }}" class="block mt-1 border border-gray-300 rounded-lg px-2 py-1.5"></label>
+                    <button class="bg-green-600 text-white px-4 py-2 rounded-lg font-semibold">Encaisser</button>
+                </form>
+            </details>
+            {% endif %}
+        </div>
+        {% endfor %}
+    </div>
+
+    {% if paiements %}
+    <div class="bg-white rounded-2xl shadow-md overflow-x-auto">
+        <h2 class="px-4 py-3 border-b border-gray-100 font-bold text-gray-900">Derniers paiements d'abonnement</h2>
+        <table class="w-full text-sm">
+            <thead class="bg-gray-50 text-gray-600 text-left">
+                <tr><th class="px-4 py-2">Boutique</th><th class="px-3 py-2">Mois</th><th class="px-3 py-2">Moyen</th><th class="px-3 py-2">Réf.</th><th class="px-3 py-2 text-right">Montant</th><th class="px-3 py-2"></th></tr>
+            </thead>
+            <tbody class="divide-y divide-gray-100">
+                {% for p in paiements %}
+                <tr class="{{ 'opacity-50 line-through' if p.statut != 'valide' }}">
+                    <td class="px-4 py-2 font-medium">{{ p.boutique.nom_boutique }}</td>
+                    <td class="px-3 py-2">{{ p.mois_libelle|capitalize }}</td>
+                    <td class="px-3 py-2">{{ p.mode_libelle }}<span class="block text-xs text-gray-400">{{ p.date_paiement.strftime('%d/%m/%Y') }}</span></td>
+                    <td class="px-3 py-2 font-mono">{{ p.reference or '—' }}</td>
+                    <td class="px-3 py-2 text-right whitespace-nowrap">{{ fcfa(p.montant) }}</td>
+                    <td class="px-3 py-2 text-right">
+                        {% if p.statut == 'valide' %}
+                        <form method="POST" action="{{ url_for('boutique.gestion_annuler_paiement', paiement_id=p.id) }}"
+                              data-question="Annuler ce paiement ({{ p.boutique.nom_boutique }}, {{ p.mois_libelle }}) ? Le mois redeviendra à payer." onsubmit="return confirm(this.dataset.question)">
+                            <button class="text-red-600 text-xs font-semibold">Annuler</button>
+                        </form>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% endif %}
+</div>
+<script>
+// Champs utiles selon la formule choisie : prix et 1er mois (Pro / Premium), fin d'essai (Démarrage)
+document.querySelectorAll('.formule-form').forEach(function (f) {
+    function maj() {
+        var choix = f.querySelector('input[name="formule"]:checked');
+        var v = choix ? choix.value : '';
+        f.querySelector('.champs-payant').style.display = (v === 'pro' || v === 'premium') ? '' : 'none';
+        f.querySelector('.champs-essai').style.display = v === 'demarrage' ? '' : 'none';
+        var prix = f.querySelector('input[name="prix"]');
+        if (choix && choix.dataset.prix && !prix.dataset.touche) prix.placeholder = choix.dataset.prix + ' (prix normal)';
+    }
+    f.querySelectorAll('input[name="formule"]').forEach(function (r) { r.addEventListener('change', function () {
+        var prix = f.querySelector('input[name="prix"]');
+        if (r.checked && r.dataset.prix && prix.value && !prix.dataset.touche) prix.value = '';
+        maj();
+    }); });
+    f.querySelector('input[name="prix"]').addEventListener('input', function () { this.dataset.touche = '1'; });
+    maj();
+});
+</script>
+{% endblock %}

@@ -8,7 +8,7 @@
 {% set style = {'gratuit': 'bg-gray-100 text-gray-700', 'ok': 'bg-green-100 text-green-800', 'jaune': 'bg-yellow-100 text-yellow-800',
                 'orange': 'bg-orange-100 text-orange-800', 'rouge': 'bg-red-100 text-red-800', 'bloque': 'bg-red-600 text-white'}[n] %}
 <span class="px-2.5 py-1 rounded-full text-xs font-semibold {{ style }}">
-    {% if n == 'gratuit' %}Sans abonnement{% elif n == 'ok' %}✓ À jour{% elif n == 'bloque' %}🔒 Suspendue — {{ etat.libelle_mois_a_payer }} impayé{% else %}{{ etat.libelle_mois_a_payer|capitalize }} à payer ({{ etat.jours_restants + 1 }} j){% endif %}
+    {% if etat.essai %}Essai Démarrage jusqu'au {{ etat.essai_fin.strftime('%d/%m/%Y') }}{% elif etat.essai_fini %}🔒 Essai terminé{% elif n == 'gratuit' %}Sans abonnement{% elif n == 'ok' %}✓ À jour{% elif n == 'bloque' %}🔒 Suspendue — {{ etat.libelle_mois_a_payer }} impayé{% else %}{{ etat.libelle_mois_a_payer|capitalize }} à payer ({{ etat.jours_restants + 1 }} j){% endif %}
 </span>
 {% endmacro %}
 

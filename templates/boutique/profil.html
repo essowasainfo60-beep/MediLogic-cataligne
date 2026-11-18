@@ -7,7 +7,8 @@
     <h1 class="text-2xl md:text-3xl font-bold text-gray-800 mb-1">
         <i class="fas fa-store text-purple-500 mr-2"></i> Ma boutique
     </h1>
-    <p class="text-gray-500 mb-6">Ce que vos clients voient en haut de votre catalogue, et sur vos factures.</p>
+    <p class="text-gray-500 mb-6">Ce que vos clients voient en haut de votre catalogue, et sur vos factures.
+        {% if formule_boutique %}<a href="{{ url_for('boutique.abonnement_page') }}" class="ml-1 align-middle">{% with f=formule_boutique %}{% include '_badge_formule.html' %}{% endwith %}</a>{% endif %}</p>
 
     <form method="POST" enctype="multipart/form-data" class="space-y-5">
         <!-- Logo -->
