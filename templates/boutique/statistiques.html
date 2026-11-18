@@ -48,6 +48,40 @@
         {% endfor %}
     </div>
 
+    <!-- Boutique / en ligne, bénéfice, caisse nette (comme Ma Boutik) -->
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <div class="bg-white rounded-2xl shadow-md p-4 md:p-5 border-l-4 border-green-500">
+            <p class="text-xs md:text-sm text-gray-500"><i class="fas fa-cash-register mr-1"></i>Ventes au comptoir</p>
+            <p class="text-xl md:text-2xl font-extrabold text-gray-900 mt-1">{{ fcfa(canaux.comptoir.ventes) }}</p>
+            <p class="text-xs text-gray-500 mt-1">{{ canaux.comptoir.nb }} vente(s) · {{ canaux.comptoir.articles }} article(s) · ticket moyen {{ fcfa(canaux.comptoir.ticket) }}</p>
+        </div>
+        <div class="bg-white rounded-2xl shadow-md p-4 md:p-5 border-l-4 border-purple-500">
+            <p class="text-xs md:text-sm text-gray-500"><i class="fas fa-globe mr-1"></i>Ventes en ligne / livrées</p>
+            <p class="text-xl md:text-2xl font-extrabold text-gray-900 mt-1">{{ fcfa(canaux.en_ligne.ventes) }}</p>
+            <p class="text-xs text-gray-500 mt-1">{{ canaux.en_ligne.nb }} commande(s) · {{ canaux.en_ligne.articles }} article(s)</p>
+        </div>
+        <div class="bg-white rounded-2xl shadow-md p-4 md:p-5 border-l-4 border-emerald-500">
+            <p class="text-xs md:text-sm text-gray-500"><i class="fas fa-sack-dollar mr-1"></i>Bénéfice sur les articles</p>
+            {% if benefice.ventes_couvertes %}
+            <p class="text-xl md:text-2xl font-extrabold text-emerald-700 mt-1">{{ fcfa(benefice.marge) }}</p>
+            <p class="text-xs text-gray-500 mt-1">marge {{ benefice.taux }} %{% if benefice.lignes_sans %} · {{ benefice.lignes_sans }} ligne(s) sans prix d'achat non comptée(s){% endif %}</p>
+            {% else %}
+            <p class="text-sm text-gray-500 mt-1">Renseignez le <b>prix d'achat</b> de vos articles pour voir votre bénéfice.</p>
+            {% endif %}
+        </div>
+        <div class="bg-white rounded-2xl shadow-md p-4 md:p-5 border-l-4 border-blue-500">
+            <p class="text-xs md:text-sm text-gray-500"><i class="fas fa-wallet mr-1"></i>Caisse nette</p>
+            <p class="text-xl md:text-2xl font-extrabold text-gray-900 mt-1">{{ fcfa(caisse_periode.nette) }}</p>
+            <p class="text-xs text-gray-500 mt-1">encaissé {{ fcfa(caisse_periode.encaisse) }} − charges {{ fcfa(caisse_periode.charges) }}</p>
+        </div>
+    </div>
+    {% if creances_du %}
+    <a href="{{ url_for('boutique.page_creances') }}" class="flex items-center justify-between gap-2 bg-orange-50 border border-orange-200 rounded-2xl px-4 py-3 text-sm">
+        <span><i class="fas fa-hand-holding-dollar text-orange-500 mr-1"></i> Créances en cours (toutes périodes) : <b class="text-orange-700">{{ fcfa(creances_du) }}</b> à recevoir</span>
+        <span class="text-orange-700 font-semibold whitespace-nowrap">Voir ›</span>
+    </a>
+    {% endif %}
+
     <!-- Rapprochement ventes / caisse -->
     <div class="bg-white rounded-2xl shadow-md p-5">
         <h2 class="font-bold text-gray-900 mb-3"><i class="fas fa-scale-balanced text-purple-500 mr-1"></i> Ventes et caisse sur la période</h2>
@@ -59,7 +93,7 @@
                 <div class="flex justify-between text-orange-600"><span>dont encore chez les livreurs</span><span>{{ fcfa(resume.chez_livreurs) }}</span></div>
             </div>
             <div class="space-y-1.5">
-                <div class="flex justify-between"><span>Encaissé en caisse (versements + ventes en boutique)</span><strong class="text-green-700">+ {{ fcfa(caisse_periode.encaisse) }}</strong></div>
+                <div class="flex justify-between"><span>Encaissé en caisse (versements, ventes en boutique, créances)</span><strong class="text-green-700">+ {{ fcfa(caisse_periode.encaisse) }}</strong></div>
                 <div class="flex justify-between"><span>Charges</span><span class="text-red-600">− {{ fcfa(caisse_periode.charges) }}</span></div>
                 <div class="flex justify-between"><span>Autres sorties (retraits, remboursements, paiements livreurs)</span><span class="text-red-600">− {{ fcfa(caisse_periode.autres_sorties) }}</span></div>
                 <div class="flex justify-between"><span>Apports</span><span class="text-blue-600">+ {{ fcfa(caisse_periode.apports) }}</span></div>
@@ -92,12 +126,33 @@
                     <span class="text-gray-500 whitespace-nowrap">× {{ t.quantite }}</span>
                     <strong class="w-28 text-right whitespace-nowrap">{{ fcfa(t.montant) }}</strong>
                 </div>
+                {% if t.marge_connue and benefice.ventes_couvertes %}<p class="ml-9 text-xs text-emerald-700">bénéfice {{ fcfa(t.marge) }}</p>{% endif %}
                 <div class="ml-9 mt-1 bg-gray-100 rounded-full"><div class="{{ bar }}" style="width: {{ (100 * t.quantite / max_q)|round|int }}%"></div></div>
             </div>
             {% else %}
             <p class="px-5 py-8 text-center text-sm text-gray-500">Aucune vente livrée sur la période.</p>
             {% endfor %}
         </div>
+
+        <!-- Vendeurs (ventes au comptoir) -->
+        {% if vendeurs_st %}
+        <div class="bg-white rounded-2xl shadow-md">
+            <h3 class="px-5 py-4 border-b border-gray-100 font-bold text-gray-900">🧑‍💼 Vendeurs (ventes au comptoir)</h3>
+            {% set max_v = (vendeurs_st|map(attribute='ventes')|max) or 1 %}
+            {% for v in vendeurs_st %}
+            <div class="px-5 py-2.5 border-b border-gray-100 text-sm">
+                <div class="flex items-center gap-3">
+                    <span class="w-6 font-bold text-gray-400">{{ loop.index }}</span>
+                    <span class="flex-1 min-w-0 truncate font-semibold">{{ v.nom }}</span>
+                    <span class="text-gray-500 whitespace-nowrap">{{ v.nb }} vente(s) · {{ v.articles }} art.</span>
+                    <strong class="w-28 text-right whitespace-nowrap">{{ fcfa(v.ventes) }}</strong>
+                </div>
+                {% if v.credit %}<p class="ml-9 text-xs text-orange-600">dont {{ fcfa(v.credit) }} encore à crédit</p>{% endif %}
+                <div class="ml-9 mt-1 bg-gray-100 rounded-full"><div class="h-2 rounded-full bg-green-500" style="width: {{ (100 * v.ventes / max_v)|round|int }}%"></div></div>
+            </div>
+            {% endfor %}
+        </div>
+        {% endif %}
 
         <!-- Livreurs les plus actifs -->
         <div class="bg-white rounded-2xl shadow-md">

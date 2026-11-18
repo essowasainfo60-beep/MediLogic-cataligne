@@ -59,6 +59,14 @@
         <div class="kpi">Échecs / annulées<b>{{ resume.echecs }} / {{ resume.annulees }}</b></div>
         <div class="kpi">Délai moyen<b>{{ heures(resume.delai) }}</b></div>
     </div>
+    <div class="kpis">
+        <div class="kpi">Ventes au comptoir<b>{{ fcfa(canaux.comptoir.ventes) }}</b></div>
+        <div class="kpi">Ventes en ligne / livrées<b>{{ fcfa(canaux.en_ligne.ventes) }}</b></div>
+        <div class="kpi">Bénéfice{{ ' (partiel)' if benefice.lignes_sans and benefice.ventes_couvertes }}<b>{{ fcfa(benefice.marge) if benefice.ventes_couvertes else '—' }}</b></div>
+        <div class="kpi">Caisse nette<b>{{ fcfa(caisse_periode.nette) }}</b></div>
+        {% if creances_du %}<div class="kpi">Créances à recevoir<b>{{ fcfa(creances_du) }}</b></div>{% endif %}
+        {% for v in vendeurs_st[:3] %}<div class="kpi">Vendeur : {{ v.nom }}<b>{{ fcfa(v.ventes) }}</b></div>{% endfor %}
+    </div>
 
     <div class="deux">
         <div>

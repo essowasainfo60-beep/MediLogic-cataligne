@@ -2747,23 +2747,61 @@ def statistiques():
             g['delai'] = sum(g['delais']) / len(g['delais']) if g['delais'] else None
         return sorted(groupes.values(), key=lambda g: -g['ventes'])
 
+    # Articles vendus + bénéfice (prix d'achat noté à la vente, sinon celui de la fiche article)
+    pa_actuel = {a.id: a.prix_achat for a in Article.query.filter_by(boutique_id=current_user.id).all()}
     top = {}
+    benefice = {'marge': 0, 'cout': 0, 'ventes_couvertes': 0, 'lignes_sans': 0, 'lignes': 0}
     for c in livrees:
+        ratio = (c.net_articles / c.sous_total) if c.sous_total else 1      # part de la remise
         for a in c.articles_json:
-            t2 = top.setdefault(a['nom'], {'nom': a['nom'], 'numero': a.get('numero'), 'quantite': 0, 'montant': 0})
-            t2['quantite'] += int(a['quantite'])
-            t2['montant'] += a['prix'] * int(a['quantite'])
+            q = int(a['quantite'])
+            t2 = top.setdefault(a['nom'], {'nom': a['nom'], 'numero': a.get('numero'), 'quantite': 0, 'montant': 0,
+                                           'marge': 0, 'marge_connue': True})
+            t2['quantite'] += q
+            t2['montant'] += a['prix'] * q
+            pa = a.get('pa') if a.get('pa') is not None else pa_actuel.get(a.get('article_id'))
+            benefice['lignes'] += 1
+            if pa is None:
+                benefice['lignes_sans'] += 1
+                t2['marge_connue'] = False
+                continue
+            recette = a['prix'] * q * ratio
+            benefice['marge'] += recette - pa * q
+            benefice['cout'] += pa * q
+            benefice['ventes_couvertes'] += recette
+            t2['marge'] += recette - pa * q
+    benefice['taux'] = round(100 * benefice['marge'] / benefice['ventes_couvertes']) if benefice['ventes_couvertes'] else None
+
+    # Vente au comptoir / en ligne, et vendeurs (comme dans Ma Boutik)
+    comptoir_l = [c for c in livrees if c.source == 'comptoir']
+    en_ligne_l = [c for c in livrees if c.source != 'comptoir']
+    canaux = {
+        'comptoir': {'nb': len(comptoir_l), 'ventes': sum(c.net_articles for c in comptoir_l),
+                     'articles': sum(int(a['quantite']) for c in comptoir_l for a in c.articles_json)},
+        'en_ligne': {'nb': len(en_ligne_l), 'ventes': sum(c.net_articles for c in en_ligne_l),
+                     'articles': sum(int(a['quantite']) for c in en_ligne_l for a in c.articles_json)},
+    }
+    for k in canaux.values():
+        k['ticket'] = k['ventes'] / k['nb'] if k['nb'] else 0
+    vendeurs_st = {}
+    for c in comptoir_l:
+        v = vendeurs_st.setdefault(c.saisie_par or 'Boutique', {'nom': c.saisie_par or 'Boutique', 'nb': 0, 'ventes': 0, 'articles': 0, 'credit': 0})
+        v['nb'] += 1
+        v['ventes'] += c.net_articles
+        v['articles'] += sum(int(a['quantite']) for a in c.articles_json)
+        v['credit'] += c.reste_du or 0
 
     # Caisse sur la même période (pour comparer avec les ventes)
     mouvements = (MouvementCaisse.query.filter(MouvementCaisse.boutique_id == current_user.id,
                                                MouvementCaisse.date >= du, MouvementCaisse.date <= au).all())
     caisse_periode = {
-        'encaisse': sum(m.montant for m in mouvements if m.type in ('versement', 'vente_directe')),
+        'encaisse': sum(m.montant for m in mouvements if m.type in ('versement', 'vente_directe', 'creance')),
         'charges': -sum(m.montant for m in mouvements if m.type == 'charge'),
         'autres_sorties': -sum(m.montant for m in mouvements if m.montant < 0 and m.type != 'charge'),
         'apports': sum(m.montant for m in mouvements if m.type == 'apport'),
         'solde_periode': sum(m.montant for m in mouvements),
     }
+    caisse_periode['nette'] = caisse_periode['encaisse'] - caisse_periode['charges']
     charges_cat = {}
     for m in mouvements:
         if m.type == 'charge':
@@ -2798,6 +2836,8 @@ def statistiques():
                     par_source=regrouper(lambda c: c.source_libelle),
                     livrees=livrees, echecs=echecs, annulees=annulees,
                     caisse_periode=caisse_periode, charges_cat=sorted(charges_cat.items(), key=lambda x: -x[1]),
+                    benefice=benefice, canaux=canaux, vendeurs_st=sorted(vendeurs_st.values(), key=lambda v: -v['ventes']),
+                    creances_du=creances.total_du(current_user.id),
                     maintenant=maintenant, boutique=current_user,
                     cl=stats_avancees.classements(recues, livrees, echecs, zones_actives()))
     if request.args.get('imprimer'):
