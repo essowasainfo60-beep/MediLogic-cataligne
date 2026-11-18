@@ -9,6 +9,20 @@
             Ajoutez un <b>choix</b> et ses valeurs. Le client devra choisir avant de commander, et vous suivrez le stock de chaque variante.</p>
     </div>
 
+    <!-- Modèles tout prêts : un toucher remplit les choix (les valeurs restent modifiables) -->
+    <div>
+        <p class="text-sm font-semibold text-gray-700 mb-1.5">Cet article se vend :</p>
+        <div id="modelesVariantes" class="grid grid-cols-2 gap-2 text-sm">
+            <button type="button" data-modele="" class="modele-var border-2 rounded-xl px-2 py-2 text-left">🚫 <b>Sans variante</b><span class="block text-xs text-gray-500">une seule version</span></button>
+            <button type="button" data-modele='[["Taille","S, M, L, XL, XXL"]]' class="modele-var border-2 rounded-xl px-2 py-2 text-left">👕 <b>Taille seule</b><span class="block text-xs text-gray-500">S, M, L…</span></button>
+            <button type="button" data-modele='[["Pointure","36-45"]]' class="modele-var border-2 rounded-xl px-2 py-2 text-left">👟 <b>Pointure seule</b><span class="block text-xs text-gray-500">36 à 45…</span></button>
+            <button type="button" data-modele='[["Couleur","Noir, Blanc, Rouge"]]' class="modele-var border-2 rounded-xl px-2 py-2 text-left">🎨 <b>Couleur seule</b><span class="block text-xs text-gray-500">Noir, Blanc…</span></button>
+            <button type="button" data-modele='[["Taille","S, M, L, XL, XXL"],["Couleur","Noir, Blanc, Rouge"]]' class="modele-var border-2 rounded-xl px-2 py-2 text-left">👕🎨 <b>Taille + couleur</b><span class="block text-xs text-gray-500">habits</span></button>
+            <button type="button" data-modele='[["Pointure","36-45"],["Couleur","Noir, Blanc, Rouge"]]' class="modele-var border-2 rounded-xl px-2 py-2 text-left">👟🎨 <b>Pointure + couleur</b><span class="block text-xs text-gray-500">chaussures</span></button>
+        </div>
+        <p class="text-xs text-gray-500 mt-1.5">Ensuite, corrigez les valeurs ci-dessous (vos vraies tailles, pointures et couleurs). Autre cas (contenance, parfum…) : « Ajouter un choix ».</p>
+    </div>
+
     <div id="listeChoix" class="space-y-2">
         {% for i in [1, 2, 3] %}
         {% set paire = options_existantes[i - 1] if options_existantes|length >= i else none %}
@@ -184,6 +198,38 @@
         cachee.classList.remove('hidden');
         cachee.querySelector('.nom-choix').focus();
     });
+    // ---------- Modèles tout prêts (taille seule, pointure + couleur…) ----------
+    const modeles = [...bloc.querySelectorAll('.modele-var')];
+    function surlignerModele() {
+        const noms = choix().map((c) => c.nom.toLowerCase()).sort().join('+');
+        modeles.forEach((b) => {
+            const m = b.dataset.modele ? JSON.parse(b.dataset.modele).map((x) => x[0].toLowerCase()).sort().join('+') : '';
+            const actif = m === noms;
+            b.classList.toggle('border-purple-600', actif);
+            b.classList.toggle('bg-purple-50', actif);
+            b.classList.toggle('border-gray-200', !actif);
+        });
+    }
+    modeles.forEach((b) => b.addEventListener('click', () => {
+        const voulu = b.dataset.modele ? JSON.parse(b.dataset.modele) : [];
+        // On garde les valeurs déjà tapées pour un même choix (ex. ses couleurs)
+        const avant = {};
+        lignesChoix.forEach((l) => {
+            const n = l.querySelector('.nom-choix').value.trim().toLowerCase();
+            if (n) avant[n] = l.querySelector('.valeurs-choix').value;
+        });
+        lignesChoix.forEach((l, i) => {
+            const m = voulu[i];
+            l.querySelector('.nom-choix').value = m ? m[0] : '';
+            l.querySelector('.valeurs-choix').value = m ? (avant[m[0].toLowerCase()] || m[1]) : '';
+            l.classList.toggle('hidden', !m && i > 0);
+        });
+        dessiner();
+        if (voulu.length) lignesChoix[0].querySelector('.valeurs-choix').focus();
+    }));
+    const dessinerBase = dessiner;
+    dessiner = function () { dessinerBase(); surlignerModele(); };
+
     suivre.addEventListener('change', dessiner);
     prixCase.addEventListener('change', dessiner);
     dessiner();
