@@ -182,6 +182,18 @@ def demande_article(code):
     return jsonify(ok=True, notifiable=demande.notifiable, designation=demande.designation)
 
 
+@client_bp.route('/api/synchro/maboutik', methods=['POST'])
+def synchro_maboutik():
+    """Ma Boutik envoie ses mouvements de stock (clé de la boutique dans l'en-tête Authorization)."""
+    import synchro_maboutik as sm
+    cle = (request.headers.get('Authorization') or '').removeprefix('Bearer ').strip()
+    boutique = sm.boutique_de_la_cle(cle)
+    if not boutique:
+        return jsonify(ok=False, erreur='Clé invalide'), 401
+    d = request.get_json(silent=True) or {}
+    return jsonify(ok=True, resultats=sm.appliquer(boutique, d.get('evenements')))
+
+
 @client_bp.route('/c/<code>/article/<int:numero>')
 def voir_article(code, numero):
     """Toutes les photos d'un article, celle choisie par le client mise en avant (?photo=2)."""

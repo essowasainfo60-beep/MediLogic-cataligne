@@ -42,6 +42,9 @@ class Boutique(UserMixin, db.Model):
     # Frais de livraison : 'livreur_garde' (il garde ses frais et ne remet que les articles)
     # ou 'boutique_collecte' (il remet tout, la boutique le paie ensuite). Voir caisse.py.
     mode_frais = db.Column(db.String(20), nullable=False, default='livreur_garde', server_default='livreur_garde')
+    # Synchronisation du stock avec Ma Boutik (transition) : empreinte de la clé, dernier envoi reçu
+    cle_synchro = db.Column(db.String(64), nullable=True)
+    derniere_synchro = db.Column(db.DateTime, nullable=True)
     # Dernière annonce de nouveautés envoyée aux clients (au plus une par jour)
     derniere_annonce = db.Column(db.DateTime, nullable=True)
     # Déconnexion automatique après X minutes sans activité (0 = jamais)
@@ -648,6 +651,24 @@ class Approvisionnement(db.Model):
     date_paiement = db.Column(db.DateTime, nullable=True)
     par = db.Column(db.String(120), nullable=True)
     note = db.Column(db.String(200), nullable=True)
+
+
+class SynchroMaBoutik(db.Model):
+    """Mouvement de stock reçu de Ma Boutik (une référence n'est jamais appliquée deux fois)."""
+    __tablename__ = 'synchro_maboutik'
+    __table_args__ = (db.UniqueConstraint('boutique_id', 'ref', name='uq_synchro_ref'),)
+
+    id = db.Column(db.Integer, primary_key=True)
+    boutique_id = db.Column(db.Integer, db.ForeignKey('boutiques.id'), nullable=False, index=True)
+    ref = db.Column(db.String(80), nullable=False)
+    type = db.Column(db.String(20), nullable=False)
+    produit = db.Column(db.String(200), nullable=False)
+    delta = db.Column(db.Integer, nullable=False, default=0)
+    statut = db.Column(db.String(10), nullable=False)          # applique | inconnu
+    note = db.Column(db.String(200), nullable=True)
+    article_id = db.Column(db.Integer, db.ForeignKey('articles.id', ondelete='SET NULL'), nullable=True)
+    date_maboutik = db.Column(db.String(20), nullable=True)
+    date = db.Column(db.DateTime, default=datetime.utcnow, index=True)
 
 
 class CleBiometrique(db.Model):

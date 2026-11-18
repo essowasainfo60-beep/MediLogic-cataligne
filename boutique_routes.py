@@ -39,6 +39,7 @@ boutique_bp = Blueprint('boutique', __name__)
 # Pages réservées selon le rôle (le gérant a accès à tout). Tout ce qui n'est pas
 # listé ici est ouvert à tous les membres de l'équipe : commandes, clients, impression…
 GERANT_SEUL = {
+    'synchro_page', 'synchro_cle',
     'profil', 'gerer_logo', 'vendeurs', 'ajouter_vendeur', 'desactiver_vendeur', 'modifier_vendeur',
     'regenerer_lien', 'modifier_whatsapp', 'biometrie_inscription_options', 'biometrie_inscription_verifier',
     'biometrie_retirer',
@@ -1124,6 +1125,29 @@ def payer_approvisionnement(bon_id):
         erreur = appro.payer(bon)
         flash(erreur or f'Fournisseur payé : {msg.fcfa(bon.total)} sortis de la caisse.', 'danger' if erreur else 'success')
     return redirect(url_for('boutique.approvisionnement'))
+
+
+# ==================== SYNCHRONISATION MA BOUTIK ====================
+
+@boutique_bp.route('/synchro-maboutik')
+@login_required
+def synchro_page():
+    from models import SynchroMaBoutik
+    b = boutique_connectee()
+    evenements = (SynchroMaBoutik.query.filter_by(boutique_id=b.id).order_by(SynchroMaBoutik.id.desc()).limit(100).all())
+    inconnus = SynchroMaBoutik.query.filter_by(boutique_id=b.id, statut='inconnu').count()
+    return render_template('boutique/synchro.html', boutique=b, evenements=evenements, inconnus=inconnus,
+                           cle=session.pop('cle_synchro_affichee', None),
+                           url_api=url_for('client.synchro_maboutik', _external=True))
+
+
+@boutique_bp.route('/synchro-maboutik/cle', methods=['POST'])
+@login_required
+def synchro_cle():
+    import synchro_maboutik as sm
+    session['cle_synchro_affichee'] = sm.nouvelle_cle(boutique_connectee())
+    flash('Nouvelle clé créée : copiez-la maintenant dans les réglages de Ma Boutik (elle ne sera plus affichée).', 'success')
+    return redirect(url_for('boutique.synchro_page'))
 
 
 @boutique_bp.route('/code-barres/nouveau', methods=['POST'])

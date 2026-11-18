@@ -1,0 +1,53 @@
+{% extends "base.html" %}
+
+{% block title %}Synchronisation Ma Boutik - {{ boutique.nom_boutique }}{% endblock %}
+
+{% block content %}
+<div class="max-w-3xl mx-auto px-4 space-y-4 pb-24">
+    <div>
+        <h1 class="text-2xl font-extrabold text-gray-900"><i class="fas fa-arrows-rotate text-purple-600 mr-1"></i> Synchronisation avec Ma Boutik</h1>
+        <p class="text-sm text-gray-500">Pendant la transition : chaque vente, annulation ou approvisionnement fait dans Ma Boutik met aussi à jour le stock du même article ici.</p>
+    </div>
+
+    <div class="bg-white rounded-2xl shadow-sm p-4 space-y-3">
+        <p class="text-sm">État :
+            {% if not boutique.cle_synchro %}<b class="text-gray-600">pas encore activée</b>
+            {% elif boutique.derniere_synchro %}<b class="text-green-700">active</b> · dernier mouvement reçu le {{ boutique.derniere_synchro.strftime('%d/%m à %H:%M') }}
+            {% else %}<b class="text-orange-600">clé créée, en attente du premier mouvement de Ma Boutik</b>{% endif %}</p>
+        {% if cle %}
+        <div class="bg-yellow-50 border-2 border-yellow-300 rounded-xl p-3 text-sm space-y-2">
+            <p class="font-bold">Clé à copier MAINTENANT (elle ne sera plus affichée) :</p>
+            <p class="font-mono break-all bg-white rounded-lg px-2 py-1.5 select-all" id="cleSynchro">{{ cle }}</p>
+            <p>Dans les réglages (variables d'environnement) de <b>Ma Boutik</b> sur Render, ajoutez :</p>
+            <p class="font-mono text-xs bg-white rounded-lg px-2 py-1.5 break-all">LIVRAPLUS_URL = {{ url_api }}<br>LIVRAPLUS_CLE_&lt;n° de la boutique dans Ma Boutik&gt; = la clé ci-dessus</p>
+        </div>
+        {% endif %}
+        <form method="POST" action="{{ url_for('boutique.synchro_cle') }}"
+              {% if boutique.cle_synchro %}onsubmit="return confirm('Remplacer la clé ? L\'ancienne ne marchera plus : il faudra mettre la nouvelle dans Ma Boutik.')"{% endif %}>
+            <button type="submit" class="bg-purple-600 text-white px-4 py-2.5 rounded-xl font-semibold"><i class="fas fa-key mr-1"></i> {{ 'Créer une nouvelle clé' if boutique.cle_synchro else 'Activer : créer la clé' }}</button>
+        </form>
+        <ol class="text-xs text-gray-600 list-decimal ml-5 space-y-0.5">
+            <li>Importez d'abord vos articles de Ma Boutik (l'administrateur le fait), pour que les noms correspondent.</li>
+            <li>Créez la clé et mettez-la dans Ma Boutik. À partir de là, chaque mouvement arrive ici en quelques secondes.</li>
+            <li>Le jour où vous ne vendez plus que dans LivraPlus, retirez la clé de Ma Boutik.</li>
+        </ol>
+    </div>
+
+    {% if inconnus %}
+    <p class="bg-orange-50 border border-orange-200 text-orange-800 rounded-xl px-4 py-3 text-sm"><b>{{ inconnus }} mouvement(s)</b> concernent un article introuvable ici (nom différent) : ajustez ces articles à la main dans le stock.</p>
+    {% endif %}
+
+    <div class="bg-white rounded-2xl shadow-sm divide-y divide-gray-100">
+        <p class="px-4 py-3 font-bold text-gray-900">Derniers mouvements reçus</p>
+        {% for e in evenements %}
+        <div class="px-4 py-2 text-sm flex justify-between gap-2 {{ 'bg-orange-50' if e.statut == 'inconnu' }}">
+            <span class="min-w-0"><span class="font-semibold">{{ e.produit }}</span>
+                <span class="text-gray-500">· {{ e.type }}{% if e.note %} · {{ e.note }}{% endif %}{% if e.statut == 'inconnu' %} · <b class="text-orange-700">article introuvable</b>{% endif %}</span></span>
+            <span class="whitespace-nowrap font-bold {{ 'text-red-600' if e.delta < 0 else 'text-green-700' }}">{{ '%+d'|format(e.delta) if e.delta else '' }}</span>
+        </div>
+        {% else %}
+        <p class="px-4 py-6 text-center text-gray-500 text-sm">Aucun mouvement reçu pour l'instant.</p>
+        {% endfor %}
+    </div>
+</div>
+{% endblock %}

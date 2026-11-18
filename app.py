@@ -40,6 +40,9 @@ from client_routes import client_bp
 app.register_blueprint(admin_bp, url_prefix='/admin')
 app.register_blueprint(boutique_bp, url_prefix='/boutique')
 app.register_blueprint(client_bp, url_prefix='/')
+# API appelée par Ma Boutik (serveur à serveur, protégée par la clé de la boutique, pas de formulaire)
+from client_routes import synchro_maboutik as _vue_synchro
+csrf.exempt(_vue_synchro)
 
 
 @app.errorhandler(RequestEntityTooLarge)
@@ -238,6 +241,8 @@ def mettre_a_jour_schema():
                                 ('mode_frais', "VARCHAR(20) NOT NULL DEFAULT 'livreur_garde'"),
                                 ('deconnexion_minutes', 'INTEGER NOT NULL DEFAULT 15'),
                                 ('derniere_annonce', 'TIMESTAMP'),
+                                ('cle_synchro', 'VARCHAR(64)'),
+                                ('derniere_synchro', 'TIMESTAMP'),
                                 ('abonnement_prix', 'FLOAT'), ('abonnement_debut', 'VARCHAR(7)'),
                                 ('derniere_activite', 'TIMESTAMP'), ('latitude', 'FLOAT'), ('longitude', 'FLOAT'),
                                 ('message_statut', 'TEXT'),
