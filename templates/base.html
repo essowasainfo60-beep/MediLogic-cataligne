@@ -168,6 +168,9 @@
                 {% endif %}
 
                 <div class="flex items-center gap-2">
+                    <!-- Actualiser : l'application installée n'a pas de bouton « recharger » -->
+                    <button type="button" id="btnActualiser" onclick="actualiserPage()" title="Actualiser la page" aria-label="Actualiser la page"
+                            class="h-9 w-8 sm:w-9 flex-shrink-0 rounded-lg text-gray-500 hover:bg-gray-100 hover:text-purple-700"><i class="fas fa-rotate-right"></i></button>
                     {% if session.get('is_admin') %}
                         <a href="{{ url_for('admin.admin_dashboard') }}" class="text-sm text-gray-600 hover:text-primary px-2"><i class="fas fa-gauge"></i> Admin</a>
                         <a href="{{ url_for('admin.compte_admin') }}" class="text-sm text-gray-600 hover:text-primary px-2" title="Mes identifiants"><i class="fas fa-user-shield"></i><span class="hidden sm:inline"> Mon compte</span></a>
@@ -226,7 +229,7 @@
                         {% if en_cours is defined and en_cours %}<span class="bg-purple-600 text-white rounded-full min-w-[20px] h-5 px-1 flex items-center justify-center text-[11px]">{{ en_cours|length }}</span>{% endif %}
                     </a>
                     {% endif %}
-                    <button type="button" onclick="basculerTheme()" class="h-9 w-9 rounded-lg text-gray-500 hover:bg-gray-100" title="Mode clair / nuit">
+                    <button type="button" onclick="basculerTheme()" class="hidden sm:inline-flex items-center justify-center h-9 w-9 rounded-lg text-gray-500 hover:bg-gray-100" title="Mode clair / nuit">
                         <i class="fas fa-moon icone-theme"></i>
                     </button>
                     {% endif %}
@@ -424,6 +427,13 @@
     </footer>
 
     <script>
+        // ---------- Actualiser (rechargement propre : jamais de « renvoyer le formulaire ? ») ----------
+        function actualiserPage() {
+            const b = document.getElementById('btnActualiser');
+            if (b) { b.disabled = true; b.querySelector('i').classList.add('fa-spin'); }
+            location.replace(location.href);
+        }
+
         // ---------- Mode clair / nuit ----------
         function majBoutonsTheme() {
             var nuit = document.documentElement.classList.contains('dark');
