@@ -1,0 +1,196 @@
+{% extends "base.html" %}
+
+{% block title %}Approvisionnement - {{ current_user.nom_boutique }}{% endblock %}
+
+{% macro f(v) %}{{ "{:,.0f}".format(v or 0).replace(',', ' ') }}{% endmacro %}
+
+{% block content %}
+<div class="max-w-3xl mx-auto px-4 space-y-4 pb-28">
+    <div>
+        <h1 class="text-2xl font-extrabold text-gray-900"><i class="fas fa-truck-ramp-box text-purple-600 mr-1"></i> Approvisionnement</h1>
+        <p class="text-sm text-gray-500">La marchandise arrive : scannez ou cherchez chaque article, indiquez la quantité et le prix d'achat. Le stock et le prix d'achat se mettent à jour.</p>
+    </div>
+
+    <!-- Bon de réception -->
+    <section class="bg-white rounded-2xl shadow-sm p-4 space-y-3">
+        <div>
+            <label class="block text-sm font-bold text-gray-700 mb-1">Fournisseur <span class="font-normal text-gray-400">(facultatif)</span></label>
+            <input id="fournisseur" list="listeFournisseurs" maxlength="120" placeholder="Ex : Grossiste Assigamé, Dubaï Import…"
+                   class="w-full border border-gray-300 rounded-xl px-3 py-2.5">
+            <datalist id="listeFournisseurs">{% for x in fournisseurs %}<option value="{{ x }}">{% endfor %}</datalist>
+        </div>
+        <div>
+            <label class="block text-sm font-bold text-gray-700 mb-1">Articles reçus</label>
+            <div class="flex gap-2">
+                <div class="relative flex-1">
+                    <i class="fas fa-barcode absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400"></i>
+                    <input id="recherche" type="search" autocomplete="off" enterkeyhint="search" placeholder="Scannez, ou tapez nom / n° / code"
+                           class="w-full pl-10 pr-3 py-3 border-2 border-gray-200 rounded-2xl focus:outline-none focus:border-purple-500">
+                </div>
+                <button type="button" id="btnCamera" class="w-14 rounded-2xl bg-gray-900 text-white text-xl" aria-label="Scanner avec la caméra"><i class="fas fa-camera"></i></button>
+            </div>
+            <div id="suggestions" class="hidden mt-2 border border-gray-200 rounded-xl divide-y divide-gray-100 max-h-64 overflow-y-auto"></div>
+            <p id="message" class="hidden mt-2 text-sm rounded-xl px-3 py-2"></p>
+        </div>
+        <div id="lignes" class="space-y-2"></div>
+        <p id="vide" class="text-center text-gray-400 text-sm py-4">Aucun article pour l'instant.</p>
+        <div id="pied" class="hidden space-y-3 border-t border-gray-100 pt-3">
+            <div class="flex justify-between items-end"><span class="font-bold">Total des achats</span><span id="total" class="text-2xl font-extrabold"></span></div>
+            {% if peut_payer %}
+            <label class="flex items-center gap-2 text-sm font-semibold bg-gray-50 rounded-xl px-3 py-2.5">
+                <input type="checkbox" id="payer" checked class="h-5 w-5"> Payé maintenant avec l'argent de la caisse
+                <span class="font-normal text-gray-500">(sinon : « à payer au fournisseur »)</span></label>
+            {% else %}
+            <p class="text-xs text-gray-500 bg-gray-50 rounded-xl px-3 py-2">Le bon sera noté « à payer au fournisseur » : le gérant ou le caissier le paiera depuis la caisse.</p>
+            {% endif %}
+            <input id="note" maxlength="200" placeholder="Note (facultatif) : n° de facture du fournisseur…" class="w-full border border-gray-300 rounded-xl px-3 py-2">
+            <button type="button" id="valider" class="w-full bg-purple-600 text-white rounded-2xl font-extrabold py-4 text-lg"><i class="fas fa-check mr-1"></i> Enregistrer l'approvisionnement</button>
+        </div>
+    </section>
+
+    {% if a_payer %}
+    <section class="bg-white rounded-2xl shadow-sm p-4">
+        <p class="font-bold text-gray-900 mb-2"><i class="fas fa-file-invoice-dollar text-orange-500 mr-1"></i> À payer aux fournisseurs : {{ f(a_payer|sum(attribute='total')) }} FCFA</p>
+        {% for b in a_payer %}
+        <div class="flex items-center justify-between gap-2 py-2 border-t border-gray-100 text-sm">
+            <span class="min-w-0">n°{{ b.id }} · {{ b.fournisseur or 'Fournisseur' }} · {{ b.date.strftime('%d/%m/%Y') }}</span>
+            <span class="font-bold whitespace-nowrap">{{ f(b.total) }} F</span>
+            {% if peut_payer %}
+            <form method="POST" action="{{ url_for('boutique.payer_approvisionnement', bon_id=b.id) }}" data-q="Payer {{ f(b.total) }} FCFA à {{ b.fournisseur or 'ce fournisseur' }} depuis la caisse ?" onsubmit="return confirm(this.dataset.q)">
+                <button type="submit" class="bg-green-600 text-white px-3 py-1.5 rounded-lg font-semibold">Payer</button>
+            </form>
+            {% endif %}
+        </div>
+        {% endfor %}
+    </section>
+    {% endif %}
+
+    {% if historique %}
+    <section class="bg-white rounded-2xl shadow-sm">
+        <p class="font-bold text-gray-900 px-4 pt-4 pb-2">Derniers approvisionnements</p>
+        {% for b in historique %}
+        <details class="border-t border-gray-100 px-4 py-2.5 text-sm">
+            <summary class="cursor-pointer flex justify-between gap-2">
+                <span>n°{{ b.id }} · {{ b.date.strftime('%d/%m %H:%M') }} · {{ b.fournisseur or '—' }}</span>
+                <span class="whitespace-nowrap"><b>{{ f(b.total) }} F</b> {% if b.paye %}<span class="text-green-700">✓ payé</span>{% else %}<span class="text-orange-600">à payer</span>{% endif %}</span>
+            </summary>
+            <ul class="mt-2 space-y-0.5 text-gray-600">
+                {% for l in b.lignes %}<li>{{ l.quantite }} × {{ l.nom }}{% if l.prix_achat is not none %} à {{ f(l.prix_achat) }} F{% endif %}</li>{% endfor %}
+            </ul>
+            <p class="text-xs text-gray-400 mt-1">Par {{ b.par }}{% if b.note %} · {{ b.note }}{% endif %}</p>
+        </details>
+        {% endfor %}
+    </section>
+    {% endif %}
+</div>
+
+<script src="{{ url_for('static', filename='scanner.js') }}"></script>
+<script>
+(function () {
+    const CATALOGUE = {{ catalogue|tojson }};
+    const PA = {{ pa|tojson }};
+    const URL = {{ url_for('boutique.approvisionner')|tojson }};
+    const $ = (id) => document.getElementById(id);
+    const fcfa = (v) => Math.round(v).toLocaleString('fr-FR').replace(/ | /g, ' ') + ' FCFA';
+    const sansAcc = (t) => (t || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+    let lignes = [];          // { a, cle, q, pa }
+
+    function message(t, ok) {
+        const m = $('message'); m.textContent = t;
+        m.className = 'mt-2 text-sm rounded-xl px-3 py-2 font-semibold ' + (ok ? 'bg-green-50 text-green-800' : 'bg-red-50 text-red-700');
+        clearTimeout(message.t); message.t = setTimeout(() => m.classList.add('hidden'), 3000);
+    }
+    function ajouter(a, cle) {
+        const ligne = lignes.find((l) => l.a.id === a.id && l.cle === (cle || null) && !(a.suivi && !cle));
+        if (ligne) ligne.q += 1;
+        else lignes.push({ a, cle: cle || null, q: 1, pa: PA[a.id] != null ? PA[a.id] : '' });
+        $('recherche').value = ''; $('suggestions').classList.add('hidden');
+        message('✓ ' + a.nom + (cle ? ' (' + a.v[cle].l + ')' : '') + ' ajouté', true);
+        if (navigator.vibrate) navigator.vibrate(40);
+        dessiner();
+    }
+    function chercher(code) {
+        code = (code || '').trim();
+        if (!code) return;
+        for (const a of CATALOGUE) {
+            if (a.cb && a.cb === code) return ajouter(a, null);
+            for (const [cle, v] of Object.entries(a.v)) if (v.cb && v.cb === code) return ajouter(a, cle);
+        }
+        const n = CATALOGUE.find((a) => String(a.n) === code);
+        if (n) return ajouter(n, null);
+        const liste = CATALOGUE.filter((a) => sansAcc(a.nom).includes(sansAcc(code)));
+        if (liste.length === 1) return ajouter(liste[0], null);
+        message(liste.length ? 'Plusieurs articles : touchez le bon ci-dessous.' : 'Code ' + code + ' inconnu : créez d\'abord l\'article (ou ajoutez ce code sur sa fiche).', !!liste.length);
+    }
+    function suggestions() {
+        const q = sansAcc($('recherche').value.trim());
+        const box = $('suggestions');
+        if (!q) { box.classList.add('hidden'); return; }
+        const liste = CATALOGUE.filter((a) => sansAcc('n°' + a.n + ' ' + a.nom + ' ' + (a.cb || '')).includes(q)).slice(0, 8);
+        box.innerHTML = '';
+        liste.forEach((a) => {
+            const b = document.createElement('button');
+            b.type = 'button'; b.className = 'w-full text-left px-3 py-2 text-sm hover:bg-gray-50 flex justify-between gap-2';
+            b.innerHTML = '<span class="truncate"></span><span class="text-gray-500 whitespace-nowrap"></span>';
+            b.firstChild.textContent = 'n°' + a.n + ' · ' + a.nom;
+            b.lastChild.textContent = a.s === null ? '' : a.s + ' en stock';
+            b.addEventListener('click', () => ajouter(a, null));
+            box.appendChild(b);
+        });
+        box.classList.toggle('hidden', !liste.length);
+    }
+    function dessiner() {
+        const c = $('lignes'); c.innerHTML = '';
+        lignes.forEach((l, i) => {
+            const d = document.createElement('div');
+            d.className = 'border border-gray-200 rounded-xl p-2.5';
+            const choix = Object.keys(l.a.options || {}).length;
+            d.innerHTML = '<div class="flex items-start gap-2"><p class="flex-1 min-w-0 text-sm font-semibold nom"></p>'
+                + '<button type="button" class="text-gray-400 hover:text-red-600 px-1" data-x aria-label="Retirer"><i class="fas fa-trash"></i></button></div>'
+                + (choix ? '<select class="mt-1.5 w-full border rounded-lg px-2 py-1.5 text-sm" data-cle><option value="">' + (l.a.suivi ? 'Choisissez la taille / couleur reçue…' : 'Variante (facultatif)') + '</option></select>' : '')
+                + '<div class="grid grid-cols-3 gap-2 mt-1.5 items-end text-xs text-gray-500">'
+                + '<label>Quantité<input type="number" min="1" inputmode="numeric" class="w-full border-2 border-gray-200 rounded-lg px-2 py-1.5 text-base font-bold text-gray-900" data-q></label>'
+                + '<label>Prix d\'achat (unité)<input type="number" min="0" inputmode="numeric" placeholder="—" class="w-full border border-gray-300 rounded-lg px-2 py-1.5 text-base text-gray-900" data-pa></label>'
+                + '<p class="text-right text-sm font-bold text-gray-900 pb-2" data-st></p></div>';
+            d.querySelector('.nom').textContent = 'n°' + l.a.n + ' · ' + l.a.nom;
+            const sel = d.querySelector('[data-cle]');
+            if (sel) {
+                Object.entries(l.a.v).forEach(([cle, v]) => { const o = document.createElement('option'); o.value = cle; o.textContent = v.l + (v.s != null ? ' (' + v.s + ' en stock)' : ''); sel.appendChild(o); });
+                sel.value = l.cle || '';
+                sel.addEventListener('change', () => { l.cle = sel.value || null; });
+            }
+            const q = d.querySelector('[data-q]'), pa = d.querySelector('[data-pa]'), st = d.querySelector('[data-st]');
+            q.value = l.q; pa.value = l.pa;
+            const maj = () => { st.textContent = l.pa !== '' ? fcfa(l.q * l.pa) : ''; totaux(); };
+            q.addEventListener('input', () => { l.q = parseInt(q.value, 10) || 0; maj(); });
+            pa.addEventListener('input', () => { l.pa = pa.value === '' ? '' : parseFloat(pa.value); maj(); });
+            d.querySelector('[data-x]').addEventListener('click', () => { lignes.splice(i, 1); dessiner(); });
+            maj();
+            c.appendChild(d);
+        });
+        $('vide').classList.toggle('hidden', lignes.length > 0);
+        $('pied').classList.toggle('hidden', !lignes.length);
+        totaux();
+    }
+    function totaux() { $('total').textContent = fcfa(lignes.reduce((n, l) => n + (l.pa !== '' ? l.q * l.pa : 0), 0)); }
+
+    $('recherche').addEventListener('input', suggestions);
+    $('recherche').addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); chercher($('recherche').value); } });
+    $('btnCamera').addEventListener('click', () => Scanner.ouvrir(chercher));
+    $('valider').addEventListener('click', async () => {
+        const manque = lignes.find((l) => l.a.suivi && !l.cle);
+        if (manque) return message('« ' + manque.a.nom + ' » : choisissez la taille / couleur reçue', false);
+        const b = $('valider'); b.disabled = true;
+        try {
+            const r = await fetch(URL, { method: 'POST', headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+                body: JSON.stringify({ fournisseur: $('fournisseur').value, note: $('note').value, payer: $('payer') ? $('payer').checked : false,
+                                       lignes: lignes.map((l) => ({ article_id: l.a.id, cle: l.cle, quantite: l.q, prix_achat: l.pa })) }) });
+            const d = await r.json();
+            if (!d.success) throw new Error(d.message || 'Erreur');
+            location.href = d.redirect;
+        } catch (e) { message(e.message, false); b.disabled = false; }
+    });
+    dessiner();
+})();
+</script>
+{% endblock %}

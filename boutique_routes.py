@@ -19,6 +19,7 @@ import videos
 import comptoir
 import creances
 import demandes_gerant
+import appro
 import suivi_gps
 import stats_avancees
 import promos
@@ -51,6 +52,7 @@ GESTION = {
     'ajouter_zone', 'modifier_zone', 'zones_modele', 'envoyer_espace_livreur', 'nouveau_lien_livreur',
     'statistiques', 'historique', 'message_statut', 'historique_csv', 'retour_commande', 'codes_promo', 'modifier_code_promo', 'regler_fidelite',
     'annoncer_article', 'annoncer_nouveautes', 'envoyer_video', 'code_barre_nouveau', 'etiquettes', 'etiquettes_codes',
+    'approvisionnement', 'approvisionner', 'payer_approvisionnement',
 }
 ROLES_AUTORISES = {'vendeur': set(), 'caissier': CAISSE, 'gestionnaire': CAISSE | GESTION}
 
@@ -1053,6 +1055,51 @@ def traiter_demande_gerant(demande_id, action):
     else:
         flash('Demande refusée.', 'warning')
     return redirect(url_for('boutique.validations'))
+
+
+# ==================== APPROVISIONNEMENT ====================
+
+@boutique_bp.route('/approvisionnement')
+@login_required
+def approvisionnement():
+    """Bon de réception : fournisseur, articles reçus (scan ou recherche), quantités, prix d'achat."""
+    from models import Approvisionnement
+    b = boutique_connectee()
+    return render_template('boutique/approvisionnement.html', catalogue=comptoir.catalogue_caisse(b.id),
+                           pa={a.id: a.prix_achat for a in Article.query.filter_by(boutique_id=b.id).all()},
+                           fournisseurs=appro.fournisseurs(b.id), a_payer=appro.a_payer(b.id),
+                           historique=Approvisionnement.query.filter_by(boutique_id=b.id)
+                           .order_by(Approvisionnement.date.desc()).limit(30).all(),
+                           peut_payer=peut('boutique.page_caisse'))
+
+
+@boutique_bp.route('/approvisionnement', methods=['POST'])
+@login_required
+def approvisionner():
+    d = request.get_json(silent=True) or {}
+    b = boutique_connectee()
+    payer = bool(d.get('payer')) and peut('boutique.page_caisse')     # sortir l'argent : droit de caisse
+    bon, erreur = appro.enregistrer(b, d.get('fournisseur'), d.get('lignes'), payer, qui() or b.nom_boutique, d.get('note'))
+    if erreur:
+        return jsonify(success=False, message=erreur), 400
+    nb = sum(l['quantite'] for l in bon.lignes)
+    flash(f'Approvisionnement n°{bon.id} enregistré : {nb} article(s) ajouté(s) au stock'
+          + (f', {msg.fcfa(bon.total)} payés depuis la caisse.' if bon.paye and bon.total
+             else f', {msg.fcfa(bon.total)} à payer au fournisseur.' if bon.total else '.'), 'success')
+    return jsonify(success=True, id=bon.id, redirect=url_for('boutique.approvisionnement'))
+
+
+@boutique_bp.route('/approvisionnement/<int:bon_id>/payer', methods=['POST'])
+@login_required
+def payer_approvisionnement(bon_id):
+    from models import Approvisionnement
+    bon = Approvisionnement.query.filter_by(id=bon_id, boutique_id=boutique_connectee().id).first_or_404()
+    if not peut('boutique.page_caisse'):
+        flash("Seuls le gérant et le caissier peuvent sortir l'argent de la caisse.", 'danger')
+    else:
+        erreur = appro.payer(bon)
+        flash(erreur or f'Fournisseur payé : {msg.fcfa(bon.total)} sortis de la caisse.', 'danger' if erreur else 'success')
+    return redirect(url_for('boutique.approvisionnement'))
 
 
 @boutique_bp.route('/code-barres/nouveau', methods=['POST'])

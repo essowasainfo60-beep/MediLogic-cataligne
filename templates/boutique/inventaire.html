@@ -29,6 +29,9 @@
 
     <!-- Entrée de marchandise -->
     {% if articles %}
+    <a href="{{ url_for('boutique.approvisionnement') }}" class="flex items-center justify-between gap-2 bg-purple-50 border border-purple-200 rounded-xl px-4 py-3 mb-3 text-sm">
+        <span><i class="fas fa-truck-ramp-box text-purple-600 mr-1"></i> <b>Bon de réception complet</b> : fournisseur, plusieurs articles, prix d'achat, paiement</span>
+        <span class="text-purple-700 font-semibold whitespace-nowrap">Approvisionner ›</span></a>
     <form method="POST" action="{{ url_for('boutique.entree_stock') }}" class="bg-white rounded-xl shadow-md p-4 mb-6 grid grid-cols-1 md:grid-cols-6 gap-2 items-end">
         <div class="md:col-span-3">
             <label class="block text-sm font-bold text-gray-700 mb-1"><i class="fas fa-truck-ramp-box mr-1"></i> Réception de marchandise</label>

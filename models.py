@@ -630,6 +630,22 @@ class DemandeGerant(db.Model):
     commande = db.relationship('Commande')
 
 
+class Approvisionnement(db.Model):
+    """Bon de réception de marchandise : fournisseur, lignes (article, variante, quantité, prix d'achat)."""
+    __tablename__ = 'approvisionnements'
+
+    id = db.Column(db.Integer, primary_key=True)
+    boutique_id = db.Column(db.Integer, db.ForeignKey('boutiques.id'), nullable=False, index=True)
+    date = db.Column(db.DateTime, default=datetime.utcnow, index=True)
+    fournisseur = db.Column(db.String(120), nullable=True)
+    lignes = db.Column(db.JSON, nullable=False, default=list)
+    total = db.Column(db.Float, nullable=False, default=0)
+    paye = db.Column(db.Boolean, nullable=False, default=True)
+    date_paiement = db.Column(db.DateTime, nullable=True)
+    par = db.Column(db.String(120), nullable=True)
+    note = db.Column(db.String(200), nullable=True)
+
+
 class CleBiometrique(db.Model):
     """Appareil autorisé à se connecter par Face ID / empreinte / Windows Hello
     (WebAuthn). On ne stocke que la clé publique : la biométrie reste sur l'appareil."""
