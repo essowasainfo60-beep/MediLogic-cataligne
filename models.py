@@ -57,6 +57,7 @@ class Boutique(UserMixin, db.Model):
     abonnement_debut = db.Column(db.String(7), nullable=True)     # premier mois facturé, 'AAAA-MM'
     # Espace Mixx by Yas / Moov Money (Flooz) : voir momo.py
     momo_caisse = db.Column(db.String(10), nullable=True)          # 'separee' (défaut) ou 'boutique'
+    modules = db.Column(db.JSON, nullable=True)                    # {'catalogue': bool, 'commandes'…} ; vide = tout (modules_boutique.py)
     momo_seuil = db.Column(db.Integer, nullable=True)              # alerte « solde bas » (FCFA)
     momo_grilles = db.Column(db.JSON, nullable=True)               # {'mixx': [[max, frais], …], 'flooz': […]}
     momo_reglages = db.Column(db.JSON, nullable=True)              # {'marchand': {'mixx': bool…}, 'annulation_max': {'mixx': F…}}

@@ -199,6 +199,23 @@
                 {% endif %}
             </div>
 
+            <!-- Modules de la boutique -->
+            <details class="rounded-xl border border-gray-200">
+                <summary class="px-3 py-2 text-sm font-semibold text-gray-800 cursor-pointer"><i class="fas fa-puzzle-piece mr-1"></i> Modules
+                    <span class="font-normal text-gray-600">· {{ x.modules|length }}/{{ modules|length }} actifs{% if x.modules|length < modules|length %} :
+                        {% for code in modules if code in x.modules %}{{ modules[code][0] }}{{ ', ' if not loop.last }}{% endfor %}{% endif %}</span></summary>
+                <form method="POST" action="{{ url_for('boutique.gestion_modules', boutique_id=b.id) }}" class="p-3 pt-1 space-y-2 text-sm">
+                    {% for code, (titre, aide, _) in modules.items() %}
+                    <label class="flex items-start gap-3 rounded-lg px-2 py-1.5 hover:bg-gray-50">
+                        <input type="checkbox" name="modules" value="{{ code }}" class="mt-1 h-5 w-5 flex-shrink-0" {{ 'checked' if code in x.modules }}>
+                        <span><b>{{ titre }}</b><span class="block text-xs text-gray-600">{{ aide }}</span></span>
+                    </label>
+                    {% endfor %}
+                    <p class="text-xs text-gray-600">Un module décoché disparaît du menu de la boutique et ses pages sont fermées (le catalogue public aussi). Les articles et le stock restent ouverts tant qu’un module de vente est actif. La vente au comptoir et Mixx & Flooz demandent aussi une formule qui les inclut.</p>
+                    <button class="bg-purple-600 text-white px-4 py-2 rounded-lg font-semibold">Enregistrer les modules</button>
+                </form>
+            </details>
+
             <!-- Programmer l'abonnement -->
             <details class="rounded-xl border border-gray-200" {{ 'open' if not b.formule and b.active }}>
                 <summary class="px-3 py-2 text-sm font-semibold text-purple-700 cursor-pointer"><i class="fas fa-sliders mr-1"></i> Programmer l'abonnement</summary>

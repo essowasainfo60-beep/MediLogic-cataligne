@@ -252,7 +252,7 @@ def mettre_a_jour_schema():
                                 ('cle_synchro', 'VARCHAR(64)'),
                                 ('derniere_synchro', 'TIMESTAMP'),
                                 ('formule', 'VARCHAR(20)'), ('essai_fin', 'DATE'),
-                                ('momo_caisse', 'VARCHAR(10)'), ('momo_seuil', 'INTEGER'), ('momo_grilles', 'JSON'), ('momo_reglages', 'JSON'),
+                                ('momo_caisse', 'VARCHAR(10)'), ('momo_seuil', 'INTEGER'), ('momo_grilles', 'JSON'), ('momo_reglages', 'JSON'), ('modules', 'JSON'),
                                 ('abonnement_prix', 'FLOAT'), ('abonnement_debut', 'VARCHAR(7)'),
                                 ('derniere_activite', 'TIMESTAMP'), ('latitude', 'FLOAT'), ('longitude', 'FLOAT'),
                                 ('message_statut', 'TEXT'),

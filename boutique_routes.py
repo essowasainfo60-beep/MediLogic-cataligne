@@ -10,6 +10,7 @@ from flask import Blueprint, Response, render_template, redirect, url_for, flash
 from flask_login import login_user, logout_user, login_required, current_user
 
 import abonnement
+import modules_boutique
 import caisse
 import discussions
 import notifications
@@ -67,7 +68,8 @@ ROLES_AUTORISES = {'vendeur': set(), 'caissier': CAISSE, 'gestionnaire': CAISSE 
 
 # Gestion des abonnements de toutes les boutiques : gérant de la boutique gestionnaire (L'UNIK) seulement
 GESTION_ABONNEMENTS = {'gestion_abonnements', 'gestion_formule', 'gestion_activer', 'gestion_encaisser', 'gestion_annuler_paiement',
-                       'gestion_formules_creer', 'gestion_formules_modifier', 'gestion_formules_supprimer', 'gestion_verifier_paiement'}
+                       'gestion_formules_creer', 'gestion_formules_modifier', 'gestion_formules_supprimer', 'gestion_verifier_paiement',
+                       'gestion_modules'}
 
 
 ADMIN_INACTIVITE = 15 * 60
@@ -118,6 +120,8 @@ def peut(endpoint):
                 and abonnement.est_gestionnaire(boutique_connectee()))
     if nom in MODULE_BOUTIQUE and current_user.is_authenticated and not abonnement.module_boutique(boutique_connectee()):
         return False                   # formule sans vente au comptoir : liens masqués
+    if current_user.is_authenticated and not modules_boutique.autorise(boutique_connectee(), nom):
+        return False                   # module désactivé pour cette boutique : liens masqués
     if not getattr(current_user, 'est_vendeur', False):
         return True
     if nom in GERANT_SEUL:
@@ -248,6 +252,15 @@ def verifier_abonnement_et_activite():
             boutique.derniere_activite = maintenant
         db.session.commit()
     nom_page = request.endpoint.split('.')[-1]
+    if not modules_boutique.autorise(boutique, nom_page):
+        texte = ("Ce module n'est pas activé pour votre boutique. Pour l'ajouter, contactez la gestion des abonnements LivraPlus.")
+        if request.accept_mimetypes.best == 'application/json' or request.is_json:
+            return jsonify(success=False, message=texte), 403
+        flash(texte, 'warning')
+        return redirect(url_for(modules_boutique.page_accueil(boutique)))
+    if (nom_page == 'dashboard' and 'commandes' not in modules_boutique.actifs(boutique)
+            and modules_boutique.page_accueil(boutique) != 'boutique.dashboard' and not abonnement.etat(boutique)['bloque']):
+        return redirect(url_for(modules_boutique.page_accueil(boutique)))     # ex. boutique Mixx & Flooz seulement
     if nom_page in MODULE_BOUTIQUE and not abonnement.module_boutique(boutique):
         message = (f"La vente au comptoir (caisse, tickets, scanner, créances, approvisionnement…) est incluse dans "
                    f"les formules {abonnement.formules_avec_module()}.")
@@ -2809,7 +2822,7 @@ def gestion_abonnements():
     toutes_formules = abonnement.formules()
     for b in Boutique.query.filter(Boutique.id != abonnement.GESTIONNAIRE_ID).order_by(Boutique.active, Boutique.date_inscription.desc()).all():
         activites = [d for d in [b.derniere_activite] + [v.derniere_activite for v in b.vendeurs] if d]
-        fiches.append({'b': b, 'etat': abonnement.etat(b), 'formule': abonnement.infos_formule(b),
+        fiches.append({'b': b, 'etat': abonnement.etat(b), 'formule': abonnement.infos_formule(b), 'modules': modules_boutique.actifs(b),
                        'utilise': abonnement.utilisation(b), 'derniere_activite': max(activites) if activites else None})
     mois = abonnement.cle_mois(datetime.utcnow().date())
     paiements = (PaiementAbonnement.query.filter(PaiementAbonnement.boutique_id != abonnement.GESTIONNAIRE_ID)
@@ -2833,7 +2846,7 @@ def gestion_abonnements():
         fiches = [f for f in fiches if f['formule'] and f['formule']['code'] == filtre]
     resume['a_verifier'] = sum(1 for p in paiements if p.statut == 'valide' and not p.verifie)
     return render_template('boutique/gestion_abonnements.html', fiches=fiches, resume=resume, paiements=paiements,
-                           comptes=abonnement.comptes(),
+                           comptes=abonnement.comptes(), modules=modules_boutique.MODULES,
                            formules=toutes_formules, fcfa=msg.fcfa, modes=PaiementAbonnement.MODES, filtre=filtre,
                            couleurs=abonnement.COULEURS, icones=abonnement.ICONES,
                            mois_libelle=abonnement.libelle_mois(mois), premier_mois=abonnement.premier_mois_par_defaut(),
@@ -2871,6 +2884,20 @@ def gestion_formule(boutique_id):
               f"à partir de {abonnement.libelle_mois(b.abonnement_debut)}", 'success')
     else:
         flash(f"{b.nom_boutique} : formule {toutes_formules[code]['nom']} (gratuite)", 'success')
+    return redirect(url_for('boutique.gestion_abonnements', _anchor=f'b{b.id}'))
+
+
+@boutique_bp.route('/abonnements/<int:boutique_id>/modules', methods=['POST'])
+@gestion_requise
+def gestion_modules(boutique_id):
+    """Choisir les modules de la boutique (ex. Mixx & Flooz seulement)."""
+    b = _boutique_geree(boutique_id)
+    codes = [c for c in request.form.getlist('modules') if c in modules_boutique.MODULES]
+    if not codes:
+        flash('Gardez au moins un module actif (sinon désactivez plutôt la boutique).', 'danger')
+        return redirect(url_for('boutique.gestion_abonnements', _anchor=f'b{b.id}'))
+    modules_boutique.regler(b, codes)
+    flash(f"{b.nom_boutique} : modules actifs → " + ', '.join(modules_boutique.MODULES[c][0] for c in codes), 'success')
     return redirect(url_for('boutique.gestion_abonnements', _anchor=f'b{b.id}'))
 
 

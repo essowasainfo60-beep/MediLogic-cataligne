@@ -16,6 +16,7 @@ import suivi_gps
 from utils import enregistrer_photo
 import stock
 import demandes
+import modules_boutique
 from models import db, Boutique, Article, Commande, Photo, Zone, Livreur, enregistrer_avec_numero
 
 client_bp = Blueprint('client', __name__)
@@ -40,6 +41,17 @@ def lire_coordonnee(valeur, limite):
 def boutique_du_panier(panier):
     for item in panier.values():
         return db.session.get(Boutique, item.get('boutique_id'))
+    return None
+
+
+@client_bp.before_request
+def catalogue_actif():
+    """Catalogue public (/c/<code>…) indisponible si la boutique n'a pas le module « Catalogue en ligne »."""
+    code = (request.view_args or {}).get('code')
+    if code and request.url_rule and request.url_rule.rule.startswith('/c/<code>'):
+        b = Boutique.query.filter_by(lien_public=code).first()
+        if b and 'catalogue' not in modules_boutique.actifs(b):
+            return render_template('client/lien_invalide.html'), 404
     return None
 
 
